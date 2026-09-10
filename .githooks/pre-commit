@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+
+runner=""
+if command -v mise >/dev/null 2>&1; then
+    runner="mise exec --"
+fi
+
+hygiene_failed=0
+oldifs=$IFS
+IFS='
+'
+for f in $(git diff --cached --name-only --diff-filter=ACM); do
+    case "$f" in
+        old-version/*) continue ;;
+    esac
+    [ -f "$f" ] || continue
+    grep -Iq . "$f" || continue
+
+    if [ -s "$f" ] && [ -n "$(tail -c 1 "$f")" ]; then
+        echo "pre-commit: missing trailing newline: $f"
+        hygiene_failed=1
+    fi
+    if grep -nq '[[:space:]]$' "$f"; then
+        echo "pre-commit: trailing whitespace: $f"
+        hygiene_failed=1
+    fi
+done
+IFS=$oldifs
+
+if [ "$hygiene_failed" -ne 0 ]; then
+    echo "pre-commit: fix the file-hygiene issues above and re-stage."
+    exit 1
+fi
+
+$runner cargo fmt --all --check
+$runner cargo clippy --all-targets --all-features -- -D warnings
+$runner cargo test --all

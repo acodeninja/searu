@@ -1,0 +1,16 @@
+[package]
+name = "searu"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "searu"
+path = "src/main.rs"
+
+[dependencies]
+clap = "4.6.6"
+
+[dev-dependencies]
+assert_cmd = "2.2.2"
+predicates = "3.1.4"

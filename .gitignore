@@ -1,0 +1,9 @@
+# The previous Python toolkit, kept as a read-only reference. Never committed.
+# TODO: remove this once replacement complete
+/old-version/
+
+# IDE metadata.
+/.idea/
+
+# Rust build output.
+/target/
