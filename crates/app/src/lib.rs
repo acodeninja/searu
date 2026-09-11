@@ -4,18 +4,22 @@
 use searu_domain::findings::{Finding, Loot, Observation};
 use searu_domain::gate::{decide, Decision};
 use searu_domain::ports::{
-    FindingsStore, LootStore, ObservationStore, RepoError, RoeRepository, RunnerError, StoreError,
-    ToolInvocation, ToolOutcome, ToolRunner,
+    FindingsStore, LootStore, Mount, ObservationStore, RepoError, RoeRepository, RunnerError,
+    StoreError, ToolInvocation, ToolOutcome, ToolRunner, WordlistError, WordlistProvider,
 };
 use searu_domain::tools::ToolRegistry;
 
-pub struct RunAction<R, Reg, T, FS, LS, OS> {
+const SECLISTS_TOKEN: &str = "seclists:";
+const SECLISTS_MOUNT: &str = "/seclists";
+
+pub struct RunAction<R, Reg, T, FS, LS, OS, W> {
     pub roe: R,
     pub registry: Reg,
     pub runner: T,
     pub findings: FS,
     pub loot: LS,
     pub observations: OS,
+    pub wordlists: W,
 }
 
 pub enum RunReport {
@@ -35,6 +39,7 @@ pub enum RunError {
     UnsupportedTechnique { tool: String, technique: String },
     Runner(RunnerError),
     Store(StoreError),
+    Wordlist(WordlistError),
 }
 
 impl std::fmt::Display for RunError {
@@ -47,13 +52,14 @@ impl std::fmt::Display for RunError {
             }
             RunError::Runner(error) => write!(f, "{error}"),
             RunError::Store(error) => write!(f, "{error}"),
+            RunError::Wordlist(error) => write!(f, "{error}"),
         }
     }
 }
 
 impl std::error::Error for RunError {}
 
-impl<R, Reg, T, FS, LS, OS> RunAction<R, Reg, T, FS, LS, OS>
+impl<R, Reg, T, FS, LS, OS, W> RunAction<R, Reg, T, FS, LS, OS, W>
 where
     R: RoeRepository,
     Reg: ToolRegistry,
@@ -61,6 +67,7 @@ where
     FS: FindingsStore,
     LS: LootStore,
     OS: ObservationStore,
+    W: WordlistProvider,
 {
     pub fn run(
         &self,
@@ -90,12 +97,13 @@ where
             refused => return Ok(RunReport::Refused(refused)),
         }
 
-        let argv = tool.invocation(target, args);
+        let (argv, mounts) = self.resolve_wordlists(tool.invocation(target, args))?;
         let invocation = ToolInvocation {
             tool: tool.name(),
             target,
             args: &argv,
             dockerfile: tool.dockerfile(),
+            mounts: &mounts,
         };
         let outcome = self.runner.run(&invocation).map_err(RunError::Runner)?;
         let parsed = tool.parse(target, &outcome);
@@ -116,6 +124,35 @@ where
             observations: parsed.observations.len(),
             outcome,
         })
+    }
+
+    /// Rewrite `seclists:<path>` argument tokens to their in-container path, fetching each referenced
+    /// list once and mounting the shared cache read-only when any token is present.
+    fn resolve_wordlists(&self, argv: Vec<String>) -> Result<(Vec<String>, Vec<Mount>), RunError> {
+        let mut resolved = Vec::with_capacity(argv.len());
+        let mut uses_seclists = false;
+        for arg in argv {
+            match arg.strip_prefix(SECLISTS_TOKEN) {
+                Some(relative) => {
+                    self.wordlists
+                        .ensure(relative)
+                        .map_err(RunError::Wordlist)?;
+                    resolved.push(format!("{SECLISTS_MOUNT}/{relative}"));
+                    uses_seclists = true;
+                }
+                None => resolved.push(arg),
+            }
+        }
+        let mounts = if uses_seclists {
+            vec![Mount {
+                host: self.wordlists.root(),
+                container: SECLISTS_MOUNT.to_string(),
+                readonly: true,
+            }]
+        } else {
+            Vec::new()
+        };
+        Ok((resolved, mounts))
     }
 }
 
@@ -283,10 +320,12 @@ mod tests {
     #[derive(Default)]
     struct CapturingRunner {
         args: RefCell<Vec<String>>,
+        mounts: RefCell<Vec<Mount>>,
     }
     impl ToolRunner for CapturingRunner {
         fn run(&self, invocation: &ToolInvocation) -> Result<ToolOutcome, RunnerError> {
             *self.args.borrow_mut() = invocation.args.to_vec();
+            *self.mounts.borrow_mut() = invocation.mounts.to_vec();
             Ok(ToolOutcome {
                 code: 0,
                 stdout: "out".to_string(),
@@ -344,6 +383,20 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct MemWordlists {
+        fetched: RefCell<Vec<String>>,
+    }
+    impl WordlistProvider for MemWordlists {
+        fn root(&self) -> String {
+            "/home/u/.searu/wordlists".to_string()
+        }
+        fn ensure(&self, relative: &str) -> Result<(), WordlistError> {
+            self.fetched.borrow_mut().push(relative.to_string());
+            Ok(())
+        }
+    }
+
     const LOCAL: &str = "http://localhost:5000/cmd/dig?ip_addr=1";
 
     #[test]
@@ -355,6 +408,7 @@ mod tests {
             findings: MemFindings::default(),
             loot: MemLoot::default(),
             observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
         };
         let report = use_case
             .run(
@@ -386,6 +440,7 @@ mod tests {
             findings: MemFindings::default(),
             loot: MemLoot::default(),
             observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
         };
         use_case
             .run("faketool", "T1190", LOCAL, &["--os-cmd".to_string()])
@@ -397,6 +452,69 @@ mod tests {
     }
 
     #[test]
+    fn seclists_tokens_are_fetched_once_and_rewritten_to_the_mount() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising),
+            registry: FakeRegistry,
+            runner: CapturingRunner::default(),
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
+            observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
+        };
+        use_case
+            .run(
+                "faketool",
+                "T1190",
+                LOCAL,
+                &[
+                    "-w".to_string(),
+                    "seclists:Fuzzing/LFI/LFI-Jhaddix.txt".to_string(),
+                ],
+            )
+            .unwrap();
+
+        assert_eq!(
+            *use_case.wordlists.fetched.borrow(),
+            vec!["Fuzzing/LFI/LFI-Jhaddix.txt".to_string()]
+        );
+        assert_eq!(
+            *use_case.runner.args.borrow(),
+            vec![
+                "--built".to_string(),
+                "-w".to_string(),
+                "/seclists/Fuzzing/LFI/LFI-Jhaddix.txt".to_string(),
+            ]
+        );
+        assert_eq!(
+            *use_case.runner.mounts.borrow(),
+            vec![Mount {
+                host: "/home/u/.searu/wordlists".to_string(),
+                container: "/seclists".to_string(),
+                readonly: true,
+            }]
+        );
+    }
+
+    #[test]
+    fn a_run_without_a_seclists_token_mounts_nothing() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising),
+            registry: FakeRegistry,
+            runner: CapturingRunner::default(),
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
+            observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
+        };
+        use_case
+            .run("faketool", "T1190", LOCAL, &["--os-cmd".to_string()])
+            .unwrap();
+        assert!(use_case.wordlists.fetched.borrow().is_empty());
+        assert!(use_case.runner.mounts.borrow().is_empty());
+    }
+
+    #[test]
     fn an_out_of_scope_target_refuses_and_never_runs() {
         let use_case = RunAction {
             roe: StubRoe(authorising),
@@ -405,6 +523,7 @@ mod tests {
             findings: MemFindings::default(),
             loot: MemLoot::default(),
             observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
         };
         let report = use_case
             .run("faketool", "T1190", "http://evil.example.org/x", &[])
@@ -423,6 +542,7 @@ mod tests {
             findings: MemFindings::default(),
             loot: MemLoot::default(),
             observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
         };
         assert!(matches!(
             use_case.run("nope", "T1190", LOCAL, &[]),
@@ -439,6 +559,7 @@ mod tests {
             findings: MemFindings::default(),
             loot: MemLoot::default(),
             observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
         };
         assert!(matches!(
             use_case.run("faketool", "T9999", LOCAL, &[]),

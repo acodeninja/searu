@@ -64,11 +64,19 @@ pub trait RoeRepository {
     fn load(&self) -> Result<Roe, RepoError>;
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mount {
+    pub host: String,
+    pub container: String,
+    pub readonly: bool,
+}
+
 pub struct ToolInvocation<'a> {
     pub tool: &'a str,
     pub target: &'a str,
     pub args: &'a [String],
     pub dockerfile: &'a str,
+    pub mounts: &'a [Mount],
 }
 
 pub struct ToolOutcome {
@@ -115,4 +123,24 @@ pub trait LootStore {
 pub trait ObservationStore {
     fn emit(&self, observation: &Observation) -> Result<(), StoreError>;
     fn list(&self) -> Result<Vec<Observation>, StoreError>;
+}
+
+#[derive(Debug)]
+pub enum WordlistError {
+    Fetch(String),
+}
+
+impl std::fmt::Display for WordlistError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WordlistError::Fetch(message) => write!(f, "could not fetch the wordlist: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for WordlistError {}
+
+pub trait WordlistProvider {
+    fn root(&self) -> String;
+    fn ensure(&self, relative: &str) -> Result<(), WordlistError>;
 }
