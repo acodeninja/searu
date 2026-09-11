@@ -9,6 +9,7 @@ members = [
     "crates/tools/wrappers/commix",
     "crates/tools/wrappers/httpx",
     "crates/tools/wrappers/katana",
+    "crates/tools/wrappers/sqlmap",
     "crates/tools/registry",
     "crates/cli",
     "crates/xtask",

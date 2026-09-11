@@ -5,8 +5,9 @@ use searu_domain::tools::{Tool, ToolRegistry};
 use searu_tool_commix::COMMIX;
 use searu_tool_httpx::HTTPX;
 use searu_tool_katana::KATANA;
+use searu_tool_sqlmap::SQLMAP;
 
-static TOOLS: &[&'static dyn Tool] = &[&COMMIX, &HTTPX, &KATANA];
+static TOOLS: &[&'static dyn Tool] = &[&COMMIX, &HTTPX, &KATANA, &SQLMAP];
 
 #[derive(Default)]
 pub struct Registry;

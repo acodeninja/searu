@@ -9,3 +9,4 @@ searu-domain = { path = "../../domain" }
 searu-tool-commix = { path = "../wrappers/commix" }
 searu-tool-httpx = { path = "../wrappers/httpx" }
 searu-tool-katana = { path = "../wrappers/katana" }
+searu-tool-sqlmap = { path = "../wrappers/sqlmap" }

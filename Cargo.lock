@@ -469,6 +469,14 @@ dependencies = [
  "searu-tool-commix",
  "searu-tool-httpx",
  "searu-tool-katana",
+ "searu-tool-sqlmap",
+]
+
+[[package]]
+name = "searu-tool-sqlmap"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
 ]
 
 [[package]]
