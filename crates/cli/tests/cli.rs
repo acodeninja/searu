@@ -19,7 +19,42 @@ fn bare_invocation_lists_the_subcommands() {
         .unwrap()
         .assert()
         .success()
-        .stdout(contains("check-scope"));
+        .stdout(contains("run"))
+        .stdout(contains("attack"));
+}
+
+const SAMPLE_ROE: &str = r#"{
+    "scope": {
+        "targets": [
+            { "type": "domain", "value": "staging.example.com" },
+            { "type": "cidr", "value": "10.20.0.0/24" }
+        ],
+        "exclusions": [
+            { "type": "domain", "value": "billing.staging.example.com" }
+        ]
+    }
+}"#;
+
+#[test]
+fn run_refuses_an_out_of_scope_target() {
+    let dir = tempfile::tempdir().unwrap();
+    let roe = dir.path().join("rules-of-engagement.json");
+    std::fs::write(&roe, SAMPLE_ROE).unwrap();
+
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args([
+            "run",
+            "scan",
+            "--roe",
+            roe.to_str().unwrap(),
+            "--target",
+            "evil.example.org",
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(contains("OUT OF SCOPE"));
 }
 
 #[test]

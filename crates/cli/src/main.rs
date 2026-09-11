@@ -31,15 +31,40 @@ fn cli() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("check-scope").about("Check whether a target is in scope for an ROE"),
+            Command::new("run")
+                .about("Run a tool in a container against an in-scope target")
+                .arg(
+                    Arg::new("tool")
+                        .required(true)
+                        .value_name("TOOL")
+                        .help("The tool to run"),
+                )
+                .arg(
+                    Arg::new("roe")
+                        .long("roe")
+                        .required(true)
+                        .value_name("PATH")
+                        .help("Path to the rules-of-engagement JSON"),
+                )
+                .arg(
+                    Arg::new("target")
+                        .long("target")
+                        .required(true)
+                        .value_name("TARGET")
+                        .help("The target to run against"),
+                )
+                .arg(
+                    Arg::new("args")
+                        .last(true)
+                        .num_args(0..)
+                        .value_name("ARG")
+                        .help("Arguments passed through to the tool"),
+                ),
         )
         .subcommand(
             Command::new("validate-roe").about("Validate an engagement's rules of engagement"),
         )
         .subcommand(Command::new("scope-hook").about("PreToolUse scope gate for tool commands"))
-        .subcommand(
-            Command::new("run").about("Run a scanner in a container against an in-scope target"),
-        )
         .subcommand(
             Command::new("emit-finding").about("Append a validated finding to the findings log"),
         )
@@ -50,6 +75,7 @@ fn main() {
     let mut cmd = cli();
     match cmd.clone().get_matches().subcommand() {
         Some(("attack", matches)) => std::process::exit(run_attack(matches)),
+        Some(("run", matches)) => std::process::exit(run_tool(matches)),
         Some((name, _)) => {
             eprintln!("searu: '{name}' is not implemented yet");
             std::process::exit(1);
@@ -103,6 +129,44 @@ fn run_attack(matches: &ArgMatches) -> i32 {
         _ => {
             eprintln!("searu attack: unknown subcommand");
             2
+        }
+    }
+}
+
+fn run_tool(matches: &ArgMatches) -> i32 {
+    use searu_adapter_docker::DockerToolRunner;
+    use searu_adapter_store::JsonRoeRepository;
+    use searu_app::{RunError, RunTool};
+
+    let tool = matches
+        .get_one::<String>("tool")
+        .expect("required argument");
+    let roe = matches.get_one::<String>("roe").expect("required argument");
+    let target = matches
+        .get_one::<String>("target")
+        .expect("required argument");
+    let args: Vec<String> = matches
+        .get_many::<String>("args")
+        .map(|values| values.cloned().collect())
+        .unwrap_or_default();
+
+    let use_case = RunTool {
+        roe: JsonRoeRepository::new(roe),
+        runner: DockerToolRunner::default(),
+    };
+    match use_case.execute(tool, target, &args) {
+        Ok(code) => code,
+        Err(RunError::OutOfScope(target)) => {
+            eprintln!("OUT OF SCOPE: {target}");
+            1
+        }
+        Err(RunError::Repo(error)) => {
+            eprintln!("{error}");
+            1
+        }
+        Err(RunError::Runner(error)) => {
+            eprintln!("{error}");
+            1
         }
     }
 }

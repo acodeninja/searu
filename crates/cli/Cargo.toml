@@ -11,7 +11,11 @@ path = "src/main.rs"
 [dependencies]
 clap = "4.6.6"
 searu-domain = { path = "../domain" }
+searu-app = { path = "../app" }
+searu-adapter-store = { path = "../adapter-store" }
+searu-adapter-docker = { path = "../adapter-docker" }
 
 [dev-dependencies]
 assert_cmd = "2.2.2"
 predicates = "3.1.4"
+tempfile = "3.27.0"
