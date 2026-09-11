@@ -7,6 +7,34 @@ containerised tools that can both *assess* and — with sufficient authorisation
 This is the "what & why & architecture" reference. The living ATDD slice tracker is
 [current-plan.md](current-plan.md); the crate-level rules are in [architecture.md](architecture.md).
 
+## Implemented architecture (authoritative)
+
+Milestone 1 shipped, and it settled the tool boundary. Where sections further down still describe an
+`assess` command, a built-in HTTP injector, or a capability overlay, **this section supersedes them.**
+
+- **Claude orchestrates; searu is gated hands + memory.** searu never plans and never exploits by
+  hand. For one invocation it enforces the gate, runs the authorised tool in its container,
+  normalises the tool's output into findings/loot, and answers queries over that state. Claude
+  decides what to run next by querying findings/loot.
+- **One gated action:** `searu run <tool> --technique <Txxxx> --target <t> [-- <tool args>]`. The gate
+  is: the tool must list that technique; the target must be in scope *now*; the exact ATT&CK ID must
+  be in the ROE allow-list; and the technique's tier must be satisfied (Exploitation → a named
+  authoriser; Destructive → authoriser + `destructive_authorised`). Tiers come from a curated
+  `domain::technique::tier_of` table (unknown → Exploitation).
+- **Queries:** `searu findings [--technique|--severity|--tool]`, `searu loot [--category] [--reveal]`,
+  `searu tool list`, `searu tool advice <tool>`, `searu attack list|show`.
+- **Crate-per-tool.** Each tool is a thin crate under `crates/tools/wrappers/<tool>` implementing the
+  `domain::tools::Tool` trait, with its `Dockerfile` and Claude-facing `advice.md` compiled in via
+  `include_str!`, and its own `parse` that normalises output into a `ParsedOutput { findings, loot }`.
+  Shared normalisation helpers (fingerprint, HTML-unescape, secret scan) live in
+  `crates/tools/parser` (`searu-tool-parser`); `crates/tools/registry` (`searu-tool-registry`)
+  exposes them through the `ToolRegistry` port. A generic SARIF parser will join the parser crate when
+  the first SARIF-emitting tool (grype/snyk) lands.
+- **Docker adapter** builds the tool's embedded Dockerfile on first use and runs it with
+  `--add-host=host.docker.internal:host-gateway`, feeding the (host-rewritten) target on the tool's
+  stdin so a container can reach a host-published target. First tool: **commix** (OS command
+  injection, T1190/T1059), proven end-to-end against the CWE-78 lab.
+
 ## Vision
 
 Searu is the security-assessment counterpart to gstack. It is a single cross-platform Rust binary
