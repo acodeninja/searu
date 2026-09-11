@@ -2,6 +2,9 @@
 resolver = "2"
 members = [
     "crates/domain",
+    "crates/app",
+    "crates/adapter-store",
+    "crates/adapter-docker",
     "crates/cli",
     "crates/xtask",
 ]
