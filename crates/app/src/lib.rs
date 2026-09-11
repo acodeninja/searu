@@ -42,6 +42,7 @@ mod tests {
                 }],
                 exclusions: vec![],
             },
+            ..Default::default()
         }
     }
 

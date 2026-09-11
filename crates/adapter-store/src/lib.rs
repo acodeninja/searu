@@ -1,6 +1,6 @@
 //! Engagement-file repositories: reads rules of engagement from JSON on disk.
 
-use searu_domain::ports::{RepoError, Roe, RoeRepository};
+use searu_domain::ports::{Authorisation, Authoriser, RepoError, Roe, RoeRepository};
 use searu_domain::scope::{EntryKind, Scope, ScopeEntry};
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -8,6 +8,10 @@ use std::path::PathBuf;
 #[derive(Deserialize)]
 struct RoeDoc {
     scope: ScopeDoc,
+    #[serde(default)]
+    allowed_techniques: Vec<String>,
+    #[serde(default)]
+    authorisation: AuthorisationDoc,
 }
 
 #[derive(Deserialize)]
@@ -25,6 +29,20 @@ struct EntryDoc {
     value: String,
 }
 
+#[derive(Deserialize, Default)]
+struct AuthorisationDoc {
+    #[serde(default)]
+    exploitation_authorised_by: Option<AuthoriserDoc>,
+    #[serde(default)]
+    destructive_authorised: bool,
+}
+
+#[derive(Deserialize)]
+struct AuthoriserDoc {
+    name: String,
+    email: String,
+}
+
 pub fn parse_roe(json: &str) -> Result<Roe, RepoError> {
     let doc: RoeDoc = serde_json::from_str(json).map_err(|e| RepoError::Parse(e.to_string()))?;
     let targets = doc
@@ -39,11 +57,22 @@ pub fn parse_roe(json: &str) -> Result<Roe, RepoError> {
         .into_iter()
         .map(entry)
         .collect::<Result<Vec<_>, _>>()?;
+    let authorisation = Authorisation {
+        exploitation_authorised_by: doc.authorisation.exploitation_authorised_by.map(|a| {
+            Authoriser {
+                name: a.name,
+                email: a.email,
+            }
+        }),
+        destructive_authorised: doc.authorisation.destructive_authorised,
+    };
     Ok(Roe {
         scope: Scope {
             targets,
             exclusions,
         },
+        allowed_techniques: doc.allowed_techniques,
+        authorisation,
     })
 }
 
@@ -117,5 +146,30 @@ mod tests {
     fn rejects_an_unknown_entry_type() {
         let json = r#"{ "scope": { "targets": [ { "type": "carrier-pigeon", "value": "x" } ] } }"#;
         assert!(parse_roe(json).is_err());
+    }
+
+    #[test]
+    fn parses_allowed_techniques_and_the_authoriser() {
+        let json = r#"{
+            "scope": { "targets": [ { "type": "url", "value": "http://localhost:5000" } ] },
+            "allowed_techniques": ["T1190", "T1059"],
+            "authorisation": {
+                "exploitation_authorised_by": { "name": "Jane Tester", "email": "jane@example.com" }
+            }
+        }"#;
+        let roe = parse_roe(json).unwrap();
+        assert!(roe.authorises("T1190"));
+        assert!(roe.authorises("T1059"));
+        assert!(!roe.authorises("T1595"));
+        let authoriser = roe.authorisation.exploitation_authorised_by.unwrap();
+        assert_eq!(authoriser.email, "jane@example.com");
+        assert!(!roe.authorisation.destructive_authorised);
+    }
+
+    #[test]
+    fn a_scope_only_document_has_no_authorisation() {
+        let roe = parse_roe(SAMPLE).unwrap();
+        assert!(roe.allowed_techniques.is_empty());
+        assert!(roe.authorisation.exploitation_authorised_by.is_none());
     }
 }

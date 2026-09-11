@@ -2,8 +2,29 @@
 
 use crate::scope::Scope;
 
+#[derive(Default)]
 pub struct Roe {
     pub scope: Scope,
+    pub allowed_techniques: Vec<String>,
+    pub authorisation: Authorisation,
+}
+
+impl Roe {
+    pub fn authorises(&self, technique_id: &str) -> bool {
+        self.allowed_techniques.iter().any(|id| id == technique_id)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Authorisation {
+    pub exploitation_authorised_by: Option<Authoriser>,
+    pub destructive_authorised: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct Authoriser {
+    pub name: String,
+    pub email: String,
 }
 
 #[derive(Debug)]
