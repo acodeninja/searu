@@ -3,5 +3,6 @@
 pub mod attack;
 pub mod authorisation;
 pub mod capability;
+pub mod findings;
 pub mod ports;
 pub mod scope;

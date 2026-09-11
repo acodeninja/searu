@@ -1,5 +1,6 @@
 //! Ports: the traits the application depends on, implemented by adapters.
 
+use crate::findings::{Finding, Loot};
 use crate::scope::Scope;
 
 #[derive(Default)]
@@ -69,6 +70,45 @@ pub struct ToolInvocation<'a> {
     pub args: &'a [String],
 }
 
+pub struct ToolOutcome {
+    pub code: i32,
+    pub stdout: String,
+    pub stderr: String,
+}
+
 pub trait ToolRunner {
-    fn run(&self, invocation: &ToolInvocation) -> Result<i32, RunnerError>;
+    fn run(&self, invocation: &ToolInvocation) -> Result<ToolOutcome, RunnerError>;
+}
+
+#[derive(Debug)]
+pub enum StoreError {
+    Io(String),
+    Serialise(String),
+}
+
+impl std::fmt::Display for StoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StoreError::Io(message) => {
+                write!(f, "could not write to the engagement store: {message}")
+            }
+            StoreError::Serialise(message) => {
+                write!(f, "could not serialise the record: {message}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for StoreError {}
+
+pub trait FindingsStore {
+    fn emit(&self, finding: &Finding) -> Result<(), StoreError>;
+}
+
+pub trait LootStore {
+    fn emit(&self, loot: &Loot) -> Result<(), StoreError>;
+}
+
+pub trait Fingerprinter {
+    fn fingerprint(&self, value: &str) -> String;
 }

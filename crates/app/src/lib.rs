@@ -1,6 +1,8 @@
 //! Application use-cases, generic over the domain ports.
 
-use searu_domain::ports::{RepoError, RoeRepository, RunnerError, ToolInvocation, ToolRunner};
+use searu_domain::ports::{
+    RepoError, RoeRepository, RunnerError, ToolInvocation, ToolOutcome, ToolRunner,
+};
 use searu_domain::scope::is_in_scope;
 
 pub struct RunTool<R: RoeRepository, T: ToolRunner> {
@@ -16,7 +18,12 @@ pub enum RunError {
 }
 
 impl<R: RoeRepository, T: ToolRunner> RunTool<R, T> {
-    pub fn execute(&self, tool: &str, target: &str, args: &[String]) -> Result<i32, RunError> {
+    pub fn execute(
+        &self,
+        tool: &str,
+        target: &str,
+        args: &[String],
+    ) -> Result<ToolOutcome, RunError> {
         let roe = self.roe.load().map_err(RunError::Repo)?;
         if !is_in_scope(target, &roe.scope) {
             return Err(RunError::OutOfScope(target.to_string()));
@@ -65,15 +72,19 @@ mod tests {
         code: i32,
     }
     impl ToolRunner for SpyRunner {
-        fn run(&self, _invocation: &ToolInvocation) -> Result<i32, RunnerError> {
+        fn run(&self, _invocation: &ToolInvocation) -> Result<ToolOutcome, RunnerError> {
             self.calls.set(self.calls.get() + 1);
-            Ok(self.code)
+            Ok(ToolOutcome {
+                code: self.code,
+                stdout: String::new(),
+                stderr: String::new(),
+            })
         }
     }
 
     struct PanicRunner;
     impl ToolRunner for PanicRunner {
-        fn run(&self, _invocation: &ToolInvocation) -> Result<i32, RunnerError> {
+        fn run(&self, _invocation: &ToolInvocation) -> Result<ToolOutcome, RunnerError> {
             unreachable!("the runner must never be invoked for an out-of-scope target");
         }
     }
@@ -98,7 +109,7 @@ mod tests {
             },
         };
         let result = use_case.execute("scan", "staging.example.com", &[]);
-        assert!(matches!(result, Ok(7)));
+        assert!(matches!(result, Ok(outcome) if outcome.code == 7));
         assert_eq!(use_case.runner.calls.get(), 1);
     }
 

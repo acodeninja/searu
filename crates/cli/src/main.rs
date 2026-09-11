@@ -199,7 +199,11 @@ fn run_tool(matches: &ArgMatches) -> i32 {
         runner: DockerToolRunner::default(),
     };
     match use_case.execute(tool, target, &args) {
-        Ok(code) => code,
+        Ok(outcome) => {
+            print!("{}", outcome.stdout);
+            eprint!("{}", outcome.stderr);
+            outcome.code
+        }
         Err(RunError::OutOfScope(target)) => {
             eprintln!("OUT OF SCOPE: {target}");
             1
