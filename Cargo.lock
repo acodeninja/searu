@@ -394,6 +394,7 @@ dependencies = [
  "clap",
  "predicates",
  "searu-adapter-docker",
+ "searu-adapter-http",
  "searu-adapter-store",
  "searu-app",
  "searu-domain",
@@ -402,6 +403,13 @@ dependencies = [
 
 [[package]]
 name = "searu-adapter-docker"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+]
+
+[[package]]
+name = "searu-adapter-http"
 version = "0.0.1"
 dependencies = [
  "searu-domain",

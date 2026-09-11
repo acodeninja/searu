@@ -1,0 +1,15 @@
+{
+  "scope": {
+    "targets": [
+      { "type": "domain", "value": "localhost", "port": 5000 },
+      { "type": "ip", "value": "127.0.0.1", "port": 5000 }
+    ]
+  },
+  "allowed_techniques": ["T1190", "T1059"],
+  "authorisation": {
+    "exploitation_authorised_by": {
+      "name": "Lab Operator",
+      "email": "operator@example.com"
+    }
+  }
+}

@@ -4,7 +4,7 @@
 
 use crate::capability::{Capability, Tier};
 use crate::ports::Roe;
-use crate::scope::is_in_scope;
+use crate::scope::is_host_in_scope;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Decision {
@@ -15,8 +15,28 @@ pub enum Decision {
     DestructiveNotAuthorised,
 }
 
+impl std::fmt::Display for Decision {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Decision::Authorised => write!(f, "authorised"),
+            Decision::OutOfScope => write!(f, "OUT OF SCOPE"),
+            Decision::TechniqueNotAllowed(id) => {
+                write!(f, "technique not authorised in the ROE: {id}")
+            }
+            Decision::ExploitationNotAuthorised => write!(
+                f,
+                "exploitation not authorised: name an authoriser in the ROE"
+            ),
+            Decision::DestructiveNotAuthorised => write!(
+                f,
+                "destructive action not authorised: set destructive_authorised and name an authoriser"
+            ),
+        }
+    }
+}
+
 pub fn decide(roe: &Roe, capability: &Capability, target: &str) -> Decision {
-    if !is_in_scope(target, &roe.scope) {
+    if !is_host_in_scope(target, &roe.scope) {
         return Decision::OutOfScope;
     }
 
@@ -51,13 +71,14 @@ pub fn decide(roe: &Roe, capability: &Capability, target: &str) -> Decision {
 mod tests {
     use super::*;
     use crate::ports::{Authorisation, Authoriser};
-    use crate::scope::{EntryKind, Scope, ScopeEntry};
+    use crate::scope::{HostForm, Scope, ScopeEntry};
 
     fn localhost_scope() -> Scope {
         Scope {
-            targets: vec![ScopeEntry {
-                kind: EntryKind::Url,
+            targets: vec![ScopeEntry::Host {
+                form: HostForm::Url,
                 value: "http://localhost:5000".to_string(),
+                port: None,
             }],
             exclusions: vec![],
         }

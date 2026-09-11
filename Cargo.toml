@@ -5,6 +5,7 @@ members = [
     "crates/app",
     "crates/adapter-store",
     "crates/adapter-docker",
+    "crates/adapter-http",
     "crates/cli",
     "crates/xtask",
 ]

@@ -5,7 +5,7 @@ use searu_domain::ports::{
     Authorisation, Authoriser, FindingsStore, Fingerprinter, LootStore, RepoError, Roe,
     RoeRepository, StoreError,
 };
-use searu_domain::scope::{EntryKind, Scope, ScopeEntry};
+use searu_domain::scope::{HostForm, Scope, ScopeEntry};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::Write;
@@ -30,9 +30,17 @@ struct ScopeDoc {
 
 #[derive(Deserialize)]
 struct EntryDoc {
-    #[serde(rename = "type")]
+    #[serde(default = "default_kind")]
     kind: String,
+    #[serde(rename = "type", default)]
+    host_type: Option<String>,
     value: String,
+    #[serde(default)]
+    port: Option<u16>,
+}
+
+fn default_kind() -> String {
+    "host".to_string()
 }
 
 #[derive(Deserialize, Default)]
@@ -83,21 +91,31 @@ pub fn parse_roe(json: &str) -> Result<Roe, RepoError> {
 }
 
 fn entry(doc: EntryDoc) -> Result<ScopeEntry, RepoError> {
-    let kind = match doc.kind.as_str() {
-        "domain" => EntryKind::Domain,
-        "ip" => EntryKind::Ip,
-        "cidr" => EntryKind::Cidr,
-        "url" => EntryKind::Url,
-        other => {
-            return Err(RepoError::Parse(format!(
-                "unknown scope entry type: {other}"
-            )))
+    match doc.kind.as_str() {
+        "host" => {
+            let form = match doc.host_type.as_deref() {
+                Some("domain") => HostForm::Domain,
+                Some("ip") => HostForm::Ip,
+                Some("cidr") => HostForm::Cidr,
+                Some("url") => HostForm::Url,
+                Some(other) => return Err(RepoError::Parse(format!("unknown host type: {other}"))),
+                None => {
+                    return Err(RepoError::Parse(
+                        "a host target needs a \"type\"".to_string(),
+                    ))
+                }
+            };
+            Ok(ScopeEntry::Host {
+                form,
+                value: doc.value,
+                port: doc.port,
+            })
         }
-    };
-    Ok(ScopeEntry {
-        kind,
-        value: doc.value,
-    })
+        "file" => Ok(ScopeEntry::File { value: doc.value }),
+        "person" => Ok(ScopeEntry::Person { value: doc.value }),
+        "osint-domain" => Ok(ScopeEntry::OsintDomain { value: doc.value }),
+        other => Err(RepoError::Parse(format!("unknown target kind: {other}"))),
+    }
 }
 
 pub struct JsonRoeRepository {
@@ -252,14 +270,57 @@ mod tests {
         let roe = parse_roe(SAMPLE).unwrap();
         assert_eq!(roe.scope.targets.len(), 2);
         assert_eq!(roe.scope.exclusions.len(), 1);
-        assert_eq!(roe.scope.targets[0].kind, EntryKind::Domain);
-        assert_eq!(roe.scope.targets[1].kind, EntryKind::Cidr);
+        assert!(matches!(
+            &roe.scope.targets[0],
+            ScopeEntry::Host {
+                form: HostForm::Domain,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &roe.scope.targets[1],
+            ScopeEntry::Host {
+                form: HostForm::Cidr,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parses_typed_non_host_targets() {
+        let json = r#"{ "scope": { "targets": [
+            { "kind": "file", "value": "/etc/passwd" },
+            { "kind": "person", "value": "Joe Bloggs" },
+            { "kind": "osint-domain", "value": "example.com" }
+        ] } }"#;
+        let roe = parse_roe(json).unwrap();
+        assert!(
+            matches!(&roe.scope.targets[0], ScopeEntry::File { value } if value == "/etc/passwd")
+        );
+        assert!(matches!(&roe.scope.targets[1], ScopeEntry::Person { .. }));
+        assert!(matches!(
+            &roe.scope.targets[2],
+            ScopeEntry::OsintDomain { .. }
+        ));
     }
 
     #[test]
     fn ignores_unknown_top_level_fields() {
         let json = r#"{ "scope": { "targets": [] }, "authorization": { "x": 1 } }"#;
         assert!(parse_roe(json).is_ok());
+    }
+
+    #[test]
+    fn parses_a_port_limited_entry() {
+        let json = r#"{ "scope": { "targets": [ { "type": "ip", "value": "127.0.0.1", "port": 5000 } ] } }"#;
+        let roe = parse_roe(json).unwrap();
+        assert!(matches!(
+            roe.scope.targets[0],
+            ScopeEntry::Host {
+                port: Some(5000),
+                ..
+            }
+        ));
     }
 
     #[test]

@@ -31,7 +31,7 @@ static CAPABILITIES: &[Capability] = &[Capability {
     id: "command-injection",
     attack_ids: &["T1190", "T1059"],
     tier: Tier::Exploitation,
-    tools: &["commix"],
+    tools: &["http", "commix"],
 }];
 
 pub fn capabilities() -> &'static [Capability] {
@@ -51,7 +51,7 @@ mod tests {
         let capability = capability("command-injection").unwrap();
         assert_eq!(capability.tier, Tier::Exploitation);
         assert_eq!(capability.attack_ids, &["T1190", "T1059"]);
-        assert_eq!(capability.tools, &["commix"]);
+        assert_eq!(capability.tools, &["http", "commix"]);
     }
 
     #[test]

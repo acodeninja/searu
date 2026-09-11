@@ -67,6 +67,63 @@ fn capability_list_excludes_other_tiers() {
         .stdout(contains("command-injection").not());
 }
 
+const LAB_ROE: &str = r#"{
+    "scope": { "targets": [ { "type": "domain", "value": "localhost" } ] },
+    "allowed_techniques": ["T1190", "T1059"],
+    "authorisation": {
+        "exploitation_authorised_by": { "name": "Lab Operator", "email": "operator@example.com" }
+    }
+}"#;
+
+const UNAUTHORISED_ROE: &str = r#"{
+    "scope": { "targets": [ { "type": "domain", "value": "localhost" } ] },
+    "allowed_techniques": ["T1190", "T1059"]
+}"#;
+
+#[test]
+fn assess_refuses_an_out_of_scope_target_without_touching_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let roe = dir.path().join("roe.json");
+    std::fs::write(&roe, LAB_ROE).unwrap();
+
+    Command::cargo_bin("searu")
+        .unwrap()
+        .current_dir(&dir)
+        .args([
+            "assess",
+            "--roe",
+            roe.to_str().unwrap(),
+            "--target",
+            "http://evil.example.org/cmd/dig?ip_addr=1",
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(contains("OUT OF SCOPE"));
+}
+
+#[test]
+fn assess_refuses_exploitation_without_an_authoriser() {
+    let dir = tempfile::tempdir().unwrap();
+    let roe = dir.path().join("roe.json");
+    std::fs::write(&roe, UNAUTHORISED_ROE).unwrap();
+
+    Command::cargo_bin("searu")
+        .unwrap()
+        .current_dir(&dir)
+        .args([
+            "assess",
+            "--roe",
+            roe.to_str().unwrap(),
+            "--target",
+            "http://localhost:5000/cmd/dig?ip_addr=1",
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(contains("exploitation not authorised"));
+}
+
 #[test]
 fn run_refuses_an_out_of_scope_target() {
     let dir = tempfile::tempdir().unwrap();

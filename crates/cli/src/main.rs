@@ -62,6 +62,24 @@ fn cli() -> Command {
                 ),
         )
         .subcommand(
+            Command::new("assess")
+                .about("Run a full assessment against a target and record findings")
+                .arg(
+                    Arg::new("roe")
+                        .long("roe")
+                        .required(true)
+                        .value_name("PATH")
+                        .help("Path to the rules-of-engagement JSON"),
+                )
+                .arg(
+                    Arg::new("target")
+                        .long("target")
+                        .required(true)
+                        .value_name("TARGET")
+                        .help("The target URL to assess"),
+                ),
+        )
+        .subcommand(
             Command::new("capability")
                 .about("List the security capabilities searu can run")
                 .subcommand_required(true)
@@ -89,6 +107,7 @@ fn main() {
     match cmd.clone().get_matches().subcommand() {
         Some(("attack", matches)) => std::process::exit(run_attack(matches)),
         Some(("capability", matches)) => std::process::exit(run_capability(matches)),
+        Some(("assess", matches)) => std::process::exit(run_assess(matches)),
         Some(("run", matches)) => std::process::exit(run_tool(matches)),
         Some((name, _)) => {
             eprintln!("searu: '{name}' is not implemented yet");
@@ -173,6 +192,46 @@ fn run_capability(matches: &ArgMatches) -> i32 {
         _ => {
             eprintln!("searu capability: unknown subcommand");
             2
+        }
+    }
+}
+
+fn run_assess(matches: &ArgMatches) -> i32 {
+    use searu_adapter_http::HttpCommandInjector;
+    use searu_adapter_store::{
+        JsonRoeRepository, JsonlFindingsStore, JsonlLootStore, Sha256Fingerprinter,
+    };
+    use searu_app::{Assess, AssessOutcome};
+
+    let roe = matches.get_one::<String>("roe").expect("required argument");
+    let target = matches
+        .get_one::<String>("target")
+        .expect("required argument");
+
+    let assess = Assess {
+        roe: JsonRoeRepository::new(roe),
+        injector: HttpCommandInjector,
+        fingerprinter: Sha256Fingerprinter,
+        findings: JsonlFindingsStore::new("pentest"),
+        loot: JsonlLootStore::new("pentest"),
+    };
+    match assess.run("command-injection", target) {
+        Ok(AssessOutcome::Exploited {
+            category,
+            fingerprint,
+        }) => {
+            println!(
+                "EXPLOITED: captured {category} (loot {fingerprint}); recorded in pentest/findings.jsonl"
+            );
+            0
+        }
+        Ok(AssessOutcome::Refused(decision)) => {
+            eprintln!("REFUSED: {decision}");
+            1
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            1
         }
     }
 }
