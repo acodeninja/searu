@@ -1,0 +1,9 @@
+[package]
+name = "searu-tool-registry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+searu-domain = { path = "../../domain" }
+searu-tool-commix = { path = "../wrappers/commix" }

@@ -1,245 +1,249 @@
-//! Application use-cases, generic over the domain ports.
+//! Application use-cases, generic over the domain ports. searu gates and runs a tool, lets the tool
+//! normalise its own output into findings/loot, stores them, and answers queries over that state.
 
-use searu_domain::authorisation::{decide, Decision};
-use searu_domain::capability;
-use searu_domain::findings::{Finding, Loot, Severity, Status};
+use searu_domain::findings::{Finding, Loot};
+use searu_domain::gate::{decide, Decision};
 use searu_domain::ports::{
-    ExploitError, FindingsStore, Fingerprinter, LootStore, ReflectedCommandInjector, RepoError,
-    RoeRepository, RunnerError, StoreError, ToolInvocation, ToolOutcome, ToolRunner,
+    FindingsStore, LootStore, RepoError, RoeRepository, RunnerError, StoreError, ToolInvocation,
+    ToolOutcome, ToolRunner,
 };
-use searu_domain::scope::is_host_in_scope;
+use searu_domain::tools::ToolRegistry;
 
-pub struct RunTool<R: RoeRepository, T: ToolRunner> {
+pub struct RunAction<R, Reg, T, FS, LS> {
     pub roe: R,
+    pub registry: Reg,
     pub runner: T,
-}
-
-#[derive(Debug)]
-pub enum RunError {
-    Repo(RepoError),
-    OutOfScope(String),
-    Runner(RunnerError),
-}
-
-impl<R: RoeRepository, T: ToolRunner> RunTool<R, T> {
-    pub fn execute(
-        &self,
-        tool: &str,
-        target: &str,
-        args: &[String],
-    ) -> Result<ToolOutcome, RunError> {
-        let roe = self.roe.load().map_err(RunError::Repo)?;
-        if !is_host_in_scope(target, &roe.scope) {
-            return Err(RunError::OutOfScope(target.to_string()));
-        }
-        let invocation = ToolInvocation { tool, target, args };
-        self.runner.run(&invocation).map_err(RunError::Runner)
-    }
-}
-
-pub struct Assess<R, I, FP, FS, LS> {
-    pub roe: R,
-    pub injector: I,
-    pub fingerprinter: FP,
     pub findings: FS,
     pub loot: LS,
 }
 
-#[derive(Debug)]
-pub enum AssessOutcome {
-    Exploited {
-        category: String,
-        fingerprint: String,
+pub enum RunReport {
+    Ran {
+        outcome: ToolOutcome,
+        findings: usize,
+        loot: usize,
     },
     Refused(Decision),
 }
 
 #[derive(Debug)]
-pub enum AssessError {
+pub enum RunError {
     Repo(RepoError),
-    UnknownCapability(String),
-    Exploit(ExploitError),
-    NoSecret,
+    UnknownTool(String),
+    UnsupportedTechnique { tool: String, technique: String },
+    Runner(RunnerError),
     Store(StoreError),
 }
 
-impl std::fmt::Display for AssessError {
+impl std::fmt::Display for RunError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AssessError::Repo(error) => write!(f, "{error}"),
-            AssessError::UnknownCapability(id) => write!(f, "unknown capability: {id}"),
-            AssessError::Exploit(error) => write!(f, "{error}"),
-            AssessError::NoSecret => {
-                write!(
-                    f,
-                    "the exploit ran but no DATABASE_URL was found in the output"
-                )
+            RunError::Repo(error) => write!(f, "{error}"),
+            RunError::UnknownTool(tool) => write!(f, "unknown tool: {tool}"),
+            RunError::UnsupportedTechnique { tool, technique } => {
+                write!(f, "tool {tool} cannot perform technique {technique}")
             }
-            AssessError::Store(error) => write!(f, "{error}"),
+            RunError::Runner(error) => write!(f, "{error}"),
+            RunError::Store(error) => write!(f, "{error}"),
         }
     }
 }
 
-impl std::error::Error for AssessError {}
+impl std::error::Error for RunError {}
 
-impl<R, I, FP, FS, LS> Assess<R, I, FP, FS, LS>
+impl<R, Reg, T, FS, LS> RunAction<R, Reg, T, FS, LS>
 where
     R: RoeRepository,
-    I: ReflectedCommandInjector,
-    FP: Fingerprinter,
+    Reg: ToolRegistry,
+    T: ToolRunner,
     FS: FindingsStore,
     LS: LootStore,
 {
-    pub fn run(&self, capability_id: &str, target: &str) -> Result<AssessOutcome, AssessError> {
-        let roe = self.roe.load().map_err(AssessError::Repo)?;
-        let capability = capability::capability(capability_id)
-            .ok_or_else(|| AssessError::UnknownCapability(capability_id.to_string()))?;
-
-        let decision = decide(&roe, capability, target);
-        if decision != Decision::Authorised {
-            return Ok(AssessOutcome::Refused(decision));
+    pub fn run(
+        &self,
+        tool_name: &str,
+        technique: &str,
+        target: &str,
+        args: &[String],
+    ) -> Result<RunReport, RunError> {
+        let roe = self.roe.load().map_err(RunError::Repo)?;
+        let tool = self
+            .registry
+            .tool(tool_name)
+            .ok_or_else(|| RunError::UnknownTool(tool_name.to_string()))?;
+        // `contains(&technique)` cannot typecheck: elements are `&'static str`, the argument a
+        // borrowed `&str`; hence the explicit comparison.
+        #[allow(clippy::manual_contains)]
+        let performs_technique = tool.techniques().iter().any(|id| *id == technique);
+        if !performs_technique {
+            return Err(RunError::UnsupportedTechnique {
+                tool: tool_name.to_string(),
+                technique: technique.to_string(),
+            });
         }
 
-        let output = self
-            .injector
-            .exploit(target, "env")
-            .map_err(AssessError::Exploit)?;
-        let output = html_unescape(&output);
-        let secret = extract_env_var(&output, "DATABASE_URL").ok_or(AssessError::NoSecret)?;
-        let fingerprint = self.fingerprinter.fingerprint(&secret);
+        match decide(&roe, technique, target) {
+            Decision::Authorised => {}
+            refused => return Ok(RunReport::Refused(refused)),
+        }
 
-        self.loot
-            .emit(&Loot {
-                fingerprint: fingerprint.clone(),
-                category: "database-url".to_string(),
-                value: secret,
-            })
-            .map_err(AssessError::Store)?;
-        self.findings
-            .emit(&Finding {
-                tool: "http".to_string(),
-                target: target.to_string(),
-                title: "OS command injection".to_string(),
-                severity: Severity::Critical,
-                status: Status::Confirmed,
-                attack_technique: capability
-                    .attack_ids
-                    .iter()
-                    .map(|id| id.to_string())
-                    .collect(),
-                cwe: vec![78],
-                evidence: "the ip_addr parameter reflects injected command output".to_string(),
-                loot_fingerprint: Some(fingerprint.clone()),
-            })
-            .map_err(AssessError::Store)?;
-
-        Ok(AssessOutcome::Exploited {
-            category: "database-url".to_string(),
-            fingerprint,
+        let invocation = ToolInvocation {
+            tool: tool.name(),
+            target,
+            args,
+            dockerfile: tool.dockerfile(),
+        };
+        let outcome = self.runner.run(&invocation).map_err(RunError::Runner)?;
+        let parsed = tool.parse(target, &outcome);
+        for loot in &parsed.loot {
+            self.loot.emit(loot).map_err(RunError::Store)?;
+        }
+        for finding in &parsed.findings {
+            self.findings.emit(finding).map_err(RunError::Store)?;
+        }
+        Ok(RunReport::Ran {
+            findings: parsed.findings.len(),
+            loot: parsed.loot.len(),
+            outcome,
         })
     }
 }
 
-pub fn extract_env_var(output: &str, name: &str) -> Option<String> {
-    let needle = format!("{name}=");
-    let start = output.find(&needle)? + needle.len();
-    let rest = &output[start..];
-    let end = rest
-        .find(|c: char| c.is_whitespace() || c == '<')
-        .unwrap_or(rest.len());
-    let value = &rest[..end];
-    (!value.is_empty()).then(|| value.to_string())
+pub struct QueryFindings<FS> {
+    pub findings: FS,
 }
 
-/// Decodes the HTML entities a web target emits when it reflects command output into a page (the
-/// CWE-78 lab escapes `=` as `&#x3D;`, `<` as `&lt;`, and so on), so the raw command output can be
-/// parsed back out.
-pub fn html_unescape(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    let mut rest = input;
-    while let Some(amp) = rest.find('&') {
-        out.push_str(&rest[..amp]);
-        let after = &rest[amp + 1..];
-        if let Some(semi) = after.find(';') {
-            if let Some(decoded) = decode_entity(&after[..semi]) {
-                out.push(decoded);
-                rest = &after[semi + 1..];
-                continue;
-            }
+impl<FS: FindingsStore> QueryFindings<FS> {
+    pub fn filtered(
+        &self,
+        technique: Option<&str>,
+        severity: Option<&str>,
+        tool: Option<&str>,
+    ) -> Result<Vec<Finding>, StoreError> {
+        let mut items = self.findings.list()?;
+        if let Some(technique) = technique {
+            items.retain(|f| f.attack_technique.iter().any(|id| id == technique));
         }
-        out.push('&');
-        rest = after;
+        if let Some(severity) = severity {
+            items.retain(|f| f.severity.as_str() == severity);
+        }
+        if let Some(tool) = tool {
+            items.retain(|f| f.tool == tool);
+        }
+        Ok(items)
     }
-    out.push_str(rest);
-    out
 }
 
-fn decode_entity(entity: &str) -> Option<char> {
-    match entity {
-        "amp" => Some('&'),
-        "lt" => Some('<'),
-        "gt" => Some('>'),
-        "quot" => Some('"'),
-        "apos" => Some('\''),
-        _ => {
-            let code = if let Some(hex) = entity
-                .strip_prefix("#x")
-                .or_else(|| entity.strip_prefix("#X"))
-            {
-                u32::from_str_radix(hex, 16).ok()?
-            } else {
-                entity.strip_prefix('#')?.parse::<u32>().ok()?
-            };
-            char::from_u32(code)
+pub struct QueryLoot<LS> {
+    pub loot: LS,
+}
+
+impl<LS: LootStore> QueryLoot<LS> {
+    pub fn filtered(&self, category: Option<&str>) -> Result<Vec<Loot>, StoreError> {
+        let mut items = self.loot.list()?;
+        if let Some(category) = category {
+            items.retain(|l| l.category == category);
         }
+        Ok(items)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use searu_domain::findings::{Severity, Status};
     use searu_domain::ports::{Authorisation, Authoriser, Roe};
     use searu_domain::scope::{HostForm, Scope, ScopeEntry};
-    use std::cell::{Cell, RefCell};
+    use searu_domain::tools::{ParsedOutput, Tool};
+    use std::cell::RefCell;
 
-    fn in_scope_roe() -> Roe {
-        Roe {
-            scope: Scope {
-                targets: vec![ScopeEntry::Host {
-                    form: HostForm::Domain,
-                    value: "staging.example.com".to_string(),
-                    port: None,
+    struct FakeTool;
+    static FAKE_TOOL: FakeTool = FakeTool;
+    impl Tool for FakeTool {
+        fn name(&self) -> &'static str {
+            "faketool"
+        }
+        fn techniques(&self) -> &'static [&'static str] {
+            &["T1190"]
+        }
+        fn dockerfile(&self) -> &'static str {
+            ""
+        }
+        fn advice(&self) -> &'static str {
+            ""
+        }
+        fn invocation(&self, _target: &str, args: &[String]) -> Vec<String> {
+            args.to_vec()
+        }
+        fn parse(&self, target: &str, _outcome: &ToolOutcome) -> ParsedOutput {
+            ParsedOutput {
+                findings: vec![Finding {
+                    tool: "faketool".to_string(),
+                    target: target.to_string(),
+                    title: "OS command injection".to_string(),
+                    severity: Severity::Critical,
+                    status: Status::Confirmed,
+                    attack_technique: vec!["T1190".to_string()],
+                    cwe: vec![78],
+                    evidence: "e".to_string(),
+                    loot_fingerprint: Some("ff00ff00ff00".to_string()),
                 }],
-                exclusions: vec![],
-            },
-            ..Default::default()
+                loot: vec![Loot {
+                    fingerprint: "ff00ff00ff00".to_string(),
+                    category: "database-url".to_string(),
+                    value: "testing".to_string(),
+                }],
+            }
         }
     }
 
-    struct StubRepo(fn() -> Roe);
-    impl RoeRepository for StubRepo {
+    struct FakeRegistry;
+    impl ToolRegistry for FakeRegistry {
+        fn tool(&self, name: &str) -> Option<&'static dyn Tool> {
+            (name == "faketool").then_some(&FAKE_TOOL as &dyn Tool)
+        }
+        fn tools_for(&self, _technique: &str) -> Vec<&'static dyn Tool> {
+            vec![&FAKE_TOOL]
+        }
+        fn all(&self) -> Vec<&'static dyn Tool> {
+            vec![&FAKE_TOOL]
+        }
+    }
+
+    struct StubRoe(fn() -> Roe);
+    impl RoeRepository for StubRoe {
         fn load(&self) -> Result<Roe, RepoError> {
             Ok((self.0)())
         }
     }
 
-    struct FailingRepo;
-    impl RoeRepository for FailingRepo {
-        fn load(&self) -> Result<Roe, RepoError> {
-            Err(RepoError::Io("boom".to_string()))
+    fn authorising() -> Roe {
+        Roe {
+            scope: Scope {
+                targets: vec![ScopeEntry::Host {
+                    form: HostForm::Url,
+                    value: "http://localhost:5000".to_string(),
+                    port: None,
+                }],
+                exclusions: vec![],
+            },
+            allowed_techniques: vec!["T1190".to_string()],
+            authorisation: Authorisation {
+                exploitation_authorised_by: Some(Authoriser {
+                    name: "Jane".to_string(),
+                    email: "jane@example.com".to_string(),
+                }),
+                destructive_authorised: false,
+            },
         }
     }
 
-    struct SpyRunner {
-        calls: Cell<u32>,
-        code: i32,
-    }
+    struct SpyRunner;
     impl ToolRunner for SpyRunner {
         fn run(&self, _invocation: &ToolInvocation) -> Result<ToolOutcome, RunnerError> {
-            self.calls.set(self.calls.get() + 1);
             Ok(ToolOutcome {
-                code: self.code,
-                stdout: String::new(),
+                code: 0,
+                stdout: "out".to_string(),
                 stderr: String::new(),
             })
         }
@@ -248,216 +252,149 @@ mod tests {
     struct PanicRunner;
     impl ToolRunner for PanicRunner {
         fn run(&self, _invocation: &ToolInvocation) -> Result<ToolOutcome, RunnerError> {
-            unreachable!("the runner must never be invoked for an out-of-scope target");
-        }
-    }
-
-    #[test]
-    fn an_out_of_scope_target_never_invokes_the_runner() {
-        let use_case = RunTool {
-            roe: StubRepo(in_scope_roe),
-            runner: PanicRunner,
-        };
-        let result = use_case.execute("scan", "evil.example.org", &[]);
-        assert!(matches!(result, Err(RunError::OutOfScope(_))));
-    }
-
-    #[test]
-    fn an_in_scope_target_runs_the_tool_once() {
-        let use_case = RunTool {
-            roe: StubRepo(in_scope_roe),
-            runner: SpyRunner {
-                calls: Cell::new(0),
-                code: 7,
-            },
-        };
-        let result = use_case.execute("scan", "staging.example.com", &[]);
-        assert!(matches!(result, Ok(outcome) if outcome.code == 7));
-        assert_eq!(use_case.runner.calls.get(), 1);
-    }
-
-    #[test]
-    fn a_repository_failure_propagates() {
-        let use_case = RunTool {
-            roe: FailingRepo,
-            runner: PanicRunner,
-        };
-        let result = use_case.execute("scan", "staging.example.com", &[]);
-        assert!(matches!(result, Err(RunError::Repo(_))));
-    }
-
-    fn authorising_roe() -> Roe {
-        Roe {
-            scope: Scope {
-                targets: vec![ScopeEntry::Host {
-                    form: HostForm::Domain,
-                    value: "localhost".to_string(),
-                    port: None,
-                }],
-                exclusions: vec![],
-            },
-            allowed_techniques: vec!["T1190".to_string(), "T1059".to_string()],
-            authorisation: Authorisation {
-                exploitation_authorised_by: Some(Authoriser {
-                    name: "Lab Operator".to_string(),
-                    email: "operator@example.com".to_string(),
-                }),
-                destructive_authorised: false,
-            },
-        }
-    }
-
-    fn unauthorised_roe() -> Roe {
-        Roe {
-            authorisation: Authorisation::default(),
-            ..authorising_roe()
-        }
-    }
-
-    struct FakeInjector {
-        output: String,
-        calls: Cell<u32>,
-    }
-    impl ReflectedCommandInjector for FakeInjector {
-        fn exploit(&self, _target: &str, _command: &str) -> Result<String, ExploitError> {
-            self.calls.set(self.calls.get() + 1);
-            Ok(self.output.clone())
-        }
-    }
-
-    struct PanicInjector;
-    impl ReflectedCommandInjector for PanicInjector {
-        fn exploit(&self, _target: &str, _command: &str) -> Result<String, ExploitError> {
-            unreachable!("the injector must never run when the gate refuses");
-        }
-    }
-
-    struct FixedFingerprinter;
-    impl Fingerprinter for FixedFingerprinter {
-        fn fingerprint(&self, _value: &str) -> String {
-            "ff00ff00ff00".to_string()
+            unreachable!("the runner must not run when the gate refuses or validation fails");
         }
     }
 
     #[derive(Default)]
-    struct CapturingFindings {
+    struct MemFindings {
         items: RefCell<Vec<Finding>>,
     }
-    impl FindingsStore for CapturingFindings {
+    impl FindingsStore for MemFindings {
         fn emit(&self, finding: &Finding) -> Result<(), StoreError> {
             self.items.borrow_mut().push(finding.clone());
             Ok(())
         }
+        fn list(&self) -> Result<Vec<Finding>, StoreError> {
+            Ok(self.items.borrow().clone())
+        }
     }
 
     #[derive(Default)]
-    struct CapturingLoot {
+    struct MemLoot {
         items: RefCell<Vec<Loot>>,
     }
-    impl LootStore for CapturingLoot {
+    impl LootStore for MemLoot {
         fn emit(&self, loot: &Loot) -> Result<(), StoreError> {
             self.items.borrow_mut().push(loot.clone());
             Ok(())
         }
+        fn list(&self) -> Result<Vec<Loot>, StoreError> {
+            Ok(self.items.borrow().clone())
+        }
     }
 
-    const ENV_OUTPUT: &str = "PATH&#x3D;/usr/bin\nDATABASE_URL&#x3D;testing\nHOME&#x3D;/root";
+    const LOCAL: &str = "http://localhost:5000/cmd/dig?ip_addr=1";
 
     #[test]
-    fn assess_exploits_and_stores_loot_and_a_finding() {
-        let assess = Assess {
-            roe: StubRepo(authorising_roe),
-            injector: FakeInjector {
-                output: ENV_OUTPUT.to_string(),
-                calls: Cell::new(0),
-            },
-            fingerprinter: FixedFingerprinter,
-            findings: CapturingFindings::default(),
-            loot: CapturingLoot::default(),
+    fn an_authorised_run_stores_the_parsed_findings_and_loot() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising),
+            registry: FakeRegistry,
+            runner: SpyRunner,
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
         };
-
-        let outcome = assess
+        let report = use_case
             .run(
-                "command-injection",
-                "http://localhost:5000/cmd/dig?ip_addr=1",
-            )
-            .unwrap();
-        assert!(matches!(outcome, AssessOutcome::Exploited { .. }));
-
-        let loot = assess.loot.items.borrow();
-        assert_eq!(loot.len(), 1);
-        assert_eq!(loot[0].value, "testing");
-        assert_eq!(loot[0].fingerprint, "ff00ff00ff00");
-
-        let findings = assess.findings.items.borrow();
-        assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].cwe, vec![78]);
-        assert_eq!(findings[0].attack_technique, vec!["T1190", "T1059"]);
-        assert_eq!(
-            findings[0].loot_fingerprint.as_deref(),
-            Some("ff00ff00ff00")
-        );
-    }
-
-    #[test]
-    fn assess_refuses_without_an_authoriser_and_never_exploits() {
-        let assess = Assess {
-            roe: StubRepo(unauthorised_roe),
-            injector: PanicInjector,
-            fingerprinter: FixedFingerprinter,
-            findings: CapturingFindings::default(),
-            loot: CapturingLoot::default(),
-        };
-
-        let outcome = assess
-            .run(
-                "command-injection",
-                "http://localhost:5000/cmd/dig?ip_addr=1",
+                "faketool",
+                "T1190",
+                LOCAL,
+                &["--os-cmd".to_string(), "env".to_string()],
             )
             .unwrap();
         assert!(matches!(
-            outcome,
-            AssessOutcome::Refused(Decision::ExploitationNotAuthorised)
+            report,
+            RunReport::Ran {
+                findings: 1,
+                loot: 1,
+                ..
+            }
         ));
-        assert!(assess.findings.items.borrow().is_empty());
-        assert!(assess.loot.items.borrow().is_empty());
+        assert_eq!(use_case.findings.items.borrow().len(), 1);
+        assert_eq!(use_case.loot.items.borrow().len(), 1);
     }
 
     #[test]
-    fn assess_refuses_an_out_of_scope_target() {
-        let assess = Assess {
-            roe: StubRepo(authorising_roe),
-            injector: PanicInjector,
-            fingerprinter: FixedFingerprinter,
-            findings: CapturingFindings::default(),
-            loot: CapturingLoot::default(),
+    fn an_out_of_scope_target_refuses_and_never_runs() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising),
+            registry: FakeRegistry,
+            runner: PanicRunner,
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
         };
-
-        let outcome = assess
-            .run(
-                "command-injection",
-                "http://evil.example.org/cmd/dig?ip_addr=1",
-            )
+        let report = use_case
+            .run("faketool", "T1190", "http://evil.example.org/x", &[])
             .unwrap();
+        assert!(matches!(report, RunReport::Refused(Decision::OutOfScope)));
+        assert!(use_case.findings.items.borrow().is_empty());
+        assert!(use_case.loot.items.borrow().is_empty());
+    }
+
+    #[test]
+    fn an_unknown_tool_is_an_error() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising),
+            registry: FakeRegistry,
+            runner: PanicRunner,
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
+        };
         assert!(matches!(
-            outcome,
-            AssessOutcome::Refused(Decision::OutOfScope)
+            use_case.run("nope", "T1190", LOCAL, &[]),
+            Err(RunError::UnknownTool(_))
         ));
     }
 
     #[test]
-    fn extracts_an_environment_variable_value() {
-        let decoded = "PATH=/usr/bin\nDATABASE_URL=testing\nHOME=/root";
-        assert_eq!(
-            extract_env_var(decoded, "DATABASE_URL").as_deref(),
-            Some("testing")
-        );
-        assert_eq!(extract_env_var(decoded, "NOPE"), None);
+    fn a_technique_outside_the_tool_repertoire_is_an_error() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising),
+            registry: FakeRegistry,
+            runner: PanicRunner,
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
+        };
+        assert!(matches!(
+            use_case.run("faketool", "T9999", LOCAL, &[]),
+            Err(RunError::UnsupportedTechnique { .. })
+        ));
     }
 
     #[test]
-    fn html_unescapes_reflected_output() {
-        assert!(html_unescape(ENV_OUTPUT).contains("DATABASE_URL=testing"));
-        assert_eq!(html_unescape("a&amp;b&lt;c&gt;d&#x3D;e"), "a&b<c>d=e");
+    fn query_findings_filters_by_technique() {
+        let store = MemFindings::default();
+        store
+            .emit(&Finding {
+                tool: "commix".to_string(),
+                target: LOCAL.to_string(),
+                title: "a".to_string(),
+                severity: Severity::Critical,
+                status: Status::Confirmed,
+                attack_technique: vec!["T1190".to_string()],
+                cwe: vec![78],
+                evidence: String::new(),
+                loot_fingerprint: None,
+            })
+            .unwrap();
+        store
+            .emit(&Finding {
+                tool: "nmap".to_string(),
+                target: LOCAL.to_string(),
+                title: "b".to_string(),
+                severity: Severity::Info,
+                status: Status::NeedsReview,
+                attack_technique: vec!["T1046".to_string()],
+                cwe: vec![],
+                evidence: String::new(),
+                loot_fingerprint: None,
+            })
+            .unwrap();
+
+        let query = QueryFindings { findings: store };
+        assert_eq!(query.filtered(Some("T1190"), None, None).unwrap().len(), 1);
+        assert_eq!(query.filtered(None, Some("info"), None).unwrap().len(), 1);
+        assert_eq!(query.filtered(None, None, None).unwrap().len(), 2);
     }
 }

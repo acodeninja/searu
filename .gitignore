@@ -7,3 +7,9 @@
 
 # Rust build output.
 /target/
+
+# Per-engagement working data (findings/loot/ROE) — never committed.
+/pentest/
+
+# Local lab targets cloned for testing (e.g. the CWE-78 app).
+/examples/CWE-78/

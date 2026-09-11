@@ -1,0 +1,121 @@
+//! The commix tool wrapper: how searu invokes commix and normalises its output into findings/loot.
+//! commix does the exploiting; this crate only shapes the invocation and reads the result.
+
+use searu_domain::findings::{Finding, Loot, Severity, Status};
+use searu_domain::ports::ToolOutcome;
+use searu_domain::tools::{ParsedOutput, Tool};
+
+pub struct Commix;
+
+pub static COMMIX: Commix = Commix;
+
+impl Tool for Commix {
+    fn name(&self) -> &'static str {
+        "commix"
+    }
+
+    fn techniques(&self) -> &'static [&'static str] {
+        &["T1190", "T1059", "T1082", "T1083", "T1518", "T1552"]
+    }
+
+    fn dockerfile(&self) -> &'static str {
+        include_str!("../Dockerfile")
+    }
+
+    fn advice(&self) -> &'static str {
+        include_str!("../advice.md")
+    }
+
+    fn invocation(&self, _target: &str, args: &[String]) -> Vec<String> {
+        // commix reads its target from stdin (searu feeds it there), so the invocation is just the
+        // batch flag plus the caller's action arguments.
+        let mut argv = vec!["--batch".to_string()];
+        argv.extend(args.iter().cloned());
+        argv
+    }
+
+    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+        let decoded = searu_tool_parser::text::html_unescape(&outcome.stdout);
+
+        let loot: Vec<Loot> = searu_tool_parser::text::secrets(&decoded)
+            .into_iter()
+            .map(|(category, value)| Loot {
+                fingerprint: searu_tool_parser::fingerprint(&value),
+                category,
+                value,
+            })
+            .collect();
+
+        let lower = decoded.to_ascii_lowercase();
+        let confirmed =
+            !loot.is_empty() || lower.contains("vulnerable") || lower.contains("injectable");
+
+        let mut findings = Vec::new();
+        if confirmed {
+            findings.push(Finding {
+                tool: "commix".to_string(),
+                target: target.to_string(),
+                title: "OS command injection".to_string(),
+                severity: Severity::Critical,
+                status: Status::Confirmed,
+                attack_technique: vec!["T1190".to_string(), "T1059".to_string()],
+                cwe: vec![78],
+                evidence: "commix executed an injected OS command via the request parameter"
+                    .to_string(),
+                loot_fingerprint: loot.first().map(|l| l.fingerprint.clone()),
+            });
+        }
+
+        ParsedOutput { findings, loot }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invocation_is_batch_plus_the_caller_args() {
+        let argv = COMMIX.invocation(
+            "http://t/cmd/dig?ip_addr=1",
+            &["--os-cmd".to_string(), "env".to_string()],
+        );
+        assert_eq!(argv, vec!["--batch", "--os-cmd", "env"]);
+    }
+
+    #[test]
+    fn parses_a_transcript_into_a_finding_and_loot() {
+        let outcome = ToolOutcome {
+            code: 0,
+            stdout: "The (GET) 'ip_addr' parameter is vulnerable.\nDATABASE_URL&#x3D;testing\n"
+                .to_string(),
+            stderr: String::new(),
+        };
+        let parsed = COMMIX.parse("http://localhost:5000/cmd/dig?ip_addr=1", &outcome);
+
+        assert_eq!(parsed.loot.len(), 1);
+        assert_eq!(parsed.loot[0].category, "database-url");
+        assert_eq!(parsed.loot[0].value, "testing");
+
+        assert_eq!(parsed.findings.len(), 1);
+        assert_eq!(parsed.findings[0].cwe, vec![78]);
+        assert_eq!(parsed.findings[0].attack_technique, vec!["T1190", "T1059"]);
+        assert_eq!(
+            parsed.findings[0].loot_fingerprint.as_deref(),
+            Some(parsed.loot[0].fingerprint.as_str())
+        );
+        assert!(!format!("{:?}", parsed.findings[0]).contains("testing"));
+    }
+
+    #[test]
+    fn a_run_that_confirms_nothing_records_nothing() {
+        let outcome = ToolOutcome {
+            code: 1,
+            stdout: "no command injection identified".to_string(),
+            stderr: String::new(),
+        };
+        let parsed = COMMIX.parse("http://localhost:5000/", &outcome);
+        assert!(parsed.findings.is_empty());
+        assert!(parsed.loot.is_empty());
+    }
+}

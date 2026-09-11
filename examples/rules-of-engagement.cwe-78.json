@@ -5,7 +5,7 @@
       { "type": "ip", "value": "127.0.0.1", "port": 5000 }
     ]
   },
-  "allowed_techniques": ["T1190", "T1059"],
+  "allowed_techniques": ["T1190", "T1059", "T1552", "T1082", "T1083", "T1518"],
   "authorisation": {
     "exploitation_authorised_by": {
       "name": "Lab Operator",

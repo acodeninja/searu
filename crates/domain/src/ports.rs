@@ -68,6 +68,7 @@ pub struct ToolInvocation<'a> {
     pub tool: &'a str,
     pub target: &'a str,
     pub args: &'a [String],
+    pub dockerfile: &'a str,
 }
 
 pub struct ToolOutcome {
@@ -90,10 +91,10 @@ impl std::fmt::Display for StoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             StoreError::Io(message) => {
-                write!(f, "could not write to the engagement store: {message}")
+                write!(f, "could not access the engagement store: {message}")
             }
             StoreError::Serialise(message) => {
-                write!(f, "could not serialise the record: {message}")
+                write!(f, "could not (de)serialise the record: {message}")
             }
         }
     }
@@ -103,31 +104,10 @@ impl std::error::Error for StoreError {}
 
 pub trait FindingsStore {
     fn emit(&self, finding: &Finding) -> Result<(), StoreError>;
+    fn list(&self) -> Result<Vec<Finding>, StoreError>;
 }
 
 pub trait LootStore {
     fn emit(&self, loot: &Loot) -> Result<(), StoreError>;
-}
-
-pub trait Fingerprinter {
-    fn fingerprint(&self, value: &str) -> String;
-}
-
-#[derive(Debug)]
-pub enum ExploitError {
-    Request(String),
-}
-
-impl std::fmt::Display for ExploitError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExploitError::Request(message) => write!(f, "exploit request failed: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for ExploitError {}
-
-pub trait ReflectedCommandInjector {
-    fn exploit(&self, target: &str, command: &str) -> Result<String, ExploitError>;
+    fn list(&self) -> Result<Vec<Loot>, StoreError>;
 }

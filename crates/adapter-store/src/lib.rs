@@ -1,13 +1,11 @@
 //! Engagement-file repositories: reads rules of engagement from JSON on disk.
 
-use searu_domain::findings::{Finding, Loot};
+use searu_domain::findings::{Finding, Loot, Severity, Status};
 use searu_domain::ports::{
-    Authorisation, Authoriser, FindingsStore, Fingerprinter, LootStore, RepoError, Roe,
-    RoeRepository, StoreError,
+    Authorisation, Authoriser, FindingsStore, LootStore, RepoError, Roe, RoeRepository, StoreError,
 };
 use searu_domain::scope::{HostForm, Scope, ScopeEntry};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -135,18 +133,6 @@ impl RoeRepository for JsonRoeRepository {
     }
 }
 
-pub struct Sha256Fingerprinter;
-
-impl Fingerprinter for Sha256Fingerprinter {
-    fn fingerprint(&self, value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        let digest = hasher.finalize();
-        let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
-        hex[..12].to_string()
-    }
-}
-
 #[derive(Serialize)]
 struct FindingRecord<'a> {
     kind: &'a str,
@@ -167,6 +153,57 @@ struct LootRecord<'a> {
     fingerprint: &'a str,
     category: &'a str,
     value: &'a str,
+}
+
+#[derive(Deserialize)]
+struct FindingRow {
+    #[serde(default)]
+    kind: String,
+    tool: String,
+    target: String,
+    title: String,
+    severity: String,
+    status: String,
+    #[serde(default)]
+    attack_technique: Vec<String>,
+    #[serde(default)]
+    cwe: Vec<u32>,
+    #[serde(default)]
+    evidence: String,
+    #[serde(default)]
+    loot_fingerprint: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct LootRow {
+    fingerprint: String,
+    category: String,
+    value: String,
+}
+
+fn read_lines(path: &Path) -> Result<Vec<String>, StoreError> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(text.lines().map(str::to_string).collect()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(StoreError::Io(e.to_string())),
+    }
+}
+
+fn severity_from(name: &str) -> Severity {
+    match name {
+        "low" => Severity::Low,
+        "medium" => Severity::Medium,
+        "high" => Severity::High,
+        "critical" => Severity::Critical,
+        _ => Severity::Info,
+    }
+}
+
+fn status_from(name: &str) -> Status {
+    match name {
+        "confirmed" => Status::Confirmed,
+        _ => Status::NeedsReview,
+    }
 }
 
 pub struct JsonlFindingsStore {
@@ -199,6 +236,30 @@ impl FindingsStore for JsonlFindingsStore {
             serde_json::to_string(&record).map_err(|e| StoreError::Serialise(e.to_string()))?;
         append_line(&self.path, &line)
     }
+
+    fn list(&self) -> Result<Vec<Finding>, StoreError> {
+        let mut findings = Vec::new();
+        for line in read_lines(&self.path)? {
+            let Ok(row) = serde_json::from_str::<FindingRow>(&line) else {
+                continue;
+            };
+            if row.kind != "finding" {
+                continue;
+            }
+            findings.push(Finding {
+                tool: row.tool,
+                target: row.target,
+                title: row.title,
+                severity: severity_from(&row.severity),
+                status: status_from(&row.status),
+                attack_technique: row.attack_technique,
+                cwe: row.cwe,
+                evidence: row.evidence,
+                loot_fingerprint: row.loot_fingerprint,
+            });
+        }
+        Ok(findings)
+    }
 }
 
 pub struct JsonlLootStore {
@@ -224,6 +285,20 @@ impl LootStore for JsonlLootStore {
         append_line(&path, &line)?;
         harden_loot(&self.dir, &path);
         Ok(())
+    }
+
+    fn list(&self) -> Result<Vec<Loot>, StoreError> {
+        let mut loot = Vec::new();
+        for line in read_lines(&self.dir.join("loot.jsonl"))? {
+            if let Ok(row) = serde_json::from_str::<LootRow>(&line) {
+                loot.push(Loot {
+                    fingerprint: row.fingerprint,
+                    category: row.category,
+                    value: row.value,
+                });
+            }
+        }
+        Ok(loot)
     }
 }
 
@@ -355,13 +430,7 @@ mod tests {
     }
 
     #[test]
-    fn fingerprints_are_the_first_twelve_hex_of_sha256() {
-        assert_eq!(Sha256Fingerprinter.fingerprint("abc"), "ba7816bf8f01");
-    }
-
-    #[test]
     fn a_finding_records_the_fingerprint_never_the_secret() {
-        use searu_domain::findings::{Severity, Status};
         let dir = tempfile::tempdir().unwrap();
         let store = JsonlFindingsStore::new(dir.path());
         let finding = Finding {
@@ -399,5 +468,59 @@ mod tests {
         let text = std::fs::read_to_string(dir.path().join("loot.jsonl")).unwrap();
         assert!(text.contains("postgres://admin:s3cr3t@db/app"));
         assert!(text.contains("ba7816bf8f01"));
+    }
+
+    #[test]
+    fn lists_emitted_findings() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = JsonlFindingsStore::new(dir.path());
+        store
+            .emit(&Finding {
+                tool: "commix".to_string(),
+                target: "http://localhost:5000".to_string(),
+                title: "OS command injection".to_string(),
+                severity: Severity::Critical,
+                status: Status::Confirmed,
+                attack_technique: vec!["T1190".to_string()],
+                cwe: vec![78],
+                evidence: "x".to_string(),
+                loot_fingerprint: Some("ba7816bf8f01".to_string()),
+            })
+            .unwrap();
+
+        let listed = store.list().unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].severity, Severity::Critical);
+        assert_eq!(listed[0].status, Status::Confirmed);
+        assert_eq!(listed[0].attack_technique, vec!["T1190"]);
+        assert_eq!(listed[0].cwe, vec![78]);
+    }
+
+    #[test]
+    fn lists_emitted_loot() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = JsonlLootStore::new(dir.path());
+        store
+            .emit(&Loot {
+                fingerprint: "ba7816bf8f01".to_string(),
+                category: "database-url".to_string(),
+                value: "testing".to_string(),
+            })
+            .unwrap();
+
+        let listed = store.list().unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].category, "database-url");
+        assert_eq!(listed[0].value, "testing");
+    }
+
+    #[test]
+    fn listing_a_missing_store_is_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(JsonlFindingsStore::new(dir.path())
+            .list()
+            .unwrap()
+            .is_empty());
+        assert!(JsonlLootStore::new(dir.path()).list().unwrap().is_empty());
     }
 }

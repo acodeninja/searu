@@ -1,4 +1,7 @@
-use clap::{Arg, ArgMatches, Command};
+use clap::{Arg, ArgAction, ArgMatches, Command};
+
+const DEFAULT_ROE: &str = "pentest/rules-of-engagement.json";
+const ENGAGEMENT_DIR: &str = "pentest";
 
 fn cli() -> Command {
     Command::new("searu")
@@ -12,46 +15,35 @@ fn cli() -> Command {
                 .subcommand(
                     Command::new("list")
                         .about("List techniques, optionally within a tactic")
-                        .arg(
-                            Arg::new("tactic")
-                                .long("tactic")
-                                .value_name("TAxxxx")
-                                .help("Restrict the listing to one tactic"),
-                        ),
+                        .arg(Arg::new("tactic").long("tactic").value_name("TAxxxx")),
                 )
                 .subcommand(
                     Command::new("show")
                         .about("Show a technique by its ATT&CK ID")
-                        .arg(
-                            Arg::new("technique")
-                                .required(true)
-                                .value_name("Txxxx")
-                                .help("The ATT&CK technique or sub-technique ID"),
-                        ),
+                        .arg(Arg::new("technique").required(true).value_name("Txxxx")),
                 ),
         )
         .subcommand(
             Command::new("run")
-                .about("Run a tool in a container against an in-scope target")
+                .about("Run a tool against an in-scope, authorised target")
+                .arg(Arg::new("tool").required(true).value_name("TOOL"))
                 .arg(
-                    Arg::new("tool")
+                    Arg::new("technique")
+                        .long("technique")
                         .required(true)
-                        .value_name("TOOL")
-                        .help("The tool to run"),
-                )
-                .arg(
-                    Arg::new("roe")
-                        .long("roe")
-                        .required(true)
-                        .value_name("PATH")
-                        .help("Path to the rules-of-engagement JSON"),
+                        .value_name("Txxxx")
+                        .help("The ATT&CK technique this action performs"),
                 )
                 .arg(
                     Arg::new("target")
                         .long("target")
                         .required(true)
-                        .value_name("TARGET")
-                        .help("The target to run against"),
+                        .value_name("TARGET"),
+                )
+                .arg(
+                    Arg::new("roe").long("roe").value_name("PATH").help(
+                        "Rules-of-engagement JSON (default: pentest/rules-of-engagement.json)",
+                    ),
                 )
                 .arg(
                     Arg::new("args")
@@ -62,53 +54,47 @@ fn cli() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("assess")
-                .about("Run a full assessment against a target and record findings")
+            Command::new("findings")
+                .about("Query recorded findings")
+                .arg(Arg::new("technique").long("technique").value_name("Txxxx"))
+                .arg(Arg::new("severity").long("severity").value_name("SEVERITY"))
+                .arg(Arg::new("tool").long("tool").value_name("TOOL")),
+        )
+        .subcommand(
+            Command::new("loot")
+                .about("Query recorded loot")
+                .arg(Arg::new("category").long("category").value_name("CATEGORY"))
                 .arg(
-                    Arg::new("roe")
-                        .long("roe")
-                        .required(true)
-                        .value_name("PATH")
-                        .help("Path to the rules-of-engagement JSON"),
-                )
-                .arg(
-                    Arg::new("target")
-                        .long("target")
-                        .required(true)
-                        .value_name("TARGET")
-                        .help("The target URL to assess"),
+                    Arg::new("reveal")
+                        .long("reveal")
+                        .action(ArgAction::SetTrue)
+                        .help("Show captured values, not just fingerprints"),
                 ),
         )
         .subcommand(
-            Command::new("capability")
-                .about("List the security capabilities searu can run")
+            Command::new("tool")
+                .about("Inspect the available tools")
                 .subcommand_required(true)
                 .arg_required_else_help(true)
                 .subcommand(
-                    Command::new("list")
-                        .about("List capabilities, optionally within a tier")
-                        .arg(Arg::new("tier").long("tier").value_name("TIER").help(
-                            "Restrict to a tier: passive, active, exploitation, destructive",
-                        )),
+                    Command::new("list").about("List tools and the techniques they perform"),
+                )
+                .subcommand(
+                    Command::new("advice")
+                        .about("Print how Claude should drive a tool")
+                        .arg(Arg::new("tool").required(true).value_name("TOOL")),
                 ),
         )
-        .subcommand(
-            Command::new("validate-roe").about("Validate an engagement's rules of engagement"),
-        )
-        .subcommand(Command::new("scope-hook").about("PreToolUse scope gate for tool commands"))
-        .subcommand(
-            Command::new("emit-finding").about("Append a validated finding to the findings log"),
-        )
-        .subcommand(Command::new("report").about("Compile findings into a client report"))
 }
 
 fn main() {
     let mut cmd = cli();
     match cmd.clone().get_matches().subcommand() {
         Some(("attack", matches)) => std::process::exit(run_attack(matches)),
-        Some(("capability", matches)) => std::process::exit(run_capability(matches)),
-        Some(("assess", matches)) => std::process::exit(run_assess(matches)),
-        Some(("run", matches)) => std::process::exit(run_tool(matches)),
+        Some(("run", matches)) => std::process::exit(run_action(matches)),
+        Some(("findings", matches)) => std::process::exit(run_findings(matches)),
+        Some(("loot", matches)) => std::process::exit(run_loot(matches)),
+        Some(("tool", matches)) => std::process::exit(run_tool(matches)),
         Some((name, _)) => {
             eprintln!("searu: '{name}' is not implemented yet");
             std::process::exit(1);
@@ -166,67 +152,56 @@ fn run_attack(matches: &ArgMatches) -> i32 {
     }
 }
 
-fn run_capability(matches: &ArgMatches) -> i32 {
-    use searu_domain::capability;
-    match matches.subcommand() {
-        Some(("list", args)) => {
-            let tier = args
-                .get_one::<String>("tier")
-                .map(|t| t.to_ascii_lowercase());
-            for capability in capability::capabilities() {
-                if let Some(tier) = &tier {
-                    if capability.tier.to_string().to_ascii_lowercase() != *tier {
-                        continue;
-                    }
-                }
-                println!(
-                    "{}\t{}\t{}\t{}",
-                    capability.id,
-                    capability.tier,
-                    capability.attack_ids.join(","),
-                    capability.tools.join(",")
-                );
-            }
-            0
-        }
-        _ => {
-            eprintln!("searu capability: unknown subcommand");
-            2
-        }
-    }
-}
+fn run_action(matches: &ArgMatches) -> i32 {
+    use searu_adapter_docker::DockerToolRunner;
+    use searu_adapter_store::{JsonRoeRepository, JsonlFindingsStore, JsonlLootStore};
+    use searu_app::{RunAction, RunError, RunReport};
+    use searu_tool_registry::Registry;
 
-fn run_assess(matches: &ArgMatches) -> i32 {
-    use searu_adapter_http::HttpCommandInjector;
-    use searu_adapter_store::{
-        JsonRoeRepository, JsonlFindingsStore, JsonlLootStore, Sha256Fingerprinter,
-    };
-    use searu_app::{Assess, AssessOutcome};
-
-    let roe = matches.get_one::<String>("roe").expect("required argument");
+    let tool = matches
+        .get_one::<String>("tool")
+        .expect("required argument");
+    let technique = matches
+        .get_one::<String>("technique")
+        .expect("required argument");
     let target = matches
         .get_one::<String>("target")
         .expect("required argument");
+    let roe = matches
+        .get_one::<String>("roe")
+        .map(String::as_str)
+        .unwrap_or(DEFAULT_ROE);
+    let args: Vec<String> = matches
+        .get_many::<String>("args")
+        .map(|values| values.cloned().collect())
+        .unwrap_or_default();
 
-    let assess = Assess {
+    let use_case = RunAction {
         roe: JsonRoeRepository::new(roe),
-        injector: HttpCommandInjector,
-        fingerprinter: Sha256Fingerprinter,
-        findings: JsonlFindingsStore::new("pentest"),
-        loot: JsonlLootStore::new("pentest"),
+        registry: Registry,
+        runner: DockerToolRunner::default(),
+        findings: JsonlFindingsStore::new(ENGAGEMENT_DIR),
+        loot: JsonlLootStore::new(ENGAGEMENT_DIR),
     };
-    match assess.run("command-injection", target) {
-        Ok(AssessOutcome::Exploited {
-            category,
-            fingerprint,
+    match use_case.run(tool, technique, target, &args) {
+        Ok(RunReport::Ran {
+            outcome,
+            findings,
+            loot,
         }) => {
-            println!(
-                "EXPLOITED: captured {category} (loot {fingerprint}); recorded in pentest/findings.jsonl"
+            print!("{}", outcome.stdout);
+            eprint!("{}", outcome.stderr);
+            eprintln!(
+                "recorded {findings} finding(s) and {loot} loot item(s) in {ENGAGEMENT_DIR}/"
             );
-            0
+            outcome.code
         }
-        Ok(AssessOutcome::Refused(decision)) => {
+        Ok(RunReport::Refused(decision)) => {
             eprintln!("REFUSED: {decision}");
+            1
+        }
+        Err(RunError::Repo(error)) => {
+            eprintln!("{error}");
             1
         }
         Err(error) => {
@@ -236,44 +211,92 @@ fn run_assess(matches: &ArgMatches) -> i32 {
     }
 }
 
-fn run_tool(matches: &ArgMatches) -> i32 {
-    use searu_adapter_docker::DockerToolRunner;
-    use searu_adapter_store::JsonRoeRepository;
-    use searu_app::{RunError, RunTool};
+fn run_findings(matches: &ArgMatches) -> i32 {
+    use searu_adapter_store::JsonlFindingsStore;
+    use searu_app::QueryFindings;
 
-    let tool = matches
-        .get_one::<String>("tool")
-        .expect("required argument");
-    let roe = matches.get_one::<String>("roe").expect("required argument");
-    let target = matches
-        .get_one::<String>("target")
-        .expect("required argument");
-    let args: Vec<String> = matches
-        .get_many::<String>("args")
-        .map(|values| values.cloned().collect())
-        .unwrap_or_default();
-
-    let use_case = RunTool {
-        roe: JsonRoeRepository::new(roe),
-        runner: DockerToolRunner::default(),
+    let query = QueryFindings {
+        findings: JsonlFindingsStore::new(ENGAGEMENT_DIR),
     };
-    match use_case.execute(tool, target, &args) {
-        Ok(outcome) => {
-            print!("{}", outcome.stdout);
-            eprint!("{}", outcome.stderr);
-            outcome.code
+    let result = query.filtered(
+        matches.get_one::<String>("technique").map(String::as_str),
+        matches.get_one::<String>("severity").map(String::as_str),
+        matches.get_one::<String>("tool").map(String::as_str),
+    );
+    match result {
+        Ok(findings) => {
+            for finding in findings {
+                println!(
+                    "{}\t{}\t{}\t{}\t{}",
+                    finding.severity.as_str(),
+                    finding.status.as_str(),
+                    finding.attack_technique.join(","),
+                    finding.tool,
+                    finding.title
+                );
+            }
+            0
         }
-        Err(RunError::OutOfScope(target)) => {
-            eprintln!("OUT OF SCOPE: {target}");
-            1
-        }
-        Err(RunError::Repo(error)) => {
+        Err(error) => {
             eprintln!("{error}");
             1
         }
-        Err(RunError::Runner(error)) => {
+    }
+}
+
+fn run_loot(matches: &ArgMatches) -> i32 {
+    use searu_adapter_store::JsonlLootStore;
+    use searu_app::QueryLoot;
+
+    let query = QueryLoot {
+        loot: JsonlLootStore::new(ENGAGEMENT_DIR),
+    };
+    let reveal = matches.get_flag("reveal");
+    match query.filtered(matches.get_one::<String>("category").map(String::as_str)) {
+        Ok(loot) => {
+            for item in loot {
+                if reveal {
+                    println!("{}\t{}\t{}", item.category, item.fingerprint, item.value);
+                } else {
+                    println!("{}\t{}", item.category, item.fingerprint);
+                }
+            }
+            0
+        }
+        Err(error) => {
             eprintln!("{error}");
             1
+        }
+    }
+}
+
+fn run_tool(matches: &ArgMatches) -> i32 {
+    use searu_domain::tools::ToolRegistry;
+    use searu_tool_registry::Registry;
+
+    match matches.subcommand() {
+        Some(("list", _)) => {
+            for tool in Registry.all() {
+                println!("{}\t{}", tool.name(), tool.techniques().join(","));
+            }
+            0
+        }
+        Some(("advice", args)) => {
+            let name = args.get_one::<String>("tool").expect("required argument");
+            match Registry.tool(name) {
+                Some(tool) => {
+                    println!("{}", tool.advice());
+                    0
+                }
+                None => {
+                    eprintln!("unknown tool: {name}");
+                    1
+                }
+            }
+        }
+        _ => {
+            eprintln!("searu tool: unknown subcommand");
+            2
         }
     }
 }

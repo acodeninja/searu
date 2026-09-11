@@ -1,8 +1,26 @@
 use assert_cmd::Command;
-use predicates::boolean::PredicateBooleanExt;
 use predicates::str::contains;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+const LAB_ROE: &str = r#"{
+    "scope": { "targets": [ { "type": "domain", "value": "localhost", "port": 5000 } ] },
+    "allowed_techniques": ["T1190", "T1059"],
+    "authorisation": { "exploitation_authorised_by": { "name": "Lab", "email": "lab@example.com" } }
+}"#;
+
+const UNAUTHORISED_ROE: &str = r#"{
+    "scope": { "targets": [ { "type": "domain", "value": "localhost", "port": 5000 } ] },
+    "allowed_techniques": ["T1190", "T1059"]
+}"#;
+
+fn roe_file(content: &str) -> (tempfile::TempDir, String) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("rules-of-engagement.json");
+    std::fs::write(&path, content).unwrap();
+    let path = path.to_str().unwrap().to_string();
+    (dir, path)
+}
 
 #[test]
 fn version_flag_reports_the_package_version() {
@@ -21,129 +39,9 @@ fn bare_invocation_lists_the_subcommands() {
         .assert()
         .success()
         .stdout(contains("run"))
-        .stdout(contains("attack"));
-}
-
-const SAMPLE_ROE: &str = r#"{
-    "scope": {
-        "targets": [
-            { "type": "domain", "value": "staging.example.com" },
-            { "type": "cidr", "value": "10.20.0.0/24" }
-        ],
-        "exclusions": [
-            { "type": "domain", "value": "billing.staging.example.com" }
-        ]
-    }
-}"#;
-
-#[test]
-fn capability_list_shows_command_injection() {
-    Command::cargo_bin("searu")
-        .unwrap()
-        .args(["capability", "list"])
-        .assert()
-        .success()
-        .stdout(contains("command-injection"))
-        .stdout(contains("T1190"));
-}
-
-#[test]
-fn capability_list_can_filter_to_a_tier() {
-    Command::cargo_bin("searu")
-        .unwrap()
-        .args(["capability", "list", "--tier", "exploitation"])
-        .assert()
-        .success()
-        .stdout(contains("command-injection"));
-}
-
-#[test]
-fn capability_list_excludes_other_tiers() {
-    Command::cargo_bin("searu")
-        .unwrap()
-        .args(["capability", "list", "--tier", "passive"])
-        .assert()
-        .success()
-        .stdout(contains("command-injection").not());
-}
-
-const LAB_ROE: &str = r#"{
-    "scope": { "targets": [ { "type": "domain", "value": "localhost" } ] },
-    "allowed_techniques": ["T1190", "T1059"],
-    "authorisation": {
-        "exploitation_authorised_by": { "name": "Lab Operator", "email": "operator@example.com" }
-    }
-}"#;
-
-const UNAUTHORISED_ROE: &str = r#"{
-    "scope": { "targets": [ { "type": "domain", "value": "localhost" } ] },
-    "allowed_techniques": ["T1190", "T1059"]
-}"#;
-
-#[test]
-fn assess_refuses_an_out_of_scope_target_without_touching_it() {
-    let dir = tempfile::tempdir().unwrap();
-    let roe = dir.path().join("roe.json");
-    std::fs::write(&roe, LAB_ROE).unwrap();
-
-    Command::cargo_bin("searu")
-        .unwrap()
-        .current_dir(&dir)
-        .args([
-            "assess",
-            "--roe",
-            roe.to_str().unwrap(),
-            "--target",
-            "http://evil.example.org/cmd/dig?ip_addr=1",
-        ])
-        .assert()
-        .failure()
-        .code(1)
-        .stderr(contains("OUT OF SCOPE"));
-}
-
-#[test]
-fn assess_refuses_exploitation_without_an_authoriser() {
-    let dir = tempfile::tempdir().unwrap();
-    let roe = dir.path().join("roe.json");
-    std::fs::write(&roe, UNAUTHORISED_ROE).unwrap();
-
-    Command::cargo_bin("searu")
-        .unwrap()
-        .current_dir(&dir)
-        .args([
-            "assess",
-            "--roe",
-            roe.to_str().unwrap(),
-            "--target",
-            "http://localhost:5000/cmd/dig?ip_addr=1",
-        ])
-        .assert()
-        .failure()
-        .code(1)
-        .stderr(contains("exploitation not authorised"));
-}
-
-#[test]
-fn run_refuses_an_out_of_scope_target() {
-    let dir = tempfile::tempdir().unwrap();
-    let roe = dir.path().join("rules-of-engagement.json");
-    std::fs::write(&roe, SAMPLE_ROE).unwrap();
-
-    Command::cargo_bin("searu")
-        .unwrap()
-        .args([
-            "run",
-            "scan",
-            "--roe",
-            roe.to_str().unwrap(),
-            "--target",
-            "evil.example.org",
-        ])
-        .assert()
-        .failure()
-        .code(1)
-        .stderr(contains("OUT OF SCOPE"));
+        .stdout(contains("attack"))
+        .stdout(contains("findings"))
+        .stdout(contains("loot"));
 }
 
 #[test]
@@ -157,16 +55,6 @@ fn attack_show_prints_the_technique_name() {
 }
 
 #[test]
-fn attack_show_reports_the_parent_of_a_subtechnique() {
-    Command::cargo_bin("searu")
-        .unwrap()
-        .args(["attack", "show", "T1595.002"])
-        .assert()
-        .success()
-        .stdout(contains("Sub-technique of: T1595"));
-}
-
-#[test]
 fn attack_list_filters_by_tactic() {
     Command::cargo_bin("searu")
         .unwrap()
@@ -177,10 +65,104 @@ fn attack_list_filters_by_tactic() {
 }
 
 #[test]
-fn attack_show_rejects_an_unknown_technique() {
+fn run_refuses_an_out_of_scope_target() {
+    let (_dir, roe) = roe_file(LAB_ROE);
     Command::cargo_bin("searu")
         .unwrap()
-        .args(["attack", "show", "T9999"])
+        .args([
+            "run",
+            "commix",
+            "--technique",
+            "T1190",
+            "--target",
+            "http://evil.example.org/cmd/dig?ip_addr=1",
+            "--roe",
+            &roe,
+        ])
         .assert()
-        .failure();
+        .failure()
+        .code(1)
+        .stderr(contains("OUT OF SCOPE"));
+}
+
+#[test]
+fn run_refuses_exploitation_without_an_authoriser() {
+    let (_dir, roe) = roe_file(UNAUTHORISED_ROE);
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args([
+            "run",
+            "commix",
+            "--technique",
+            "T1190",
+            "--target",
+            "http://localhost:5000/cmd/dig?ip_addr=1",
+            "--roe",
+            &roe,
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(contains("exploitation not authorised"));
+}
+
+#[test]
+fn run_rejects_a_technique_outside_the_tool_repertoire() {
+    let (_dir, roe) = roe_file(LAB_ROE);
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args([
+            "run",
+            "commix",
+            "--technique",
+            "T9999",
+            "--target",
+            "http://localhost:5000/cmd/dig?ip_addr=1",
+            "--roe",
+            &roe,
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(contains("cannot perform"));
+}
+
+#[test]
+fn tool_list_includes_commix() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args(["tool", "list"])
+        .assert()
+        .success()
+        .stdout(contains("commix"))
+        .stdout(contains("T1190"));
+}
+
+#[test]
+fn tool_advice_prints_guidance() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args(["tool", "advice", "commix"])
+        .assert()
+        .success()
+        .stdout(contains("commix"));
+}
+
+#[test]
+fn findings_and_loot_are_empty_on_a_fresh_engagement() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("searu")
+        .unwrap()
+        .current_dir(&dir)
+        .arg("findings")
+        .assert()
+        .success()
+        .stdout("");
+    Command::cargo_bin("searu")
+        .unwrap()
+        .current_dir(&dir)
+        .arg("loot")
+        .assert()
+        .success()
+        .stdout("");
 }

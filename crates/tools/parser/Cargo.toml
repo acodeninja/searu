@@ -1,8 +1,9 @@
 [package]
-name = "searu-adapter-http"
+name = "searu-tool-parser"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-searu-domain = { path = "../domain" }
+sha2 = "0.11.0"
+regex = "1.13.1"

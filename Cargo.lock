@@ -394,22 +394,15 @@ dependencies = [
  "clap",
  "predicates",
  "searu-adapter-docker",
- "searu-adapter-http",
  "searu-adapter-store",
  "searu-app",
  "searu-domain",
+ "searu-tool-registry",
  "tempfile",
 ]
 
 [[package]]
 name = "searu-adapter-docker"
-version = "0.0.1"
-dependencies = [
- "searu-domain",
-]
-
-[[package]]
-name = "searu-adapter-http"
 version = "0.0.1"
 dependencies = [
  "searu-domain",
@@ -422,7 +415,6 @@ dependencies = [
  "searu-domain",
  "serde",
  "serde_json",
- "sha2",
  "tempfile",
 ]
 
@@ -436,6 +428,30 @@ dependencies = [
 [[package]]
 name = "searu-domain"
 version = "0.0.1"
+
+[[package]]
+name = "searu-tool-commix"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "searu-tool-parser",
+]
+
+[[package]]
+name = "searu-tool-parser"
+version = "0.0.1"
+dependencies = [
+ "regex",
+ "sha2",
+]
+
+[[package]]
+name = "searu-tool-registry"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "searu-tool-commix",
+]
 
 [[package]]
 name = "serde"

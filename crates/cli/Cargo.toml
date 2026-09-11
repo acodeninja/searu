@@ -14,7 +14,7 @@ searu-domain = { path = "../domain" }
 searu-app = { path = "../app" }
 searu-adapter-store = { path = "../adapter-store" }
 searu-adapter-docker = { path = "../adapter-docker" }
-searu-adapter-http = { path = "../adapter-http" }
+searu-tool-registry = { path = "../tools/registry" }
 
 [dev-dependencies]
 assert_cmd = "2.2.2"

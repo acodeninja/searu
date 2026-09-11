@@ -1,59 +1,60 @@
-//! Runs a tool image via the Docker CLI, capturing its output.
+//! Runs a tool in a container via the Docker CLI: builds the tool's embedded Dockerfile on first use,
+//! runs it with host networking so it can reach a host-published target, and captures its output.
 
 use searu_domain::ports::{RunnerError, ToolInvocation, ToolOutcome, ToolRunner};
-use std::path::PathBuf;
-use std::process::Command;
-
-pub fn docker_argv(image: &str, args: &[String]) -> Vec<String> {
-    let mut argv = vec!["run".to_string(), "--rm".to_string(), image.to_string()];
-    argv.extend(args.iter().cloned());
-    argv
-}
+use std::io::Write;
+use std::process::{Command, Stdio};
 
 pub struct DockerToolRunner {
-    pub registry: String,
     pub version: String,
-    pub images_dir: PathBuf,
 }
 
 impl Default for DockerToolRunner {
     fn default() -> Self {
-        let registry =
-            std::env::var("SEARU_REGISTRY").unwrap_or_else(|_| "ghcr.io/searu".to_string());
         Self {
-            registry,
             version: env!("CARGO_PKG_VERSION").to_string(),
-            images_dir: PathBuf::from("images"),
         }
     }
 }
 
-impl DockerToolRunner {
-    pub fn image_for(&self, tool: &str) -> String {
-        format!("{}/searu-{}:{}", self.registry, tool, self.version)
-    }
+pub fn image_tag(tool: &str, version: &str) -> String {
+    format!("searu-{tool}:{version}")
+}
 
-    fn ensure_image(&self, image: &str, tool: &str) -> Result<(), RunnerError> {
+/// Rewrite a host-local target so a tool *inside a container* can reach it on the host.
+pub fn reachable(target: &str) -> String {
+    target
+        .replace("127.0.0.1", "host.docker.internal")
+        .replace("localhost", "host.docker.internal")
+}
+
+pub fn docker_run_argv(image: &str, args: &[String]) -> Vec<String> {
+    let mut argv = vec![
+        "run".to_string(),
+        "-i".to_string(),
+        "--rm".to_string(),
+        "--add-host".to_string(),
+        "host.docker.internal:host-gateway".to_string(),
+        image.to_string(),
+    ];
+    argv.extend(args.iter().cloned());
+    argv
+}
+
+impl DockerToolRunner {
+    fn ensure_image(&self, image: &str, tool: &str, dockerfile: &str) -> Result<(), RunnerError> {
         if docker_ok(["image", "inspect", image]) {
             return Ok(());
         }
-        if docker_ok(["pull", image]) {
-            return Ok(());
-        }
-        let dockerfile = self.images_dir.join(format!("{tool}.Dockerfile"));
-        if !dockerfile.exists() {
-            return Err(RunnerError::Launch(format!(
-                "image {image} is not available and there is no {}",
-                dockerfile.display()
-            )));
-        }
+        let dir = std::env::temp_dir().join(format!("searu-build-{tool}"));
+        std::fs::create_dir_all(&dir).map_err(|e| RunnerError::Launch(e.to_string()))?;
+        std::fs::write(dir.join("Dockerfile"), dockerfile)
+            .map_err(|e| RunnerError::Launch(e.to_string()))?;
         let built = Command::new("docker")
             .arg("build")
             .arg("-t")
             .arg(image)
-            .arg("-f")
-            .arg(&dockerfile)
-            .arg(&self.images_dir)
+            .arg(&dir)
             .status()
             .map(|status| status.success())
             .unwrap_or(false);
@@ -61,8 +62,7 @@ impl DockerToolRunner {
             Ok(())
         } else {
             Err(RunnerError::Launch(format!(
-                "could not build {image} from {}",
-                dockerfile.display()
+                "could not build image {image}"
             )))
         }
     }
@@ -78,12 +78,36 @@ fn docker_ok<const N: usize>(args: [&str; N]) -> bool {
 
 impl ToolRunner for DockerToolRunner {
     fn run(&self, invocation: &ToolInvocation) -> Result<ToolOutcome, RunnerError> {
-        let image = self.image_for(invocation.tool);
-        self.ensure_image(&image, invocation.tool)?;
-        let argv = docker_argv(&image, invocation.args);
-        let output = Command::new("docker")
-            .args(&argv)
-            .output()
+        let image = image_tag(invocation.tool, &self.version);
+        self.ensure_image(&image, invocation.tool, invocation.dockerfile)?;
+
+        let reachable_target = reachable(invocation.target);
+        let args: Vec<String> = invocation
+            .args
+            .iter()
+            .map(|arg| {
+                if arg == invocation.target {
+                    reachable_target.clone()
+                } else {
+                    arg.clone()
+                }
+            })
+            .collect();
+
+        // The reachable target is fed on the tool's stdin (commix reads its target list there); a
+        // tool that takes the target as an argument simply ignores the extra line.
+        let mut child = Command::new("docker")
+            .args(docker_run_argv(&image, &args))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| RunnerError::Launch(e.to_string()))?;
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = stdin.write_all(format!("{reachable_target}\n").as_bytes());
+        }
+        let output = child
+            .wait_with_output()
             .map_err(|e| RunnerError::Launch(e.to_string()))?;
         Ok(ToolOutcome {
             code: output.status.code().unwrap_or(-1),
@@ -98,21 +122,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn builds_a_disposable_run_argv() {
-        let argv = docker_argv("img", &["-x".to_string(), "y".to_string()]);
-        assert_eq!(argv, vec!["run", "--rm", "img", "-x", "y"]);
+    fn names_a_local_image_tag() {
+        assert_eq!(image_tag("commix", "0.0.1"), "searu-commix:0.0.1");
     }
 
     #[test]
-    fn names_a_tool_image_under_the_registry() {
-        let runner = DockerToolRunner {
-            registry: "ghcr.io/example".to_string(),
-            version: "1.2.3".to_string(),
-            images_dir: PathBuf::from("images"),
-        };
+    fn rewrites_host_local_targets_for_the_container() {
         assert_eq!(
-            runner.image_for("commix"),
-            "ghcr.io/example/searu-commix:1.2.3"
+            reachable("http://localhost:5000/cmd/dig?ip_addr=1"),
+            "http://host.docker.internal:5000/cmd/dig?ip_addr=1"
+        );
+        assert_eq!(
+            reachable("http://127.0.0.1:5000/"),
+            "http://host.docker.internal:5000/"
+        );
+    }
+
+    #[test]
+    fn run_argv_adds_the_host_gateway() {
+        let argv = docker_run_argv("searu-commix:0.0.1", &["-u".to_string(), "x".to_string()]);
+        assert_eq!(
+            argv,
+            vec![
+                "run",
+                "-i",
+                "--rm",
+                "--add-host",
+                "host.docker.internal:host-gateway",
+                "searu-commix:0.0.1",
+                "-u",
+                "x"
+            ]
         );
     }
 }
