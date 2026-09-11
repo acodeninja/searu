@@ -2,12 +2,14 @@
 //! tool and normalise its output into findings/loot; searu's core runs it and stores the result but
 //! never parses tool output itself. `domain` owns the trait; concrete tools live in their own crates.
 
-use crate::findings::{Finding, Loot};
+use crate::findings::{Finding, Loot, Observation};
 use crate::ports::ToolOutcome;
 
+#[derive(Default)]
 pub struct ParsedOutput {
     pub findings: Vec<Finding>,
     pub loot: Vec<Loot>,
+    pub observations: Vec<Observation>,
 }
 
 pub trait Tool: Sync {

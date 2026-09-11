@@ -1,8 +1,9 @@
 //! Engagement-file repositories: reads rules of engagement from JSON on disk.
 
-use searu_domain::findings::{Finding, Loot, Severity, Status};
+use searu_domain::findings::{Finding, Loot, Observation, Severity, Status};
 use searu_domain::ports::{
-    Authorisation, Authoriser, FindingsStore, LootStore, RepoError, Roe, RoeRepository, StoreError,
+    Authorisation, Authoriser, FindingsStore, LootStore, ObservationStore, RepoError, Roe,
+    RoeRepository, StoreError,
 };
 use searu_domain::scope::{HostForm, Scope, ScopeEntry};
 use serde::{Deserialize, Serialize};
@@ -181,6 +182,22 @@ struct LootRow {
     value: String,
 }
 
+#[derive(Serialize)]
+struct ObservationRecord<'a> {
+    kind: &'a str,
+    value: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<&'a str>,
+}
+
+#[derive(Deserialize)]
+struct ObservationRow {
+    kind: String,
+    value: String,
+    #[serde(default)]
+    detail: Option<String>,
+}
+
 fn read_lines(path: &Path) -> Result<Vec<String>, StoreError> {
     match std::fs::read_to_string(path) {
         Ok(text) => Ok(text.lines().map(str::to_string).collect()),
@@ -299,6 +316,45 @@ impl LootStore for JsonlLootStore {
             }
         }
         Ok(loot)
+    }
+}
+
+pub struct JsonlObservationStore {
+    path: PathBuf,
+}
+
+impl JsonlObservationStore {
+    pub fn new(dir: impl Into<PathBuf>) -> Self {
+        Self {
+            path: dir.into().join("observations.jsonl"),
+        }
+    }
+}
+
+impl ObservationStore for JsonlObservationStore {
+    fn emit(&self, observation: &Observation) -> Result<(), StoreError> {
+        let record = ObservationRecord {
+            kind: &observation.kind,
+            value: &observation.value,
+            detail: observation.detail.as_deref(),
+        };
+        let line =
+            serde_json::to_string(&record).map_err(|e| StoreError::Serialise(e.to_string()))?;
+        append_line(&self.path, &line)
+    }
+
+    fn list(&self) -> Result<Vec<Observation>, StoreError> {
+        let mut observations = Vec::new();
+        for line in read_lines(&self.path)? {
+            if let Ok(row) = serde_json::from_str::<ObservationRow>(&line) {
+                observations.push(Observation {
+                    kind: row.kind,
+                    value: row.value,
+                    detail: row.detail,
+                });
+            }
+        }
+        Ok(observations)
     }
 }
 
@@ -522,5 +578,27 @@ mod tests {
             .unwrap()
             .is_empty());
         assert!(JsonlLootStore::new(dir.path()).list().unwrap().is_empty());
+    }
+
+    #[test]
+    fn lists_emitted_observations() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = JsonlObservationStore::new(dir.path());
+        store
+            .emit(&Observation {
+                kind: "endpoint".to_string(),
+                value: "/login".to_string(),
+                detail: Some("fields: username,password".to_string()),
+            })
+            .unwrap();
+
+        let listed = store.list().unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].kind, "endpoint");
+        assert_eq!(listed[0].value, "/login");
+        assert_eq!(
+            listed[0].detail.as_deref(),
+            Some("fields: username,password")
+        );
     }
 }

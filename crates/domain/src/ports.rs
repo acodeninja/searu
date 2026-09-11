@@ -1,6 +1,6 @@
 //! Ports: the traits the application depends on, implemented by adapters.
 
-use crate::findings::{Finding, Loot};
+use crate::findings::{Finding, Loot, Observation};
 use crate::scope::Scope;
 
 #[derive(Default)]
@@ -110,4 +110,9 @@ pub trait FindingsStore {
 pub trait LootStore {
     fn emit(&self, loot: &Loot) -> Result<(), StoreError>;
     fn list(&self) -> Result<Vec<Loot>, StoreError>;
+}
+
+pub trait ObservationStore {
+    fn emit(&self, observation: &Observation) -> Result<(), StoreError>;
+    fn list(&self) -> Result<Vec<Observation>, StoreError>;
 }

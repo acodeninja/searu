@@ -56,3 +56,13 @@ pub struct Loot {
     pub category: String,
     pub value: String,
 }
+
+/// An observation is recon intel — a discovered fact about the target (an endpoint, a form field, the
+/// tech stack, a server banner) that Claude reads to decide what to run next. Not a vulnerability
+/// (finding) and not a secret (loot).
+#[derive(Debug, Clone)]
+pub struct Observation {
+    pub kind: String,
+    pub value: String,
+    pub detail: Option<String>,
+}

@@ -66,7 +66,11 @@ impl Tool for Commix {
             });
         }
 
-        ParsedOutput { findings, loot }
+        ParsedOutput {
+            findings,
+            loot,
+            observations: Vec::new(),
+        }
     }
 }
 

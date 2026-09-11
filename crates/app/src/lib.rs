@@ -1,20 +1,21 @@
 //! Application use-cases, generic over the domain ports. searu gates and runs a tool, lets the tool
 //! normalise its own output into findings/loot, stores them, and answers queries over that state.
 
-use searu_domain::findings::{Finding, Loot};
+use searu_domain::findings::{Finding, Loot, Observation};
 use searu_domain::gate::{decide, Decision};
 use searu_domain::ports::{
-    FindingsStore, LootStore, RepoError, RoeRepository, RunnerError, StoreError, ToolInvocation,
-    ToolOutcome, ToolRunner,
+    FindingsStore, LootStore, ObservationStore, RepoError, RoeRepository, RunnerError, StoreError,
+    ToolInvocation, ToolOutcome, ToolRunner,
 };
 use searu_domain::tools::ToolRegistry;
 
-pub struct RunAction<R, Reg, T, FS, LS> {
+pub struct RunAction<R, Reg, T, FS, LS, OS> {
     pub roe: R,
     pub registry: Reg,
     pub runner: T,
     pub findings: FS,
     pub loot: LS,
+    pub observations: OS,
 }
 
 pub enum RunReport {
@@ -22,6 +23,7 @@ pub enum RunReport {
         outcome: ToolOutcome,
         findings: usize,
         loot: usize,
+        observations: usize,
     },
     Refused(Decision),
 }
@@ -51,13 +53,14 @@ impl std::fmt::Display for RunError {
 
 impl std::error::Error for RunError {}
 
-impl<R, Reg, T, FS, LS> RunAction<R, Reg, T, FS, LS>
+impl<R, Reg, T, FS, LS, OS> RunAction<R, Reg, T, FS, LS, OS>
 where
     R: RoeRepository,
     Reg: ToolRegistry,
     T: ToolRunner,
     FS: FindingsStore,
     LS: LootStore,
+    OS: ObservationStore,
 {
     pub fn run(
         &self,
@@ -101,9 +104,15 @@ where
         for finding in &parsed.findings {
             self.findings.emit(finding).map_err(RunError::Store)?;
         }
+        for observation in &parsed.observations {
+            self.observations
+                .emit(observation)
+                .map_err(RunError::Store)?;
+        }
         Ok(RunReport::Ran {
             findings: parsed.findings.len(),
             loot: parsed.loot.len(),
+            observations: parsed.observations.len(),
             outcome,
         })
     }
@@ -143,6 +152,20 @@ impl<LS: LootStore> QueryLoot<LS> {
         let mut items = self.loot.list()?;
         if let Some(category) = category {
             items.retain(|l| l.category == category);
+        }
+        Ok(items)
+    }
+}
+
+pub struct QueryObservations<OS> {
+    pub observations: OS,
+}
+
+impl<OS: ObservationStore> QueryObservations<OS> {
+    pub fn filtered(&self, kind: Option<&str>) -> Result<Vec<Observation>, StoreError> {
+        let mut items = self.observations.list()?;
+        if let Some(kind) = kind {
+            items.retain(|o| o.kind == kind);
         }
         Ok(items)
     }
@@ -192,6 +215,11 @@ mod tests {
                     fingerprint: "ff00ff00ff00".to_string(),
                     category: "database-url".to_string(),
                     value: "testing".to_string(),
+                }],
+                observations: vec![Observation {
+                    kind: "endpoint".to_string(),
+                    value: "/login".to_string(),
+                    detail: None,
                 }],
             }
         }
@@ -284,6 +312,20 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct MemObservations {
+        items: RefCell<Vec<Observation>>,
+    }
+    impl ObservationStore for MemObservations {
+        fn emit(&self, observation: &Observation) -> Result<(), StoreError> {
+            self.items.borrow_mut().push(observation.clone());
+            Ok(())
+        }
+        fn list(&self) -> Result<Vec<Observation>, StoreError> {
+            Ok(self.items.borrow().clone())
+        }
+    }
+
     const LOCAL: &str = "http://localhost:5000/cmd/dig?ip_addr=1";
 
     #[test]
@@ -294,6 +336,7 @@ mod tests {
             runner: SpyRunner,
             findings: MemFindings::default(),
             loot: MemLoot::default(),
+            observations: MemObservations::default(),
         };
         let report = use_case
             .run(
@@ -313,6 +356,7 @@ mod tests {
         ));
         assert_eq!(use_case.findings.items.borrow().len(), 1);
         assert_eq!(use_case.loot.items.borrow().len(), 1);
+        assert_eq!(use_case.observations.items.borrow().len(), 1);
     }
 
     #[test]
@@ -323,6 +367,7 @@ mod tests {
             runner: PanicRunner,
             findings: MemFindings::default(),
             loot: MemLoot::default(),
+            observations: MemObservations::default(),
         };
         let report = use_case
             .run("faketool", "T1190", "http://evil.example.org/x", &[])
@@ -340,6 +385,7 @@ mod tests {
             runner: PanicRunner,
             findings: MemFindings::default(),
             loot: MemLoot::default(),
+            observations: MemObservations::default(),
         };
         assert!(matches!(
             use_case.run("nope", "T1190", LOCAL, &[]),
@@ -355,6 +401,7 @@ mod tests {
             runner: PanicRunner,
             findings: MemFindings::default(),
             loot: MemLoot::default(),
+            observations: MemObservations::default(),
         };
         assert!(matches!(
             use_case.run("faketool", "T9999", LOCAL, &[]),

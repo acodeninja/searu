@@ -72,6 +72,11 @@ fn cli() -> Command {
                 ),
         )
         .subcommand(
+            Command::new("observations")
+                .about("Query recorded recon observations")
+                .arg(Arg::new("kind").long("kind").value_name("KIND")),
+        )
+        .subcommand(
             Command::new("tool")
                 .about("Inspect the available tools")
                 .subcommand_required(true)
@@ -94,6 +99,7 @@ fn main() {
         Some(("run", matches)) => std::process::exit(run_action(matches)),
         Some(("findings", matches)) => std::process::exit(run_findings(matches)),
         Some(("loot", matches)) => std::process::exit(run_loot(matches)),
+        Some(("observations", matches)) => std::process::exit(run_observations(matches)),
         Some(("tool", matches)) => std::process::exit(run_tool(matches)),
         Some((name, _)) => {
             eprintln!("searu: '{name}' is not implemented yet");
@@ -154,7 +160,9 @@ fn run_attack(matches: &ArgMatches) -> i32 {
 
 fn run_action(matches: &ArgMatches) -> i32 {
     use searu_adapter_docker::DockerToolRunner;
-    use searu_adapter_store::{JsonRoeRepository, JsonlFindingsStore, JsonlLootStore};
+    use searu_adapter_store::{
+        JsonRoeRepository, JsonlFindingsStore, JsonlLootStore, JsonlObservationStore,
+    };
     use searu_app::{RunAction, RunError, RunReport};
     use searu_tool_registry::Registry;
 
@@ -182,17 +190,19 @@ fn run_action(matches: &ArgMatches) -> i32 {
         runner: DockerToolRunner::default(),
         findings: JsonlFindingsStore::new(ENGAGEMENT_DIR),
         loot: JsonlLootStore::new(ENGAGEMENT_DIR),
+        observations: JsonlObservationStore::new(ENGAGEMENT_DIR),
     };
     match use_case.run(tool, technique, target, &args) {
         Ok(RunReport::Ran {
             outcome,
             findings,
             loot,
+            observations,
         }) => {
             print!("{}", outcome.stdout);
             eprint!("{}", outcome.stderr);
             eprintln!(
-                "recorded {findings} finding(s) and {loot} loot item(s) in {ENGAGEMENT_DIR}/"
+                "recorded {findings} finding(s), {loot} loot item(s), {observations} observation(s) in {ENGAGEMENT_DIR}/"
             );
             outcome.code
         }
@@ -259,6 +269,32 @@ fn run_loot(matches: &ArgMatches) -> i32 {
                     println!("{}\t{}\t{}", item.category, item.fingerprint, item.value);
                 } else {
                     println!("{}\t{}", item.category, item.fingerprint);
+                }
+            }
+            0
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            1
+        }
+    }
+}
+
+fn run_observations(matches: &ArgMatches) -> i32 {
+    use searu_adapter_store::JsonlObservationStore;
+    use searu_app::QueryObservations;
+
+    let query = QueryObservations {
+        observations: JsonlObservationStore::new(ENGAGEMENT_DIR),
+    };
+    match query.filtered(matches.get_one::<String>("kind").map(String::as_str)) {
+        Ok(observations) => {
+            for observation in observations {
+                match &observation.detail {
+                    Some(detail) => {
+                        println!("{}\t{}\t{}", observation.kind, observation.value, detail)
+                    }
+                    None => println!("{}\t{}", observation.kind, observation.value),
                 }
             }
             0
