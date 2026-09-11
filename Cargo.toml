@@ -7,6 +7,8 @@ members = [
     "crates/adapter-docker",
     "crates/tools/parser",
     "crates/tools/wrappers/commix",
+    "crates/tools/wrappers/httpx",
+    "crates/tools/wrappers/katana",
     "crates/tools/registry",
     "crates/cli",
     "crates/xtask",

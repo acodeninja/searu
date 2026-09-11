@@ -438,6 +438,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-httpx"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
+name = "searu-tool-katana"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
 name = "searu-tool-parser"
 version = "0.0.1"
 dependencies = [
@@ -451,6 +467,8 @@ version = "0.0.1"
 dependencies = [
  "searu-domain",
  "searu-tool-commix",
+ "searu-tool-httpx",
+ "searu-tool-katana",
 ]
 
 [[package]]

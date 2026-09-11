@@ -3,8 +3,10 @@
 
 use searu_domain::tools::{Tool, ToolRegistry};
 use searu_tool_commix::COMMIX;
+use searu_tool_httpx::HTTPX;
+use searu_tool_katana::KATANA;
 
-static TOOLS: &[&'static dyn Tool] = &[&COMMIX];
+static TOOLS: &[&'static dyn Tool] = &[&COMMIX, &HTTPX, &KATANA];
 
 #[derive(Default)]
 pub struct Registry;

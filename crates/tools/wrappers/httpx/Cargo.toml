@@ -1,0 +1,9 @@
+[package]
+name = "searu-tool-httpx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+searu-domain = { path = "../../../domain" }
+serde_json = "1.0.151"

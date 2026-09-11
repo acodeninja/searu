@@ -90,10 +90,11 @@ where
             refused => return Ok(RunReport::Refused(refused)),
         }
 
+        let argv = tool.invocation(target, args);
         let invocation = ToolInvocation {
             tool: tool.name(),
             target,
-            args,
+            args: &argv,
             dockerfile: tool.dockerfile(),
         };
         let outcome = self.runner.run(&invocation).map_err(RunError::Runner)?;
@@ -196,7 +197,9 @@ mod tests {
             ""
         }
         fn invocation(&self, _target: &str, args: &[String]) -> Vec<String> {
-            args.to_vec()
+            let mut argv = vec!["--built".to_string()];
+            argv.extend(args.iter().cloned());
+            argv
         }
         fn parse(&self, target: &str, _outcome: &ToolOutcome) -> ParsedOutput {
             ParsedOutput {
@@ -269,6 +272,21 @@ mod tests {
     struct SpyRunner;
     impl ToolRunner for SpyRunner {
         fn run(&self, _invocation: &ToolInvocation) -> Result<ToolOutcome, RunnerError> {
+            Ok(ToolOutcome {
+                code: 0,
+                stdout: "out".to_string(),
+                stderr: String::new(),
+            })
+        }
+    }
+
+    #[derive(Default)]
+    struct CapturingRunner {
+        args: RefCell<Vec<String>>,
+    }
+    impl ToolRunner for CapturingRunner {
+        fn run(&self, invocation: &ToolInvocation) -> Result<ToolOutcome, RunnerError> {
+            *self.args.borrow_mut() = invocation.args.to_vec();
             Ok(ToolOutcome {
                 code: 0,
                 stdout: "out".to_string(),
@@ -357,6 +375,25 @@ mod tests {
         assert_eq!(use_case.findings.items.borrow().len(), 1);
         assert_eq!(use_case.loot.items.borrow().len(), 1);
         assert_eq!(use_case.observations.items.borrow().len(), 1);
+    }
+
+    #[test]
+    fn the_runner_receives_the_argv_the_tool_builds_not_the_raw_args() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising),
+            registry: FakeRegistry,
+            runner: CapturingRunner::default(),
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
+            observations: MemObservations::default(),
+        };
+        use_case
+            .run("faketool", "T1190", LOCAL, &["--os-cmd".to_string()])
+            .unwrap();
+        assert_eq!(
+            *use_case.runner.args.borrow(),
+            vec!["--built".to_string(), "--os-cmd".to_string()]
+        );
     }
 
     #[test]
