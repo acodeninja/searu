@@ -62,6 +62,19 @@ fn cli() -> Command {
                 ),
         )
         .subcommand(
+            Command::new("capability")
+                .about("List the security capabilities searu can run")
+                .subcommand_required(true)
+                .arg_required_else_help(true)
+                .subcommand(
+                    Command::new("list")
+                        .about("List capabilities, optionally within a tier")
+                        .arg(Arg::new("tier").long("tier").value_name("TIER").help(
+                            "Restrict to a tier: passive, active, exploitation, destructive",
+                        )),
+                ),
+        )
+        .subcommand(
             Command::new("validate-roe").about("Validate an engagement's rules of engagement"),
         )
         .subcommand(Command::new("scope-hook").about("PreToolUse scope gate for tool commands"))
@@ -75,6 +88,7 @@ fn main() {
     let mut cmd = cli();
     match cmd.clone().get_matches().subcommand() {
         Some(("attack", matches)) => std::process::exit(run_attack(matches)),
+        Some(("capability", matches)) => std::process::exit(run_capability(matches)),
         Some(("run", matches)) => std::process::exit(run_tool(matches)),
         Some((name, _)) => {
             eprintln!("searu: '{name}' is not implemented yet");
@@ -128,6 +142,36 @@ fn run_attack(matches: &ArgMatches) -> i32 {
         }
         _ => {
             eprintln!("searu attack: unknown subcommand");
+            2
+        }
+    }
+}
+
+fn run_capability(matches: &ArgMatches) -> i32 {
+    use searu_domain::capability;
+    match matches.subcommand() {
+        Some(("list", args)) => {
+            let tier = args
+                .get_one::<String>("tier")
+                .map(|t| t.to_ascii_lowercase());
+            for capability in capability::capabilities() {
+                if let Some(tier) = &tier {
+                    if capability.tier.to_string().to_ascii_lowercase() != *tier {
+                        continue;
+                    }
+                }
+                println!(
+                    "{}\t{}\t{}\t{}",
+                    capability.id,
+                    capability.tier,
+                    capability.attack_ids.join(","),
+                    capability.tools.join(",")
+                );
+            }
+            0
+        }
+        _ => {
+            eprintln!("searu capability: unknown subcommand");
             2
         }
     }

@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use predicates::boolean::PredicateBooleanExt;
 use predicates::str::contains;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -34,6 +35,37 @@ const SAMPLE_ROE: &str = r#"{
         ]
     }
 }"#;
+
+#[test]
+fn capability_list_shows_command_injection() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args(["capability", "list"])
+        .assert()
+        .success()
+        .stdout(contains("command-injection"))
+        .stdout(contains("T1190"));
+}
+
+#[test]
+fn capability_list_can_filter_to_a_tier() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args(["capability", "list", "--tier", "exploitation"])
+        .assert()
+        .success()
+        .stdout(contains("command-injection"));
+}
+
+#[test]
+fn capability_list_excludes_other_tiers() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args(["capability", "list", "--tier", "passive"])
+        .assert()
+        .success()
+        .stdout(contains("command-injection").not());
+}
 
 #[test]
 fn run_refuses_an_out_of_scope_target() {
