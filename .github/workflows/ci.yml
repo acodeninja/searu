@@ -14,33 +14,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  cli-fmt:
-    name: cli/fmt
+  check-fmt:
+    name: check/fmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - run: mise exec -- cargo fmt --all --check
 
-  cli-quality:
-    name: cli/quality
+  check-quality:
+    name: check/quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - run: mise exec -- cargo clippy --all-targets --all-features -- -D warnings
 
-  cli-test:
-    name: cli/test
+  check-test:
+    name: check/test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - run: mise exec -- cargo test --all
 
-  release-please:
-    name: release-please
-    needs: [cli-fmt, cli-quality, cli-test]
+  release-check:
+    name: release/check
+    needs: [check-fmt, check-quality, check-test]
     if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     outputs:
@@ -56,8 +56,8 @@ jobs:
           manifest-file: .release-please-manifest.json
 
   build:
-    name: build (${{ matrix.target }})
-    needs: [cli-fmt, cli-quality, cli-test]
+    name: build/${{ matrix.target }}
+    needs: [check-fmt, check-quality, check-test]
     if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     strategy:
@@ -99,15 +99,15 @@ jobs:
 
   release:
     name: release
-    needs: [build, release-please]
+    needs: [build, release-check]
     if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_CREATED: ${{ needs.release-please.outputs.release_created }}
-      TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
-      PR_JSON: ${{ needs.release-please.outputs.pr }}
+      RELEASE_CREATED: ${{ needs.release-check.outputs.release_created }}
+      TAG_NAME: ${{ needs.release-check.outputs.tag_name }}
+      PR_JSON: ${{ needs.release-check.outputs.pr }}
     steps:
       - uses: actions/download-artifact@v8
         with:

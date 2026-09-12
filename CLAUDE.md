@@ -43,7 +43,7 @@ implement the minimum to pass, refactor. Pause for review after each slice rathe
 ### Toolchain
 `mise.toml` pins the Rust version; `mise install` locally and `jdx/mise-action` in CI both use it, so
 a green local run and a green CI run mean the same thing. CI runs `cargo fmt --check`, `cargo clippy
--D warnings`, and `cargo test` as separate namespaced jobs (`cli/fmt`, `cli/quality`, `cli/test`).
+-D warnings`, and `cargo test` as separate namespaced jobs (`check/fmt`, `check/quality`, `check/test`).
 
 ### Commits
 Conventional Commits — `<type>[(scope)][!]: subject`, types feat/fix/docs/style/refactor/perf/test/
