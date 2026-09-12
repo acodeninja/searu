@@ -1,9 +1,17 @@
 name: ci
 
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   cli-fmt:
@@ -29,3 +37,105 @@ jobs:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - run: mise exec -- cargo test --all
+
+  release-please:
+    name: release-please
+    needs: [cli-fmt, cli-quality, cli-test]
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+      pr: ${{ steps.rp.outputs.pr }}
+    steps:
+      - uses: googleapis/release-please-action@v4.4.1
+        id: rp
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build:
+    name: build (${{ matrix.target }})
+    needs: [cli-fmt, cli-quality, cli-test]
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            ext: tar.gz
+            bin: searu
+          - target: x86_64-pc-windows-gnu
+            ext: zip
+            bin: searu.exe
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98.1"
+          targets: ${{ matrix.target }}
+      - name: Build and package ${{ matrix.target }}
+        env:
+          TARGET: ${{ matrix.target }}
+          EXT: ${{ matrix.ext }}
+          BIN: ${{ matrix.bin }}
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl-tools gcc-mingw-w64-x86-64 zip
+          cargo build --release -p searu --target "$TARGET"
+          asset="searu-${TARGET}.${EXT}"
+          case "$EXT" in
+            tar.gz) tar czf "$asset" -C "target/${TARGET}/release" "$BIN" ;;
+            zip) zip -j "$asset" "target/${TARGET}/release/${BIN}" ;;
+          esac
+          sha256sum "$asset" > "${asset}.sha256"
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: searu-${{ matrix.target }}
+          path: |
+            searu-${{ matrix.target }}.${{ matrix.ext }}
+            searu-${{ matrix.target }}.${{ matrix.ext }}.sha256
+          if-no-files-found: error
+
+  release:
+    name: release
+    needs: [build, release-please]
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_CREATED: ${{ needs.release-please.outputs.release_created }}
+      TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+      PR_JSON: ${{ needs.release-please.outputs.pr }}
+    steps:
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish release or candidate
+        run: |
+          set -eux
+          cd dist
+          assets="searu-x86_64-unknown-linux-musl.tar.gz searu-x86_64-unknown-linux-musl.tar.gz.sha256 searu-x86_64-pc-windows-gnu.zip searu-x86_64-pc-windows-gnu.zip.sha256"
+          if [ "$RELEASE_CREATED" = "true" ]; then
+            gh release upload "$TAG_NAME" $assets --clobber
+            gh release delete "${TAG_NAME}-rc" --cleanup-tag --yes || true
+          else
+            version=""
+            if [ -n "$PR_JSON" ]; then
+              version=$(printf '%s' "$PR_JSON" | jq -r '.title // ""' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+            fi
+            if [ -z "$version" ]; then
+              echo "No pending release; nothing to publish."
+              exit 0
+            fi
+            tag="v${version}-rc"
+            gh release delete "$tag" --cleanup-tag --yes || true
+            gh release create "$tag" --prerelease --target "$GITHUB_SHA" \
+              --title "$tag" --notes "Release candidate for v${version}, built from main." \
+              $assets
+          fi
