@@ -107,7 +107,6 @@ jobs:
       GH_REPO: ${{ github.repository }}
       RELEASE_CREATED: ${{ needs.release-check.outputs.release_created }}
       TAG_NAME: ${{ needs.release-check.outputs.tag_name }}
-      PR_JSON: ${{ needs.release-check.outputs.pr }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -126,12 +125,10 @@ jobs:
               gh release delete "$tag" --cleanup-tag --yes || true
             done
           else
-            version=""
-            if [ -n "$PR_JSON" ]; then
-              version=$(printf '%s' "$PR_JSON" | jq -r '.title // ""' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
-            fi
+            title=$(gh pr list --state open --head release-please--branches--main --json title --jq '.[0].title // ""')
+            version=$(printf '%s' "$title" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
             if [ -z "$version" ]; then
-              echo "No pending release; nothing to publish."
+              echo "No pending release PR; nothing to publish."
               exit 0
             fi
             base="v${version}-rc"
