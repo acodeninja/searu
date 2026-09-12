@@ -72,10 +72,7 @@ jobs:
             bin: searu.exe
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.98.1"
-          targets: ${{ matrix.target }}
+      - uses: jdx/mise-action@v4
       - name: Build and package ${{ matrix.target }}
         env:
           TARGET: ${{ matrix.target }}
@@ -85,7 +82,7 @@ jobs:
           set -eux
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends musl-tools gcc-mingw-w64-x86-64 zip
-          cargo build --release -p searu --target "$TARGET"
+          mise exec -- cargo build --release -p searu --target "$TARGET"
           asset="searu-${TARGET}.${EXT}"
           case "$EXT" in
             tar.gz) tar czf "$asset" -C "target/${TARGET}/release" "$BIN" ;;

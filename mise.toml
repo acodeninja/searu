@@ -1,5 +1,5 @@
 [tools]
-rust = { version = "1.98.1", components = ["rustfmt", "clippy"] }
+rust = { version = "1.98.1", components = ["rustfmt", "clippy"], targets = ["x86_64-unknown-linux-musl", "x86_64-pc-windows-gnu"] }
 
 [tasks.install-hooks]
 run = "git config core.hooksPath .githooks"
