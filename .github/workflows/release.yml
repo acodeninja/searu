@@ -1,0 +1,106 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-please:
+    name: release-please
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+      pr: ${{ steps.rp.outputs.pr }}
+    steps:
+      - uses: googleapis/release-please-action@v4.4.1
+        id: rp
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  rc:
+    name: release-candidate
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created != 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR_JSON: ${{ needs.release-please.outputs.pr }}
+    steps:
+      - name: Resolve the pending version
+        id: ver
+        run: |
+          version=""
+          if [ -n "$PR_JSON" ]; then
+            version=$(printf '%s' "$PR_JSON" | jq -r '.title // ""' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ -z "$version" ]; then echo "No pending release; skipping the RC build."; fi
+      - uses: actions/checkout@v7
+        if: ${{ steps.ver.outputs.version != '' }}
+      - uses: dtolnay/rust-toolchain@master
+        if: ${{ steps.ver.outputs.version != '' }}
+        with:
+          toolchain: "1.98.1"
+          targets: x86_64-unknown-linux-musl, x86_64-pc-windows-gnu
+      - name: Build and publish the release candidate
+        if: ${{ steps.ver.outputs.version != '' }}
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl-tools gcc-mingw-w64-x86-64 zip
+          sed -i "s/^version = \"[0-9][^\"]*\"/version = \"${VERSION}-rc\"/" Cargo.toml
+          cargo build --release -p searu --target x86_64-unknown-linux-musl
+          cargo build --release -p searu --target x86_64-pc-windows-gnu
+          tar czf searu-x86_64-unknown-linux-musl.tar.gz -C target/x86_64-unknown-linux-musl/release searu
+          zip -j searu-x86_64-pc-windows-gnu.zip target/x86_64-pc-windows-gnu/release/searu.exe
+          for f in searu-*.tar.gz searu-*.zip; do sha256sum "$f" > "$f.sha256"; done
+          tag="v${VERSION}-rc"
+          gh release delete "$tag" --cleanup-tag --yes || true
+          gh release create "$tag" --prerelease --target "$GITHUB_SHA" \
+            --title "$tag" --notes "Release candidate for v${VERSION}, built from main." \
+            searu-x86_64-unknown-linux-musl.tar.gz searu-x86_64-unknown-linux-musl.tar.gz.sha256 \
+            searu-x86_64-pc-windows-gnu.zip searu-x86_64-pc-windows-gnu.zip.sha256
+
+  release:
+    name: release
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.release-please.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98.1"
+          targets: x86_64-unknown-linux-musl, x86_64-pc-windows-gnu
+      - name: Build and attach the release binaries
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl-tools gcc-mingw-w64-x86-64 zip
+          cargo build --release -p searu --target x86_64-unknown-linux-musl
+          cargo build --release -p searu --target x86_64-pc-windows-gnu
+          tar czf searu-x86_64-unknown-linux-musl.tar.gz -C target/x86_64-unknown-linux-musl/release searu
+          zip -j searu-x86_64-pc-windows-gnu.zip target/x86_64-pc-windows-gnu/release/searu.exe
+          for f in searu-*.tar.gz searu-*.zip; do sha256sum "$f" > "$f.sha256"; done
+          gh release upload "$TAG" \
+            searu-x86_64-unknown-linux-musl.tar.gz searu-x86_64-unknown-linux-musl.tar.gz.sha256 \
+            searu-x86_64-pc-windows-gnu.zip searu-x86_64-pc-windows-gnu.zip.sha256 --clobber
+          gh release delete "${TAG}-rc" --cleanup-tag --yes || true
