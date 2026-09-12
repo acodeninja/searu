@@ -118,9 +118,13 @@ jobs:
           set -eux
           cd dist
           assets="searu-x86_64-unknown-linux-musl.tar.gz searu-x86_64-unknown-linux-musl.tar.gz.sha256 searu-x86_64-pc-windows-gnu.zip searu-x86_64-pc-windows-gnu.zip.sha256"
+          tags() { gh release list --limit 200 --json tagName --jq '.[].tagName'; }
           if [ "$RELEASE_CREATED" = "true" ]; then
             gh release upload "$TAG_NAME" $assets --clobber
-            gh release delete "${TAG_NAME}-rc" --cleanup-tag --yes || true
+            version="${TAG_NAME#v}"
+            for tag in $(tags | grep -E "^v${version}-rc[0-9]+$" || true); do
+              gh release delete "$tag" --cleanup-tag --yes || true
+            done
           else
             version=""
             if [ -n "$PR_JSON" ]; then
@@ -130,9 +134,11 @@ jobs:
               echo "No pending release; nothing to publish."
               exit 0
             fi
-            tag="v${version}-rc"
-            gh release delete "$tag" --cleanup-tag --yes || true
+            base="v${version}-rc"
+            last=$(tags | grep -E "^${base}[0-9]+$" | sed -E "s/^${base}//" | sort -n | tail -n1 || true)
+            number=$(( ${last:-0} + 1 ))
+            tag="${base}${number}"
             gh release create "$tag" --prerelease --target "$GITHUB_SHA" \
-              --title "$tag" --notes "Release candidate for v${version}, built from main." \
+              --title "$tag" --notes "Release candidate ${number} for v${version}, built from main." \
               $assets
           fi
