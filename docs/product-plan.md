@@ -145,13 +145,13 @@ runtime:
   `searu observations [--kind]` — query the three engagement stores under `./pentest/`.
 - `searu tool list` — tools and the ATT&CK techniques each performs.
 - `searu tool advice <tool>` — the compiled-in `advice.md` telling Claude how to drive a tool.
+- `searu validate-roe [--roe <path>]` — load a ROE and check every allow-listed ID against the
+  embedded ATT&CK matrix; reports target/technique counts or names unknown IDs. (M2)
+- `searu scope-hook` — PreToolUse allowlist backstop reading the hook payload on stdin: only
+  `searu …` Bash commands pass, everything else exits 2; does not read the ROE. (M2)
 
 **Planned** (by milestone; not yet implemented):
 
-- `searu validate-roe` — schema-validate `./pentest/rules-of-engagement.json` (carry
-  `rules-of-engagement.schema.json`). *M2.*
-- `searu scope-hook` — PreToolUse allowlist backstop: permit only `searu …` + file reads, block raw
-  `docker`/`curl`/scanners (exit 2). Does not read the ROE. *M2.*
 - `searu emit-finding` / `searu report` — findings JSONL (with `attack_technique`) → PDF/Dradis,
   with a **Rules of Engagement appendix** (scope, authorised ATT&CK techniques, authorisers, limits)
   rendered immediately after the executive summary, then the ATT&CK coverage heat-map + CWE
@@ -429,8 +429,10 @@ propose.
 
 Each still one ATDD slice per commit:
 
-- **M2 — ROE tooling & backstop:** `searu validate-roe` (carry `rules-of-engagement.schema.json`) +
-  `searu scope-hook` allowlist (block raw `docker`/`curl`/scanners, exit 2).
+- **M2 — ROE tooling & backstop (shipped):** `searu validate-roe` (loads the ROE and checks every
+  allow-listed ID against the embedded ATT&CK matrix — no JSON-Schema library needed, since parsing
+  is the structural check) + `searu scope-hook` (strict allowlist: only `searu …` Bash commands pass,
+  else exit 2).
 - **M3 — more tools (in progress):** remap the old `techniques.py` ATT&CK map onto the NIST 800-115
   tier ladder and add tools one slice each — commix, httpx, katana, sqlmap and ffuf have shipped;
   nmap, nuclei, dalfox, … follow. Every tool is a new crate bound to its ATT&CK cell, never a new
@@ -439,8 +441,8 @@ Each still one ATDD slice per commit:
   Dradis export (RoE appendix after the executive summary); `propose-exploits`/`record-exploit` for
   the optional review-before-execute branch.
 - **M5 — install & the `/searu` skill:** author the skill payload directly (no template generator),
-  then ship it. Planned ~5-slice sequence: (1) the `searu scope-hook` subcommand; (2) the `SKILL.md`
-  skeleton + `sections/` + `manifest.json`; (3) the `specialists/` (technique×tool, each with a
+  then ship it. Planned ~5-slice sequence: (1) the `searu scope-hook` subcommand *(shipped with M2)*;
+  (2) the `SKILL.md` skeleton + `sections/` + `manifest.json`; (3) the `specialists/` (technique×tool, each with a
   `model:` header); (4) extend `install.sh`/`install.ps1` to register the single `searu/` pointer +
   `.searu-owned` markers + hook rewrite, tested against a throwaway HOME; (5) `/searu-upgrade` +
   release scaffolding.

@@ -63,6 +63,10 @@ fn cli() -> Command {
                 ),
         )
         .subcommand(
+            Command::new("scope-hook")
+                .about("PreToolUse allowlist backstop; reads a hook payload on stdin"),
+        )
+        .subcommand(
             Command::new("findings")
                 .about("Query recorded findings")
                 .arg(Arg::new("technique").long("technique").value_name("Txxxx"))
@@ -107,6 +111,7 @@ fn main() {
         Some(("attack", matches)) => std::process::exit(run_attack(matches)),
         Some(("run", matches)) => std::process::exit(run_action(matches)),
         Some(("validate-roe", matches)) => std::process::exit(run_validate_roe(matches)),
+        Some(("scope-hook", _)) => std::process::exit(run_scope_hook()),
         Some(("findings", matches)) => std::process::exit(run_findings(matches)),
         Some(("loot", matches)) => std::process::exit(run_loot(matches)),
         Some(("observations", matches)) => std::process::exit(run_observations(matches)),
@@ -264,6 +269,33 @@ fn run_validate_roe(matches: &ArgMatches) -> i32 {
                 report.targets, report.allowed
             );
             0
+        }
+    }
+}
+
+fn run_scope_hook() -> i32 {
+    use searu_domain::scope_hook::{decide, HookDecision};
+    use std::io::Read;
+
+    let mut input = String::new();
+    if std::io::stdin().read_to_string(&mut input).is_err() {
+        return 0;
+    }
+    let payload: serde_json::Value =
+        serde_json::from_str(&input).unwrap_or(serde_json::Value::Null);
+    let tool_name = payload
+        .get("tool_name")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let command = payload
+        .get("tool_input")
+        .and_then(|tool_input| tool_input.get("command"))
+        .and_then(serde_json::Value::as_str);
+    match decide(tool_name, command) {
+        HookDecision::Allow => 0,
+        HookDecision::Block(reason) => {
+            eprintln!("{reason}");
+            2
         }
     }
 }

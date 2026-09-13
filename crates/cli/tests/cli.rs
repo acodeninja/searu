@@ -205,3 +205,37 @@ fn validate_roe_reports_a_missing_file() {
         .failure()
         .code(1);
 }
+
+#[test]
+fn scope_hook_allows_a_searu_command() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .arg("scope-hook")
+        .write_stdin(
+            r#"{"tool_name":"Bash","tool_input":{"command":"searu run commix --technique T1190 --target http://localhost:5000"}}"#,
+        )
+        .assert()
+        .success();
+}
+
+#[test]
+fn scope_hook_blocks_a_raw_docker_command() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .arg("scope-hook")
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"docker run alpine"}}"#)
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(contains("searu"));
+}
+
+#[test]
+fn scope_hook_allows_a_file_read_tool() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .arg("scope-hook")
+        .write_stdin(r#"{"tool_name":"Read","tool_input":{"file_path":"/etc/hosts"}}"#)
+        .assert()
+        .success();
+}

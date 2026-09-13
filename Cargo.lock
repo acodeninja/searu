@@ -398,6 +398,7 @@ dependencies = [
  "searu-app",
  "searu-domain",
  "searu-tool-registry",
+ "serde_json",
  "tempfile",
 ]
 

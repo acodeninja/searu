@@ -5,5 +5,6 @@ pub mod findings;
 pub mod gate;
 pub mod ports;
 pub mod scope;
+pub mod scope_hook;
 pub mod technique;
 pub mod tools;

@@ -59,11 +59,14 @@ Shipped:
   cache with read-only mounts.
 - **Three engagement stores** under `./pentest/` — findings, loot, observations — with
   `searu findings|loot|observations` queries; ROE default path `pentest/rules-of-engagement.json`.
+- **M2 — ROE tooling & backstop** — `searu validate-roe` (loads a ROE and checks every allow-listed
+  ID against the embedded ATT&CK matrix; `app::ValidateRoe`) and `searu scope-hook` (strict allowlist,
+  only `searu …` Bash passes else exit 2; pure `domain::scope_hook::decide`).
 - **Binary installers** — `install.sh`, `install.ps1`, and `mise run install-local` (see *Locked
   decisions*). Release/CI scaffolding (release-please, cross-compiled Linux + Windows assets).
 
-Not yet built: M2 backstop commands (`validate-roe`, `scope-hook`), M4 reporting/intel, and all of
-M5 (the `/searu` skill payload + the `~/.claude` pointer install).
+Not yet built: M4 reporting/intel, and all of M5 (the `/searu` skill payload + the `~/.claude`
+pointer install). Note the `searu scope-hook` subcommand — M5 slice 1 — already shipped with M2.
 
 ## How to resume (build, test, commit)
 
@@ -78,13 +81,8 @@ M5 (the `/searu` skill payload + the `~/.claude` pointer install).
 
 ## Remaining work (by milestone)
 
-One ATDD slice per commit; pause for review between slices.
-
-**M2 — ROE tooling & the scope-hook backstop**
-- `searu validate-roe` — carry a `rules-of-engagement.schema.json`; schema-validate
-  `./pentest/rules-of-engagement.json`, no default-allow.
-- `searu scope-hook` — PreToolUse allowlist: permit only `searu …` + file reads; block
-  `docker`/`curl`/raw scanners (exit 2). Does not read the ROE.
+One ATDD slice per commit; pause for review between slices. (M2 — `validate-roe` + `scope-hook` —
+has shipped; see *Current status*.)
 
 **M3 — more tools (in progress)**
 - Remaining wrappers, one slice each (nmap, nuclei, dalfox, testssl, …), every one a new tool crate
@@ -97,7 +95,7 @@ One ATDD slice per commit; pause for review between slices.
 
 **M5 — install & the `/searu` skill**
 Author the skill payload directly (no template generator). Planned slice sequence:
-1. `searu scope-hook` subcommand (the PreToolUse allowlist backstop; shared with M2).
+1. ~~`searu scope-hook` subcommand~~ — **shipped with M2.**
 2. `SKILL.md` skeleton router + `sections/` (scoping, reconnaissance, discovery, initial-access,
    credential-access, exploitation, reporting) + `manifest.json`.
 3. `specialists/` — one prompt per (technique × tool), each naming a `model:`; mirror the shipped

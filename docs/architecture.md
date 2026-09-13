@@ -36,7 +36,7 @@ graph TD
 | Crate | Role | Depends on | Knows about |
 | --- | --- | --- | --- |
 | `domain` | Entities, rules (`is_host_in_scope`, ROE model, findings, techniques, exploit-gate `Decision`) and **all port traits** (`RoeRepository`, `ToolRunner`, `FindingsStore`, `LootStore`, `ObservationStore`, `WordlistProvider`, `ToolRegistry`) | nothing | nothing external |
-| `app` | Use-cases generic over the ports: shipped `RunAction`, `QueryFindings`, `QueryLoot`, `QueryObservations`; planned `ValidateRoe`, `EmitFinding`, `Report` | `domain` | no I/O, no Docker |
+| `app` | Use-cases generic over the ports: shipped `RunAction`, `QueryFindings`, `QueryLoot`, `QueryObservations`, `ValidateRoe`; planned `EmitFinding`, `Report` | `domain` | no I/O, no Docker |
 | `adapter-docker` | `DockerToolRunner`: builds a tool crate's embedded `Dockerfile` and runs it via the Docker CLI | `domain` | Docker |
 | `adapter-store` | `JsonRoeRepository` + the findings / loot / observations JSONL stores | `domain` | serde, filesystem |
 | `tools/*` | `tools/parser` (normalisation helpers), `tools/registry` (the `ToolRegistry`), and one wrapper crate per tool implementing `Tool` | `domain` | the tool's own output format |
@@ -56,11 +56,11 @@ Scope is a domain rule, not a command. There is no `check-scope` subcommand.
   `domain::is_in_scope`, and refuses an out-of-scope target with a hard error before the runner is
   ever invoked. Precedence: default-deny (a host matching no target is out), domain-suffix and CIDR
   matching, and an exclusion overridden only by an *exact* target entry for that host.
-- **Backstop — the PreToolUse allowlist hook (planned, M2/M5).** `searu scope-hook` will force a
-  target-facing agent to invoke `searu` and nothing else — no `docker`, `curl`, `wget`, or raw
-  scanners — the only exception being reading files. It does not read the ROE; its sole job is to
-  prevent bypass so scope always flows through `searu run`. The subcommand and the SKILL.md wiring
-  are not yet built.
+- **Backstop — the PreToolUse allowlist hook.** `searu scope-hook` (shipped) forces a target-facing
+  agent to invoke `searu` and nothing else: it reads the hook payload on stdin and, for a `Bash`
+  call, allows only a `searu …` command (else exit 2); non-Bash tools such as `Read`/`Grep` pass. It
+  does not read the ROE; its sole job is to prevent bypass so scope always flows through `searu run`.
+  Wiring it into the `/searu` SKILL.md `hooks.PreToolUse` is the remaining M5 step.
 
 ```mermaid
 sequenceDiagram

@@ -15,6 +15,7 @@ searu-app = { path = "../app" }
 searu-adapter-store = { path = "../adapter-store" }
 searu-adapter-docker = { path = "../adapter-docker" }
 searu-tool-registry = { path = "../tools/registry" }
+serde_json = "1.0.151"
 
 [dev-dependencies]
 assert_cmd = "2.2.2"
