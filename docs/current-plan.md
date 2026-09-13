@@ -70,11 +70,14 @@ Shipped:
   `xtask` consistency tests.
 - **M5 — skill install** — the payload is embedded in the `searu` binary (`include_dir`); `searu
   install-skill` writes it to `~/.claude/skills/searu/`, rewrites the hook to the binary's absolute
-  path, drops `.searu-owned`, and refuses to clobber a user's own skill. `install.sh`, `install.ps1`,
-  and `mise run install-local` all call it (one cross-platform Rust path; `SEARU_NO_SKILL` opts out).
+  path, drops `.searu-owned`, refuses to clobber a user's own skill, and also installs the
+  `/searu-upgrade` command into `~/.claude/commands/`. `install.sh`, `install.ps1`, and
+  `mise run install-local` all call it (one cross-platform Rust path; `SEARU_NO_SKILL` opts out).
+- **M5 — `/searu-upgrade`** — a slash command that asks the operator for the full release or a
+  release candidate, then re-runs the installer at that channel (`SEARU_VERSION=<rc-tag>` for RCs);
+  the installer replaces the binary and reinstalls the skill. **M5 is complete.**
 
-Not yet built: M4 reporting/intel; `/searu-upgrade` (M5 slice 5); plus the deferred credential-access
-section.
+Not yet built: M4 reporting/intel; plus the deferred credential-access section.
 
 ## How to resume (build, test, commit)
 
@@ -113,7 +116,11 @@ Author the skill payload directly (no template generator). Planned slice sequenc
    absolute path, drops `.searu-owned`, and won't clobber a user's own skill; `install.sh`,
    `install.ps1` and `install-local` all call it (tested against a throwaway HOME). Retired the
    `xtask install-skill` copy.
-5. `/searu-upgrade` command + release scaffolding.
+5. ~~`/searu-upgrade` command~~ — **shipped.** A slash command (installed by `install-skill` into
+   `~/.claude/commands/`) that asks full-release vs release-candidate and re-runs the installer at
+   that channel. Release scaffolding already existed (release-please + RC prereleases in CI).
+
+**M5 is complete.**
 
 ## old-version reference map (semantics/tests to port)
 

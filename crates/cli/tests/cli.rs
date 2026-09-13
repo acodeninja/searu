@@ -300,6 +300,33 @@ fn install_skill_is_idempotent() {
 }
 
 #[test]
+fn install_skill_installs_the_upgrade_command() {
+    let home = tempfile::tempdir().unwrap();
+    install_skill_into(home.path());
+    let command = home
+        .path()
+        .join(".claude")
+        .join("commands")
+        .join("searu-upgrade.md");
+    assert!(command.is_file());
+    assert!(std::fs::read_to_string(&command)
+        .unwrap()
+        .contains("searu-owned"));
+}
+
+#[test]
+fn install_skill_preserves_a_users_own_upgrade_command() {
+    let home = tempfile::tempdir().unwrap();
+    let commands = home.path().join(".claude").join("commands");
+    std::fs::create_dir_all(&commands).unwrap();
+    let command = commands.join("searu-upgrade.md");
+    std::fs::write(&command, "my own command").unwrap();
+    install_skill_into(home.path());
+    assert_eq!(std::fs::read_to_string(&command).unwrap(), "my own command");
+    assert!(commands.join("searu-upgrade.md.searu-backup").is_file());
+}
+
+#[test]
 fn install_skill_preserves_a_users_own_skill() {
     let home = tempfile::tempdir().unwrap();
     let base = home.path().join(".claude").join("skills").join("searu");

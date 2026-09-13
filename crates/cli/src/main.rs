@@ -5,6 +5,10 @@ use std::path::Path;
 const DEFAULT_ROE: &str = "pentest/rules-of-engagement.json";
 const ENGAGEMENT_DIR: &str = "pentest";
 static SKILL_PAYLOAD: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../skills/searu");
+const UPGRADE_COMMAND: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../commands/searu-upgrade.md"
+));
 
 fn cli() -> Command {
     Command::new("searu")
@@ -310,8 +314,31 @@ fn run_install_skill() -> i32 {
         eprintln!("could not install the skill to {}: {error}", dest.display());
         return 1;
     }
+    if let Err(error) = install_upgrade_command(&home) {
+        eprintln!("could not install the /searu-upgrade command: {error}");
+        return 1;
+    }
     println!("installed the /searu skill to {}", dest.display());
     0
+}
+
+fn install_upgrade_command(home: &Path) -> std::io::Result<()> {
+    let dir = home.join(".claude").join("commands");
+    let dest = dir.join("searu-upgrade.md");
+    if dest.exists()
+        && !std::fs::read_to_string(&dest)
+            .unwrap_or_default()
+            .contains("searu-owned")
+    {
+        std::fs::copy(&dest, dir.join("searu-upgrade.md.searu-backup"))?;
+        eprintln!(
+            "warning: {} is not searu-owned; leaving it untouched (backed up)",
+            dest.display()
+        );
+        return Ok(());
+    }
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(&dest, UPGRADE_COMMAND)
 }
 
 fn write_skill_payload(dest: &Path, hook: &str) -> std::io::Result<()> {

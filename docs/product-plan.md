@@ -251,8 +251,8 @@ graph TD
 and the eleven `specialists/` (one per shipped registry binding, each with a `model:` header) are
 shipped in `skills/searu/`. Registry-driven `xtask` tests enforce section↔manifest and
 binding↔specialist coverage. The payload is embedded in the binary and installed by `searu
-install-skill` (called by `install.sh`/`install.ps1`/`install-local`); `/searu-upgrade` is the
-remaining M5 piece.
+install-skill` (called by `install.sh`/`install.ps1`/`install-local`), which also installs the
+`/searu-upgrade` command. **M5 is complete.**
 
 `SKILL.md` is a skeleton: a trigger→section table + STOP directives ("Read
 `~/.claude/skills/searu/sections/<x>.md` before executing"). Phases map PTES onto ATT&CK tactics so
@@ -449,13 +449,12 @@ Each still one ATDD slice per commit:
 - **M4 — reporting & intel:** ATT&CK coverage heat-map, CWE attack-chains, KEV/EPSS exploitability,
   Dradis export (RoE appendix after the executive summary); `propose-exploits`/`record-exploit` for
   the optional review-before-execute branch.
-- **M5 — install & the `/searu` skill:** author the skill payload directly (no template generator),
-  then ship it. ~5-slice sequence: (1) the `searu scope-hook` subcommand *(shipped with M2)*;
-  (2) the `SKILL.md` skeleton + `sections/` + `manifest.json` *(shipped; `mise run install-local`
-  installs the skill)*; (3) the `specialists/` (technique×tool, each with a `model:` header)
-  *(shipped; 11 files, registry-enforced)*;
-  (4) install the skill from the binary via `searu install-skill` — embedded payload, hook rewrite,
-  `.searu-owned`, detect-and-skip *(shipped)*; (5) `/searu-upgrade` + release scaffolding.
+- **M5 — install & the `/searu` skill (shipped):** the skill payload is authored directly (no
+  template generator). (1) `searu scope-hook` *(with M2)*; (2) `SKILL.md` + `sections/` +
+  `manifest.json`; (3) the 11 `specialists/` (technique×tool, each with a `model:`, registry-enforced);
+  (4) `searu install-skill` — payload embedded in the binary, written to `~/.claude` with the hook
+  rewritten to the binary's absolute path, `.searu-owned`, detect-and-skip; (5) the `/searu-upgrade`
+  slash command — asks full-release vs release-candidate, then re-runs the installer at that channel.
 
 ## Safety invariants to preserve (from old-version)
 

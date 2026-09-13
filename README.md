@@ -52,8 +52,10 @@ That drops `searu.exe` in `%LOCALAPPDATA%\Programs\searu` (override with `$env:S
 adds that directory to your user PATH, so new shells find it automatically. Pin a release with
 `$env:SEARU_VERSION`.
 
-Either installer also registers the `/searu` Claude Code skill into `~/.claude/skills/searu` (it
-won't touch a skill of that name you already own; set `SEARU_NO_SKILL=1` to skip this step).
+Either installer also registers the `/searu` Claude Code skill into `~/.claude/skills/searu` and the
+`/searu-upgrade` command into `~/.claude/commands` (it won't touch a skill or command of that name
+you already own; set `SEARU_NO_SKILL=1` to skip this step). Later, run `/searu-upgrade` to update to
+the latest release or a release candidate.
 
 Where there's no prebuilt binary yet — Apple silicon or Windows on Arm, for instance — the script
 builds from source instead, so you'll need Rust on hand. Either way you also need Docker running,
