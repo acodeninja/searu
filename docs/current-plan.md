@@ -64,9 +64,14 @@ Shipped:
   only `searu …` Bash passes else exit 2; pure `domain::scope_hook::decide`).
 - **Binary installers** — `install.sh`, `install.ps1`, and `mise run install-local` (see *Locked
   decisions*). Release/CI scaffolding (release-please, cross-compiled Linux + Windows assets).
+- **M5 — `/searu` skill payload (router + sections)** — `skills/searu/SKILL.md` (router with the
+  `PreToolUse -> searu scope-hook` frontmatter) + six phase `sections/` (scoping, reconnaissance,
+  discovery, initial-access, exploitation, reporting) + `sections/manifest.json`, guarded by an
+  `xtask` manifest↔sections consistency test. `mise run install-local` now installs the skill into
+  `~/.claude/skills/searu/` alongside the binary.
 
-Not yet built: M4 reporting/intel, and all of M5 (the `/searu` skill payload + the `~/.claude`
-pointer install). Note the `searu scope-hook` subcommand — M5 slice 1 — already shipped with M2.
+Not yet built: M4 reporting/intel; M5 specialists (slice 3), the release-installer `~/.claude`
+pointer (slice 4), and `/searu-upgrade` (slice 5); plus the deferred credential-access section.
 
 ## How to resume (build, test, commit)
 
@@ -96,8 +101,8 @@ has shipped; see *Current status*.)
 **M5 — install & the `/searu` skill**
 Author the skill payload directly (no template generator). Planned slice sequence:
 1. ~~`searu scope-hook` subcommand~~ — **shipped with M2.**
-2. `SKILL.md` skeleton router + `sections/` (scoping, reconnaissance, discovery, initial-access,
-   credential-access, exploitation, reporting) + `manifest.json`.
+2. ~~`SKILL.md` router + `sections/` + `manifest.json`~~ — **shipped** (six sections;
+   credential-access deferred until cred tools land). `mise run install-local` installs the skill.
 3. `specialists/` — one prompt per (technique × tool), each naming a `model:`; mirror the shipped
    tools first (commix, ffuf, httpx, katana, sqlmap).
 4. Extend `install.sh`/`install.ps1` to register the single `~/.claude/skills/searu/` pointer +

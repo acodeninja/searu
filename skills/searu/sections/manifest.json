@@ -1,0 +1,40 @@
+{
+  "sections": [
+    {
+      "id": "scoping",
+      "file": "scoping.md",
+      "title": "Scoping & rules of engagement",
+      "trigger": "starting or resuming an engagement; defining scope; writing or checking the ROE"
+    },
+    {
+      "id": "reconnaissance",
+      "file": "reconnaissance.md",
+      "title": "Reconnaissance (TA0043)",
+      "trigger": "fingerprinting a live target; learning the stack before choosing an attack"
+    },
+    {
+      "id": "discovery",
+      "file": "discovery.md",
+      "title": "Discovery (TA0007)",
+      "trigger": "enumerating endpoints, content and parameters on an in-scope target"
+    },
+    {
+      "id": "initial-access",
+      "file": "initial-access.md",
+      "title": "Initial access (TA0001)",
+      "trigger": "detecting an exploitable weakness (SQLi, LFI, command injection) before exploiting it"
+    },
+    {
+      "id": "exploitation",
+      "file": "exploitation.md",
+      "title": "Exploitation",
+      "trigger": "exercising an authorised weakness and collecting from the foothold"
+    },
+    {
+      "id": "reporting",
+      "file": "reporting.md",
+      "title": "Reporting",
+      "trigger": "reviewing and summarising what the engagement recorded"
+    }
+  ]
+}

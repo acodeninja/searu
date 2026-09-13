@@ -1,14 +1,57 @@
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let sub = args.next().unwrap_or_default();
-    if sub != "attack-sync" {
-        eprintln!("usage: xtask attack-sync [--version <v>] [--input <path>] [--out <path>]");
-        std::process::exit(2);
+    match args.next().unwrap_or_default().as_str() {
+        "attack-sync" => attack_sync(args),
+        "install-skill" => install_skill(),
+        _ => {
+            eprintln!("usage: xtask <attack-sync|install-skill> [...]");
+            std::process::exit(2);
+        }
     }
+}
 
+fn install_skill() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills/searu");
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .expect("HOME or USERPROFILE must be set to locate ~/.claude");
+    let dest = PathBuf::from(home)
+        .join(".claude")
+        .join("skills")
+        .join("searu");
+
+    if dest.exists() {
+        std::fs::remove_dir_all(&dest).expect("remove the existing skill install");
+    }
+    std::fs::create_dir_all(dest.join("sections")).expect("create the skill directory");
+    copy(&src.join("SKILL.md"), &dest.join("SKILL.md"));
+    for entry in std::fs::read_dir(src.join("sections")).expect("read the sections directory") {
+        let path = entry.expect("read a sections entry").path();
+        if path.is_file() {
+            copy(
+                &path,
+                &dest.join("sections").join(path.file_name().unwrap()),
+            );
+        }
+    }
+    std::fs::write(
+        dest.join(".searu-owned"),
+        b"installed by: cargo xtask install-skill\n",
+    )
+    .expect("write the .searu-owned marker");
+    eprintln!("installed the /searu skill to {}", dest.display());
+}
+
+fn copy(from: &Path, to: &Path) {
+    std::fs::copy(from, to)
+        .unwrap_or_else(|e| panic!("copy {} -> {}: {e}", from.display(), to.display()));
+}
+
+fn attack_sync(mut args: impl Iterator<Item = String>) {
     let mut version = String::from("19.2");
     let mut input: Option<String> = None;
     let mut out = String::from("crates/domain/src/attack/generated.rs");
