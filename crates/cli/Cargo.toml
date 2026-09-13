@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap = "4.6.6"
+include_dir = "0.7.4"
 searu-domain = { path = "../domain" }
 searu-app = { path = "../app" }
 searu-adapter-store = { path = "../adapter-store" }

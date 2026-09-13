@@ -249,9 +249,10 @@ graph TD
 
 *Status:* the router `SKILL.md`, six phase `sections/` (credential-access deferred), `manifest.json`,
 and the eleven `specialists/` (one per shipped registry binding, each with a `model:` header) are
-shipped in `skills/searu/`; `mise run install-local` installs the whole payload into `~/.claude`.
-Registry-driven `xtask` tests enforce section↔manifest and binding↔specialist coverage. The release
-installer `bin/` shims are still to come.
+shipped in `skills/searu/`. Registry-driven `xtask` tests enforce section↔manifest and
+binding↔specialist coverage. The payload is embedded in the binary and installed by `searu
+install-skill` (called by `install.sh`/`install.ps1`/`install-local`); `/searu-upgrade` is the
+remaining M5 piece.
 
 `SKILL.md` is a skeleton: a trigger→section table + STOP directives ("Read
 `~/.claude/skills/searu/sections/<x>.md` before executing"). Phases map PTES onto ATT&CK tactics so
@@ -303,12 +304,14 @@ Windows — falling back to `cargo install --git … searu --locked` where no as
 `SEARU_BIN_DIR` overrides the location; `SEARU_VERSION` pins a release. For development,
 `mise run install-local` runs `cargo install --path crates/cli` into `~/.cargo/bin`.
 
-**Planned (M5) — the `~/.claude` skill pointer.** `install.sh`/`install.ps1` will additionally create
-the single real dir `~/.claude/skills/searu/`, then symlink (Unix) / copy (Windows without Developer
-Mode) `SKILL.md`, `sections/`, `specialists/`, `bin/` from the repo checkout; drop `.searu-owned`
-provenance markers; never clobber a user's same-named skill (detect-and-skip); back up a pre-existing
-custom `SKILL.md`; and rewrite the installed `SKILL.md` `hooks.PreToolUse` command to the absolute
-installed binary path.
+**Shipped — the `/searu` skill install (embedded in the binary).** The skill payload is embedded in
+the `searu` binary at build time (`include_dir`), so a released user needs no checkout. `searu
+install-skill` writes it to `~/.claude/skills/searu/`, rewrites the `SKILL.md` `hooks.PreToolUse`
+command to the binary's own absolute path, drops a `.searu-owned` provenance marker, and refuses to
+clobber a user's same-named skill (backs up their `SKILL.md` and skips). `install.sh`, `install.ps1`,
+and `mise run install-local` all call it — one cross-platform Rust code path, offline; `SEARU_NO_SKILL`
+opts out. (This replaced the earlier symlink-from-checkout idea, which couldn't work for the
+binary-only `curl … | sh` install.)
 
 - Runtime caches (CWE/EPSS/KEV, M4) are planned to live in `~/.searu/` (`SEARU_HOME`), never in
   `~/.claude`; engagement data stays per-project in `./pentest/`.
@@ -451,8 +454,8 @@ Each still one ATDD slice per commit:
   (2) the `SKILL.md` skeleton + `sections/` + `manifest.json` *(shipped; `mise run install-local`
   installs the skill)*; (3) the `specialists/` (technique×tool, each with a `model:` header)
   *(shipped; 11 files, registry-enforced)*;
-  (4) extend `install.sh`/`install.ps1` to register the single `searu/` pointer + `.searu-owned`
-  markers + hook rewrite, tested against a throwaway HOME; (5) `/searu-upgrade` + release scaffolding.
+  (4) install the skill from the binary via `searu install-skill` — embedded payload, hook rewrite,
+  `.searu-owned`, detect-and-skip *(shipped)*; (5) `/searu-upgrade` + release scaffolding.
 
 ## Safety invariants to preserve (from old-version)
 

@@ -7,5 +7,7 @@ publish = false
 
 [dependencies]
 serde_json = "1.0.151"
+
+[dev-dependencies]
 searu-domain = { path = "../domain" }
 searu-tool-registry = { path = "../tools/registry" }

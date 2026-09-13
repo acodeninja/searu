@@ -44,6 +44,12 @@ function Complete-Install {
         Add-ToUserPath $where
     }
     if (-not (have docker)) { warn "Docker was not found on PATH. searu needs Docker to run its tools." }
+    if (-not $env:SEARU_NO_SKILL) {
+        $exe = Join-Path $where 'searu.exe'
+        if (Test-Path $exe) {
+            try { & $exe install-skill } catch { warn "could not install the /searu skill" }
+        }
+    }
     say 'Done. Try: searu tool list'
     exit 0
 }

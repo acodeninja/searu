@@ -67,11 +67,14 @@ Shipped:
 - **M5 — `/searu` skill payload (router + sections + specialists)** — `skills/searu/SKILL.md` (router
   with the `PreToolUse -> searu scope-hook` frontmatter) + six phase `sections/` + `manifest.json` +
   eleven `specialists/` (one per registry binding, each naming a `model:`), guarded by registry-driven
-  `xtask` consistency tests. `mise run install-local` installs the whole payload into
-  `~/.claude/skills/searu/` (copy done in Rust via `xtask install-skill`, no shell dependency).
+  `xtask` consistency tests.
+- **M5 — skill install** — the payload is embedded in the `searu` binary (`include_dir`); `searu
+  install-skill` writes it to `~/.claude/skills/searu/`, rewrites the hook to the binary's absolute
+  path, drops `.searu-owned`, and refuses to clobber a user's own skill. `install.sh`, `install.ps1`,
+  and `mise run install-local` all call it (one cross-platform Rust path; `SEARU_NO_SKILL` opts out).
 
-Not yet built: M4 reporting/intel; the release-installer `~/.claude` pointer (M5 slice 4) and
-`/searu-upgrade` (slice 5); plus the deferred credential-access section.
+Not yet built: M4 reporting/intel; `/searu-upgrade` (M5 slice 5); plus the deferred credential-access
+section.
 
 ## How to resume (build, test, commit)
 
@@ -105,9 +108,11 @@ Author the skill payload directly (no template generator). Planned slice sequenc
    credential-access deferred until cred tools land). `mise run install-local` installs the skill.
 3. ~~`specialists/` — one prompt per (technique × tool), each naming a `model:`~~ — **shipped** (all
    11 registry bindings; a registry-driven `xtask` test enforces coverage + model headers).
-4. Extend `install.sh`/`install.ps1` to register the single `~/.claude/skills/searu/` pointer +
-   `.searu-owned` markers + hook rewrite (symlink on Unix, copy on Windows without Dev Mode);
-   detect-and-skip a user's own skill; test against a throwaway HOME.
+4. ~~Install the skill from the binary~~ — **shipped.** The payload is embedded (`include_dir`) and
+   `searu install-skill` writes it to `~/.claude/skills/searu/`, rewrites the hook to the binary's
+   absolute path, drops `.searu-owned`, and won't clobber a user's own skill; `install.sh`,
+   `install.ps1` and `install-local` all call it (tested against a throwaway HOME). Retired the
+   `xtask install-skill` copy.
 5. `/searu-upgrade` command + release scaffolding.
 
 ## old-version reference map (semantics/tests to port)

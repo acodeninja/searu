@@ -239,3 +239,76 @@ fn scope_hook_allows_a_file_read_tool() {
         .assert()
         .success();
 }
+
+fn install_skill_into(home: &std::path::Path) {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .arg("install-skill")
+        .env("HOME", home)
+        .env("USERPROFILE", home)
+        .assert()
+        .success();
+}
+
+#[test]
+fn install_skill_writes_the_payload() {
+    let home = tempfile::tempdir().unwrap();
+    install_skill_into(home.path());
+    let base = home.path().join(".claude").join("skills").join("searu");
+    assert!(base.join("SKILL.md").is_file());
+    assert!(base.join("sections").join("manifest.json").is_file());
+    assert!(base.join("specialists").join("T1190-sqlmap.md").is_file());
+    assert!(base.join(".searu-owned").is_file());
+}
+
+#[test]
+fn install_skill_rewrites_the_hook_to_the_binary_path() {
+    let home = tempfile::tempdir().unwrap();
+    install_skill_into(home.path());
+    let skill = std::fs::read_to_string(
+        home.path()
+            .join(".claude")
+            .join("skills")
+            .join("searu")
+            .join("SKILL.md"),
+    )
+    .unwrap();
+    let exe = assert_cmd::cargo::cargo_bin("searu");
+    assert!(skill.contains("scope-hook"));
+    assert!(
+        !skill.contains(r#"command: "searu scope-hook""#),
+        "the bare template hook must be rewritten"
+    );
+    assert!(
+        skill.contains(exe.to_str().unwrap()),
+        "the hook must reference the absolute binary path"
+    );
+}
+
+#[test]
+fn install_skill_is_idempotent() {
+    let home = tempfile::tempdir().unwrap();
+    install_skill_into(home.path());
+    install_skill_into(home.path());
+    assert!(home
+        .path()
+        .join(".claude")
+        .join("skills")
+        .join("searu")
+        .join("SKILL.md")
+        .is_file());
+}
+
+#[test]
+fn install_skill_preserves_a_users_own_skill() {
+    let home = tempfile::tempdir().unwrap();
+    let base = home.path().join(".claude").join("skills").join("searu");
+    std::fs::create_dir_all(&base).unwrap();
+    std::fs::write(base.join("SKILL.md"), "my own skill").unwrap();
+    install_skill_into(home.path());
+    assert_eq!(
+        std::fs::read_to_string(base.join("SKILL.md")).unwrap(),
+        "my own skill"
+    );
+    assert!(base.join("SKILL.md.searu-backup").is_file());
+}

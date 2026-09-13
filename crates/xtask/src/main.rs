@@ -1,54 +1,15 @@
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
     let mut args = std::env::args().skip(1);
     match args.next().unwrap_or_default().as_str() {
         "attack-sync" => attack_sync(args),
-        "install-skill" => install_skill(),
         _ => {
-            eprintln!("usage: xtask <attack-sync|install-skill> [...]");
+            eprintln!("usage: xtask attack-sync [--version <v>] [--input <path>] [--out <path>]");
             std::process::exit(2);
         }
     }
-}
-
-fn install_skill() {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills/searu");
-    let home = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .expect("HOME or USERPROFILE must be set to locate ~/.claude");
-    let dest = PathBuf::from(home)
-        .join(".claude")
-        .join("skills")
-        .join("searu");
-
-    if dest.exists() {
-        std::fs::remove_dir_all(&dest).expect("remove the existing skill install");
-    }
-    std::fs::create_dir_all(&dest).expect("create the skill directory");
-    copy(&src.join("SKILL.md"), &dest.join("SKILL.md"));
-    for subdir in ["sections", "specialists"] {
-        std::fs::create_dir_all(dest.join(subdir)).expect("create the skill subdirectory");
-        for entry in std::fs::read_dir(src.join(subdir)).expect("read a skill subdirectory") {
-            let path = entry.expect("read a skill entry").path();
-            if path.is_file() {
-                copy(&path, &dest.join(subdir).join(path.file_name().unwrap()));
-            }
-        }
-    }
-    std::fs::write(
-        dest.join(".searu-owned"),
-        b"installed by: cargo xtask install-skill\n",
-    )
-    .expect("write the .searu-owned marker");
-    eprintln!("installed the /searu skill to {}", dest.display());
-}
-
-fn copy(from: &Path, to: &Path) {
-    std::fs::copy(from, to)
-        .unwrap_or_else(|e| panic!("copy {} -> {}: {e}", from.display(), to.display()));
 }
 
 fn attack_sync(mut args: impl Iterator<Item = String>) {

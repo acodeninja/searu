@@ -34,6 +34,12 @@ finish() {
         *":$where:"*) : ;;
         *) [ "$where" = "cargo" ] || warn "$where is not on your PATH; add it, e.g. export PATH=\"$where:\$PATH\"" ;;
     esac
+    if [ -z "${SEARU_NO_SKILL:-}" ]; then
+        if have searu; then exe=searu
+        elif [ -n "${bin:-}" ] && [ -x "$bin_dir/$bin" ]; then exe="$bin_dir/$bin"
+        else exe=""; fi
+        [ -n "$exe" ] && { "$exe" install-skill || warn "could not install the /searu skill"; }
+    fi
     say "Done. Try: searu tool list"
     exit 0
 }

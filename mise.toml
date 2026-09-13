@@ -8,5 +8,5 @@ run = "git config core.hooksPath .githooks"
 description = "Build and install the searu binary (~/.cargo/bin) and the /searu skill (~/.claude)"
 run = [
     "cargo install --path crates/cli --locked",
-    "cargo run --quiet -p xtask -- install-skill",
+    "searu install-skill",
 ]

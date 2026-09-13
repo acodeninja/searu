@@ -1,7 +1,10 @@
 use clap::{Arg, ArgAction, ArgMatches, Command};
+use include_dir::{include_dir, Dir};
+use std::path::Path;
 
 const DEFAULT_ROE: &str = "pentest/rules-of-engagement.json";
 const ENGAGEMENT_DIR: &str = "pentest";
+static SKILL_PAYLOAD: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../skills/searu");
 
 fn cli() -> Command {
     Command::new("searu")
@@ -67,6 +70,10 @@ fn cli() -> Command {
                 .about("PreToolUse allowlist backstop; reads a hook payload on stdin"),
         )
         .subcommand(
+            Command::new("install-skill")
+                .about("Install the /searu skill into ~/.claude/skills/searu"),
+        )
+        .subcommand(
             Command::new("findings")
                 .about("Query recorded findings")
                 .arg(Arg::new("technique").long("technique").value_name("Txxxx"))
@@ -112,6 +119,7 @@ fn main() {
         Some(("run", matches)) => std::process::exit(run_action(matches)),
         Some(("validate-roe", matches)) => std::process::exit(run_validate_roe(matches)),
         Some(("scope-hook", _)) => std::process::exit(run_scope_hook()),
+        Some(("install-skill", _)) => std::process::exit(run_install_skill()),
         Some(("findings", matches)) => std::process::exit(run_findings(matches)),
         Some(("loot", matches)) => std::process::exit(run_loot(matches)),
         Some(("observations", matches)) => std::process::exit(run_observations(matches)),
@@ -271,6 +279,73 @@ fn run_validate_roe(matches: &ArgMatches) -> i32 {
             0
         }
     }
+}
+
+fn run_install_skill() -> i32 {
+    let Some(home) = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(std::path::PathBuf::from)
+    else {
+        eprintln!("cannot locate the home directory (set HOME or USERPROFILE)");
+        return 1;
+    };
+    let dest = home.join(".claude").join("skills").join("searu");
+
+    if dest.exists() && !dest.join(".searu-owned").exists() {
+        let skill = dest.join("SKILL.md");
+        if skill.is_file() {
+            let _ = std::fs::copy(&skill, dest.join("SKILL.md.searu-backup"));
+        }
+        eprintln!(
+            "warning: {} is not searu-owned; leaving it untouched (backed up SKILL.md)",
+            dest.display()
+        );
+        return 0;
+    }
+
+    let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("searu"));
+    let hook = format!("command: '\"{}\" scope-hook'", exe.display());
+
+    if let Err(error) = write_skill_payload(&dest, &hook) {
+        eprintln!("could not install the skill to {}: {error}", dest.display());
+        return 1;
+    }
+    println!("installed the /searu skill to {}", dest.display());
+    0
+}
+
+fn write_skill_payload(dest: &Path, hook: &str) -> std::io::Result<()> {
+    if dest.exists() {
+        std::fs::remove_dir_all(dest)?;
+    }
+    std::fs::create_dir_all(dest)?;
+    write_skill_dir(&SKILL_PAYLOAD, dest, hook)?;
+    std::fs::write(
+        dest.join(".searu-owned"),
+        b"installed by: searu install-skill\n",
+    )
+}
+
+fn write_skill_dir(dir: &Dir, dest: &Path, hook: &str) -> std::io::Result<()> {
+    for file in dir.files() {
+        let out = dest.join(file.path());
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        if file.path() == Path::new("SKILL.md") {
+            let template = file.contents_utf8().expect("SKILL.md is UTF-8");
+            std::fs::write(
+                &out,
+                template.replace(r#"command: "searu scope-hook""#, hook),
+            )?;
+        } else {
+            std::fs::write(&out, file.contents())?;
+        }
+    }
+    for sub in dir.dirs() {
+        write_skill_dir(sub, dest, hook)?;
+    }
+    Ok(())
 }
 
 fn run_scope_hook() -> i32 {
