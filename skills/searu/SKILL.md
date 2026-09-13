@@ -46,6 +46,11 @@ first** (`~/.claude/skills/searu/sections/<file>`):
 
 Start at scoping unless a valid `./pentest/rules-of-engagement.json` already exists.
 
+For a noisy tool run, delegate it to its **specialist** rather than running it inline: spawn
+`specialists/<technique>-<tool>.md` via the Agent tool on the `model:` that file names, so scanner
+output stays out of this conversation. Scope and authorisation are still enforced by `searu` inside
+the specialist.
+
 ## Commands
 
 - `searu attack list [--tactic TAxxxx]` / `searu attack show <Txxxx>` — browse the embedded ATT&CK matrix.

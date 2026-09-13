@@ -64,14 +64,14 @@ Shipped:
   only `searu …` Bash passes else exit 2; pure `domain::scope_hook::decide`).
 - **Binary installers** — `install.sh`, `install.ps1`, and `mise run install-local` (see *Locked
   decisions*). Release/CI scaffolding (release-please, cross-compiled Linux + Windows assets).
-- **M5 — `/searu` skill payload (router + sections)** — `skills/searu/SKILL.md` (router with the
-  `PreToolUse -> searu scope-hook` frontmatter) + six phase `sections/` (scoping, reconnaissance,
-  discovery, initial-access, exploitation, reporting) + `sections/manifest.json`, guarded by an
-  `xtask` manifest↔sections consistency test. `mise run install-local` now installs the skill into
-  `~/.claude/skills/searu/` alongside the binary.
+- **M5 — `/searu` skill payload (router + sections + specialists)** — `skills/searu/SKILL.md` (router
+  with the `PreToolUse -> searu scope-hook` frontmatter) + six phase `sections/` + `manifest.json` +
+  eleven `specialists/` (one per registry binding, each naming a `model:`), guarded by registry-driven
+  `xtask` consistency tests. `mise run install-local` installs the whole payload into
+  `~/.claude/skills/searu/` (copy done in Rust via `xtask install-skill`, no shell dependency).
 
-Not yet built: M4 reporting/intel; M5 specialists (slice 3), the release-installer `~/.claude`
-pointer (slice 4), and `/searu-upgrade` (slice 5); plus the deferred credential-access section.
+Not yet built: M4 reporting/intel; the release-installer `~/.claude` pointer (M5 slice 4) and
+`/searu-upgrade` (slice 5); plus the deferred credential-access section.
 
 ## How to resume (build, test, commit)
 
@@ -103,8 +103,8 @@ Author the skill payload directly (no template generator). Planned slice sequenc
 1. ~~`searu scope-hook` subcommand~~ — **shipped with M2.**
 2. ~~`SKILL.md` router + `sections/` + `manifest.json`~~ — **shipped** (six sections;
    credential-access deferred until cred tools land). `mise run install-local` installs the skill.
-3. `specialists/` — one prompt per (technique × tool), each naming a `model:`; mirror the shipped
-   tools first (commix, ffuf, httpx, katana, sqlmap).
+3. ~~`specialists/` — one prompt per (technique × tool), each naming a `model:`~~ — **shipped** (all
+   11 registry bindings; a registry-driven `xtask` test enforces coverage + model headers).
 4. Extend `install.sh`/`install.ps1` to register the single `~/.claude/skills/searu/` pointer +
    `.searu-owned` markers + hook rewrite (symlink on Unix, copy on Windows without Dev Mode);
    detect-and-skip a user's own skill; test against a throwaway HOME.

@@ -27,15 +27,15 @@ fn install_skill() {
     if dest.exists() {
         std::fs::remove_dir_all(&dest).expect("remove the existing skill install");
     }
-    std::fs::create_dir_all(dest.join("sections")).expect("create the skill directory");
+    std::fs::create_dir_all(&dest).expect("create the skill directory");
     copy(&src.join("SKILL.md"), &dest.join("SKILL.md"));
-    for entry in std::fs::read_dir(src.join("sections")).expect("read the sections directory") {
-        let path = entry.expect("read a sections entry").path();
-        if path.is_file() {
-            copy(
-                &path,
-                &dest.join("sections").join(path.file_name().unwrap()),
-            );
+    for subdir in ["sections", "specialists"] {
+        std::fs::create_dir_all(dest.join(subdir)).expect("create the skill subdirectory");
+        for entry in std::fs::read_dir(src.join(subdir)).expect("read a skill subdirectory") {
+            let path = entry.expect("read a skill entry").path();
+            if path.is_file() {
+                copy(&path, &dest.join(subdir).join(path.file_name().unwrap()));
+            }
         }
     }
     std::fs::write(

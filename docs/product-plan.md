@@ -247,9 +247,11 @@ graph TD
   bin/                           small POSIX shims: preamble + $HOME-abs-then-relative resolve
 ```
 
-*Status:* the router `SKILL.md`, six phase `sections/` (credential-access deferred), and
-`manifest.json` are shipped in `skills/searu/`; `mise run install-local` installs them into
-`~/.claude`. `specialists/` and `bin/` are still to come.
+*Status:* the router `SKILL.md`, six phase `sections/` (credential-access deferred), `manifest.json`,
+and the eleven `specialists/` (one per shipped registry binding, each with a `model:` header) are
+shipped in `skills/searu/`; `mise run install-local` installs the whole payload into `~/.claude`.
+Registry-driven `xtask` tests enforce section↔manifest and binding↔specialist coverage. The release
+installer `bin/` shims are still to come.
 
 `SKILL.md` is a skeleton: a trigger→section table + STOP directives ("Read
 `~/.claude/skills/searu/sections/<x>.md` before executing"). Phases map PTES onto ATT&CK tactics so
@@ -447,7 +449,8 @@ Each still one ATDD slice per commit:
 - **M5 — install & the `/searu` skill:** author the skill payload directly (no template generator),
   then ship it. ~5-slice sequence: (1) the `searu scope-hook` subcommand *(shipped with M2)*;
   (2) the `SKILL.md` skeleton + `sections/` + `manifest.json` *(shipped; `mise run install-local`
-  installs the skill)*; (3) the `specialists/` (technique×tool, each with a `model:` header);
+  installs the skill)*; (3) the `specialists/` (technique×tool, each with a `model:` header)
+  *(shipped; 11 files, registry-enforced)*;
   (4) extend `install.sh`/`install.ps1` to register the single `searu/` pointer + `.searu-owned`
   markers + hook rewrite, tested against a throwaway HOME; (5) `/searu-upgrade` + release scaffolding.
 
