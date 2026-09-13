@@ -32,15 +32,29 @@ labs and signed-off engagements, nothing else.
 
 ## Install
 
-Grab the latest build for your platform:
+Grab the latest build for your platform.
+
+On macOS, Linux, or a POSIX shell (Git Bash, WSL):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/acodeninja/searu/main/install.sh | sh
 ```
 
-That drops the `searu` binary in `~/.local/bin` (override with `SEARU_BIN_DIR`). Where there's no
-prebuilt binary yet — macOS, for instance — the script builds from source instead, so you'll need Rust
-on hand. Either way you also need Docker running, since every tool runs in a container. Check it took:
+That drops the `searu` binary in `~/.local/bin` (override with `SEARU_BIN_DIR`).
+
+On Windows, in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/acodeninja/searu/main/install.ps1 | iex
+```
+
+That drops `searu.exe` in `%LOCALAPPDATA%\Programs\searu` (override with `$env:SEARU_BIN_DIR`) and
+adds that directory to your user PATH, so new shells find it automatically. Pin a release with
+`$env:SEARU_VERSION`.
+
+Where there's no prebuilt binary yet — Apple silicon or Windows on Arm, for instance — the script
+builds from source instead, so you'll need Rust on hand. Either way you also need Docker running,
+since every tool runs in a container. Check it took:
 
 ```sh
 searu tool list        # the tools, and the ATT&CK techniques each one covers
