@@ -72,4 +72,8 @@ mise run install-hooks
 cargo build
 ```
 
+To dogfood your changes, install the working-tree build onto your `PATH` with `mise run
+install-local` — it drops `searu` in `~/.cargo/bin` via `cargo install`. Re-run it after each change;
+you still need Docker running to use the tools.
+
 There are ready-made rules-of-engagement files under `examples/` for the practice labs.
