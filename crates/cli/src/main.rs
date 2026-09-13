@@ -54,6 +54,15 @@ fn cli() -> Command {
                 ),
         )
         .subcommand(
+            Command::new("validate-roe")
+                .about("Validate a rules-of-engagement file")
+                .arg(
+                    Arg::new("roe").long("roe").value_name("PATH").help(
+                        "Rules-of-engagement JSON (default: pentest/rules-of-engagement.json)",
+                    ),
+                ),
+        )
+        .subcommand(
             Command::new("findings")
                 .about("Query recorded findings")
                 .arg(Arg::new("technique").long("technique").value_name("Txxxx"))
@@ -97,6 +106,7 @@ fn main() {
     match cmd.clone().get_matches().subcommand() {
         Some(("attack", matches)) => std::process::exit(run_attack(matches)),
         Some(("run", matches)) => std::process::exit(run_action(matches)),
+        Some(("validate-roe", matches)) => std::process::exit(run_validate_roe(matches)),
         Some(("findings", matches)) => std::process::exit(run_findings(matches)),
         Some(("loot", matches)) => std::process::exit(run_loot(matches)),
         Some(("observations", matches)) => std::process::exit(run_observations(matches)),
@@ -218,6 +228,42 @@ fn run_action(matches: &ArgMatches) -> i32 {
         Err(error) => {
             eprintln!("{error}");
             1
+        }
+    }
+}
+
+fn run_validate_roe(matches: &ArgMatches) -> i32 {
+    use searu_adapter_store::JsonRoeRepository;
+    use searu_app::ValidateRoe;
+
+    let roe = matches
+        .get_one::<String>("roe")
+        .map(String::as_str)
+        .unwrap_or(DEFAULT_ROE);
+    let use_case = ValidateRoe {
+        roe: JsonRoeRepository::new(roe),
+    };
+    match use_case.validate() {
+        Err(error) => {
+            eprintln!("{error}");
+            1
+        }
+        Ok(report) if !report.is_valid() => {
+            eprintln!(
+                "unknown ATT&CK technique(s): {}",
+                report.unknown_techniques.join(", ")
+            );
+            1
+        }
+        Ok(report) => {
+            if report.targets == 0 {
+                eprintln!("warning: no targets in scope; every target will be refused");
+            }
+            println!(
+                "OK: {} target(s) in scope, {} technique(s) allowed",
+                report.targets, report.allowed
+            );
+            0
         }
     }
 }

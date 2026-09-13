@@ -209,6 +209,39 @@ impl<OS: ObservationStore> QueryObservations<OS> {
     }
 }
 
+pub struct ValidateRoe<R> {
+    pub roe: R,
+}
+
+pub struct RoeReport {
+    pub targets: usize,
+    pub allowed: usize,
+    pub unknown_techniques: Vec<String>,
+}
+
+impl RoeReport {
+    pub fn is_valid(&self) -> bool {
+        self.unknown_techniques.is_empty()
+    }
+}
+
+impl<R: RoeRepository> ValidateRoe<R> {
+    pub fn validate(&self) -> Result<RoeReport, RepoError> {
+        let roe = self.roe.load()?;
+        let unknown_techniques = roe
+            .allowed_techniques
+            .iter()
+            .filter(|id| searu_domain::attack::technique(id).is_none())
+            .cloned()
+            .collect();
+        Ok(RoeReport {
+            targets: roe.scope.targets.len(),
+            allowed: roe.allowed_techniques.len(),
+            unknown_techniques,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -601,5 +634,46 @@ mod tests {
         assert_eq!(query.filtered(Some("T1190"), None, None).unwrap().len(), 1);
         assert_eq!(query.filtered(None, Some("info"), None).unwrap().len(), 1);
         assert_eq!(query.filtered(None, None, None).unwrap().len(), 2);
+    }
+
+    fn bogus_technique() -> Roe {
+        let mut roe = authorising();
+        roe.allowed_techniques = vec!["T1190".to_string(), "T9999".to_string()];
+        roe
+    }
+
+    struct FailingRoe;
+    impl RoeRepository for FailingRoe {
+        fn load(&self) -> Result<Roe, RepoError> {
+            Err(RepoError::Parse("bad json".to_string()))
+        }
+    }
+
+    #[test]
+    fn validate_roe_accepts_real_techniques() {
+        let use_case = ValidateRoe {
+            roe: StubRoe(authorising),
+        };
+        let report = use_case.validate().unwrap();
+        assert!(report.is_valid());
+        assert!(report.unknown_techniques.is_empty());
+        assert_eq!(report.allowed, 1);
+        assert_eq!(report.targets, 1);
+    }
+
+    #[test]
+    fn validate_roe_flags_an_unknown_technique() {
+        let use_case = ValidateRoe {
+            roe: StubRoe(bogus_technique),
+        };
+        let report = use_case.validate().unwrap();
+        assert_eq!(report.unknown_techniques, vec!["T9999".to_string()]);
+        assert!(!report.is_valid());
+    }
+
+    #[test]
+    fn validate_roe_propagates_a_parse_error() {
+        let use_case = ValidateRoe { roe: FailingRoe };
+        assert!(matches!(use_case.validate(), Err(RepoError::Parse(_))));
     }
 }

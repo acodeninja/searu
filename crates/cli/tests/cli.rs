@@ -14,6 +14,12 @@ const UNAUTHORISED_ROE: &str = r#"{
     "allowed_techniques": ["T1190", "T1059"]
 }"#;
 
+const BOGUS_TECHNIQUE_ROE: &str = r#"{
+    "scope": { "targets": [ { "type": "domain", "value": "localhost", "port": 5000 } ] },
+    "allowed_techniques": ["T1190", "T9999"],
+    "authorisation": { "exploitation_authorised_by": { "name": "Lab", "email": "lab@example.com" } }
+}"#;
+
 fn roe_file(content: &str) -> (tempfile::TempDir, String) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("rules-of-engagement.json");
@@ -165,4 +171,37 @@ fn findings_and_loot_are_empty_on_a_fresh_engagement() {
         .assert()
         .success()
         .stdout("");
+}
+
+#[test]
+fn validate_roe_accepts_a_good_file() {
+    let (_dir, roe) = roe_file(LAB_ROE);
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args(["validate-roe", "--roe", &roe])
+        .assert()
+        .success()
+        .stdout(contains("OK"));
+}
+
+#[test]
+fn validate_roe_rejects_an_unknown_technique() {
+    let (_dir, roe) = roe_file(BOGUS_TECHNIQUE_ROE);
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args(["validate-roe", "--roe", &roe])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(contains("T9999"));
+}
+
+#[test]
+fn validate_roe_reports_a_missing_file() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args(["validate-roe", "--roe", "does/not/exist.json"])
+        .assert()
+        .failure()
+        .code(1);
 }
