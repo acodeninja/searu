@@ -30,10 +30,10 @@ GitHub Actions, the Rust toolchain, base images — look up the latest release o
 it. Do not rely on memory for version numbers.
 
 ### Clean architecture
-Layers are crates: `cli → infra → application → domain`, dependencies point inward only, and
-`domain` depends on nothing external. The rule is enforced by what each crate lists under
-`[dependencies]`: the domain crate physically cannot reach for Docker, clap, or the filesystem. Keep
-it that way.
+Layers are crates: `cli → {app, adapters, tools} → domain`, dependencies point inward only, and
+`domain` depends on nothing external. There is no `infra` catch-all crate — each external system gets
+its own adapter crate. The rule is enforced by what each crate lists under `[dependencies]`: the
+domain crate physically cannot reach for Docker, clap, or the filesystem. Keep it that way.
 
 ### ATDD
 Work in small vertical slices, each a full cycle: write the failing acceptance test first (CLI

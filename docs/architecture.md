@@ -18,26 +18,29 @@ graph TD
     app["app — use-cases, generic over ports"]
     domain["domain — entities + all port traits + rules"]
     ad["adapter-docker — ToolRunner via Docker CLI"]
-    as["adapter-store — engagement-file repos (serde + fs)"]
-    ai["adapter-intel — CWE/EPSS/KEV HTTP feeds (later)"]
+    ast["adapter-store — engagement-file repos (serde + fs)"]
+    tr["tools/registry + wrappers + parser"]
+    ai["adapter-intel — CWE/EPSS/KEV HTTP feeds (M4)"]
 
     cli --> app
     cli --> ad
-    cli --> as
-    cli --> ai
+    cli --> ast
+    cli --> tr
     app --> domain
     ad --> domain
-    as --> domain
+    ast --> domain
+    tr --> domain
     ai --> domain
 ```
 
 | Crate | Role | Depends on | Knows about |
 | --- | --- | --- | --- |
-| `domain` | Entities, rules (`is_in_scope`, ROE model, findings, techniques, exploit-gate `Decision`) and **all port traits** (`RoeRepository`, `ToolRunner`, `FindingsStore`, `LootStore`, …) | nothing | nothing external |
-| `app` | Use-cases generic over the ports (`RunTool<R, T>`, `ValidateRoe`, `EmitFinding`, `Report`) | `domain` | no I/O, no Docker |
-| `adapter-docker` | `DockerToolRunner`: runs a tool image via the Docker CLI | `domain` | Docker |
-| `adapter-store` | `JsonRoeRepository` and (later) findings/loot repos | `domain` | serde, filesystem |
-| `adapter-intel` | HTTP clients for the CWE/EPSS/KEV feeds (later slice) | `domain` | HTTP |
+| `domain` | Entities, rules (`is_host_in_scope`, ROE model, findings, techniques, exploit-gate `Decision`) and **all port traits** (`RoeRepository`, `ToolRunner`, `FindingsStore`, `LootStore`, `ObservationStore`, `WordlistProvider`, `ToolRegistry`) | nothing | nothing external |
+| `app` | Use-cases generic over the ports: shipped `RunAction`, `QueryFindings`, `QueryLoot`, `QueryObservations`; planned `ValidateRoe`, `EmitFinding`, `Report` | `domain` | no I/O, no Docker |
+| `adapter-docker` | `DockerToolRunner`: builds a tool crate's embedded `Dockerfile` and runs it via the Docker CLI | `domain` | Docker |
+| `adapter-store` | `JsonRoeRepository` + the findings / loot / observations JSONL stores | `domain` | serde, filesystem |
+| `tools/*` | `tools/parser` (normalisation helpers), `tools/registry` (the `ToolRegistry`), and one wrapper crate per tool implementing `Tool` | `domain` | the tool's own output format |
+| `adapter-intel` | HTTP clients for the CWE/EPSS/KEV feeds (M4, not yet built) | `domain` | HTTP |
 | `cli` | Parses args (clap), constructs concrete adapters, injects them into the generic use-cases | `app`, adapters | everything, at the edge |
 
 Dependency injection is via **generics** (`RunTool<R: RoeRepository, T: ToolRunner>`), not `dyn`.
@@ -53,10 +56,11 @@ Scope is a domain rule, not a command. There is no `check-scope` subcommand.
   `domain::is_in_scope`, and refuses an out-of-scope target with a hard error before the runner is
   ever invoked. Precedence: default-deny (a host matching no target is out), domain-suffix and CIDR
   matching, and an exclusion overridden only by an *exact* target entry for that host.
-- **Backstop — the PreToolUse allowlist hook.** `searu scope-hook` forces a target-facing agent to
-  invoke `searu` and nothing else — no `docker`, `curl`, `wget`, or raw scanners — the only exception
-  being reading files. It does not read the ROE; its sole job is to prevent bypass so scope always
-  flows through `searu run`.
+- **Backstop — the PreToolUse allowlist hook (planned, M2/M5).** `searu scope-hook` will force a
+  target-facing agent to invoke `searu` and nothing else — no `docker`, `curl`, `wget`, or raw
+  scanners — the only exception being reading files. It does not read the ROE; its sole job is to
+  prevent bypass so scope always flows through `searu run`. The subcommand and the SKILL.md wiring
+  are not yet built.
 
 ```mermaid
 sequenceDiagram
@@ -83,20 +87,24 @@ sequenceDiagram
 
 ## Distribution and install
 
-- The repo is a self-contained payload cloned to `~/.claude/skills/searu/`. `install.sh` /
-  `install.ps1` register thin pointers into `~/.claude/{agents,skills,commands}/` (symlink on Unix,
-  copy on Windows without Developer Mode) carrying `.searu-owned` provenance markers, and rewrite
-  each agent's PreToolUse hook command to the installed binary path.
-- Runtime state lives in `~/.searu/` (`SEARU_HOME`): the downloaded/built `searu` binary and the
-  CWE/EPSS/KEV caches. Engagement data stays per-project in `./pentest/`.
-- The `searu` binary is a prebuilt static download from GitHub Releases per OS/arch, falling back to
-  `cargo build` when a platform asset is missing and a Rust toolchain is present.
-- Tool images are pulled from `ghcr.io/<ns>/searu-<tool>` on first use, falling back to building
-  from a checked-in `images/<tool>.Dockerfile` when the pull fails.
+- **Shipped today (binary).** `install.sh` (macOS/Linux/Git-Bash/WSL) and `install.ps1` (Windows
+  PowerShell) download a prebuilt `searu` binary from GitHub Releases per OS/arch and put it on PATH
+  (`~/.local/bin` on Unix, `%LOCALAPPDATA%\Programs\searu` + user PATH on Windows), falling back to
+  `cargo install --git … searu --locked` when no platform asset is published and a Rust toolchain is
+  present. `SEARU_BIN_DIR`/`SEARU_VERSION` override the location/release; `mise run install-local`
+  builds the local checkout into `~/.cargo/bin` for development.
+- **Planned (M5) — the `~/.claude` pointer.** `install.sh`/`install.ps1` will additionally clone the
+  self-contained payload to `~/.claude/skills/searu/` and register a single thin pointer (symlink on
+  Unix, copy on Windows without Developer Mode) carrying a `.searu-owned` provenance marker, rewriting
+  the SKILL.md PreToolUse hook command to the installed binary path.
+- Runtime caches (CWE/EPSS/KEV, M4) are planned to live in `~/.searu/` (`SEARU_HOME`), never in
+  `~/.claude`. Engagement data stays per-project in `./pentest/`.
+- Tool images are built on first use from each tool crate's embedded `Dockerfile`; pulling prebuilt
+  `ghcr.io/<ns>/searu-<tool>` with a build fallback is planned.
 
 ## Toolchain and quality gates
 
 `mise.toml` pins the Rust toolchain; `mise install` locally and `jdx/mise-action` in CI use the same
 version. CI runs `cargo fmt --check`, `cargo clippy -D warnings`, and `cargo test` as separate
-namespaced jobs (`cli/fmt`, `cli/quality`, `cli/test`). Cross-platform POSIX git hooks in
+namespaced jobs (`check/fmt`, `check/quality`, `check/test`). Cross-platform POSIX git hooks in
 `.githooks/` enforce file hygiene, the same fmt/clippy/test gates, and Conventional Commits.

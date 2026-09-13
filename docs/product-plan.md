@@ -9,23 +9,25 @@ This is the "what & why & architecture" reference. The living ATDD slice tracker
 
 ## Implemented architecture (authoritative)
 
-Milestone 1 shipped, and it settled the tool boundary. Where sections further down still describe an
-`assess` command, a built-in HTTP injector, or a capability overlay, **this section supersedes them.**
+Milestone 1 shipped, and it settled the tool boundary: Claude orchestrates and `searu` is gated
+hands plus memory. This section is the settled model; the design discussion further down elaborates
+it.
 
 - **Claude orchestrates; searu is gated hands + memory.** searu never plans and never exploits by
   hand. For one invocation it enforces the gate, runs the authorised tool in its container,
-  normalises the tool's output into findings/loot, and answers queries over that state. Claude
-  decides what to run next by querying findings/loot.
+  normalises the tool's output into findings/loot/observations, and answers queries over that state.
+  Claude decides what to run next by querying findings/loot/observations.
 - **One gated action:** `searu run <tool> --technique <Txxxx> --target <t> [-- <tool args>]`. The gate
   is: the tool must list that technique; the target must be in scope *now*; the exact ATT&CK ID must
   be in the ROE allow-list; and the technique's tier must be satisfied (Exploitation → a named
   authoriser; Destructive → authoriser + `destructive_authorised`). Tiers come from a curated
   `domain::technique::tier_of` table (unknown → Exploitation).
 - **Queries:** `searu findings [--technique|--severity|--tool]`, `searu loot [--category] [--reveal]`,
-  `searu tool list`, `searu tool advice <tool>`, `searu attack list|show`.
+  `searu observations [--kind]`, `searu tool list`, `searu tool advice <tool>`, `searu attack list|show`.
 - **Crate-per-tool.** Each tool is a thin crate under `crates/tools/wrappers/<tool>` implementing the
   `domain::tools::Tool` trait, with its `Dockerfile` and Claude-facing `advice.md` compiled in via
-  `include_str!`, and its own `parse` that normalises output into a `ParsedOutput { findings, loot }`.
+  `include_str!`, and its own `parse` that normalises output into a
+  `ParsedOutput { findings, loot, observations }`.
   Shared normalisation helpers (fingerprint, HTML-unescape, secret scan) live in
   `crates/tools/parser` (`searu-tool-parser`); `crates/tools/registry` (`searu-tool-registry`)
   exposes them through the `ToolRegistry` port. A generic SARIF parser will join the parser crate when
@@ -61,12 +63,12 @@ fingerprint redaction, and PDF/Dradis reporting. Searu rebuilds it from first pr
   sub-technique), embedded and offline. Tools attach to matrix cells incrementally; most cells start
   with "no tooling".
 - **Authorised = executable.** Active and destructive testing run directly when the ROE authorises
-  them; `propose-exploits` is an optional planning aid (an ROE `require_review` setting can make it
-  mandatory per tier). Scope is the one absolute gate. There are **no absolute prohibitions**:
-  authorisation is granting the *exact* ATT&CK technique/sub-technique ID in the ROE (so `T1498.002`
-  reflection-amplification DoS can be sanctioned without sanctioning `T1498.001` direct flood).
-  Exploitation tier also needs a named authoriser (person + email); Destructive tier also needs
-  `destructive_authorized: true`.
+  them; `propose-exploits` is a planned optional planning aid (an aspirational ROE `require_review`
+  setting could make it mandatory per tier). Scope is the one absolute gate. There are **no absolute
+  prohibitions**: authorisation is granting the *exact* ATT&CK technique/sub-technique ID in the ROE
+  (so `T1498.002` reflection-amplification DoS can be sanctioned without sanctioning `T1498.001`
+  direct flood). Exploitation tier also needs a named authoriser (person + email); Destructive tier
+  also needs `destructive_authorised: true`.
 
 ## The core idea: two catalogues, ATT&CK as the spine
 
@@ -78,38 +80,40 @@ Everything hangs off two layers that both live in `domain` (zero external deps):
    can *speak ATT&CK* even about cells it cannot yet act on. Offline (never depends on
    attack.mitre.org at runtime), mirroring the old `ATTACK_NAMES` table but complete.
 
-2. **Searu capability overlay (curated, grows).** The subset of ATT&CK cells the toolkit can
-   actually operate, each entry binding:
-   `{ capability id, attack_ids: [Txxxx…], tier, tools: [image…], gate }`.
-   `tier ∈ { Passive, Active, Exploitation, Destructive }` — the intrusiveness/impact ladder from
-   **NIST SP 800-115** (Review → Target Identification & Analysis → Target Vulnerability Validation),
-   extended with `Destructive` for impact. `Passive` = no packets to the target (OSINT/third-party);
-   `Active` = read-only interaction (discovery, enumeration, fingerprinting, vulnerability
-   *detection*); `Exploitation` = validating a weakness by exercising it / gaining access;
-   `Destructive` = may modify, degrade or deny (writes, DoS).
-   This is where nmap/nuclei/sqlmap/hydra/etc. hang off their ATT&CK techniques. Starts with the
-   handful of techniques needed for the first milestone; every new tool is a new binding, never a new
-   command. **Authorisation is by exact ATT&CK ID:** a capability is runnable only if *every* one of
-   its `attack_ids` appears in the ROE's allow-list, matched exactly and sub-technique-specifically
-   (a parent never implies a child, nor a child its parent). This makes the ROE speak ATT&CK
-   directly — the same spine the catalogue is built on.
+2. **Searu tool registry (curated, grows).** The subset of ATT&CK cells the toolkit can actually
+   operate. Rather than a separate capability data structure, this is realised **crate-per-tool**:
+   each wrapper under `crates/tools/wrappers/<tool>` implements `domain::tools::Tool`, *declaring the
+   ATT&CK techniques it performs* (`Tool::techniques`), and `crates/tools/registry` exposes them
+   through the `ToolRegistry` port. A technique's **tier** is not stored per tool but derived from a
+   curated `domain::technique::tier_of` table: `tier ∈ { Passive, Active, Exploitation, Destructive }`
+   — the intrusiveness/impact ladder from **NIST SP 800-115** (Review → Target Identification &
+   Analysis → Target Vulnerability Validation), extended with `Destructive` for impact. `Passive` =
+   no packets to the target (OSINT/third-party); `Active` = read-only interaction (discovery,
+   enumeration, fingerprinting, vulnerability *detection*); `Exploitation` = validating a weakness by
+   exercising it / gaining access; `Destructive` = may modify, degrade or deny (writes, DoS).
+   This is where commix/ffuf/httpx/katana/sqlmap (and later nmap/nuclei/dalfox/…) hang off their
+   ATT&CK techniques. Every new tool is a new crate, never a new command. **Authorisation is by exact
+   ATT&CK ID:** `searu run <tool> --technique <T>` is permitted only if the tool lists that technique
+   and the *exact* ID appears in the ROE's allow-list, matched sub-technique-specifically (a parent
+   never implies a child, nor a child its parent). This makes the ROE speak ATT&CK directly — the
+   same spine the registry is built on.
 
-Coverage is then a *join*: "for tactic X, here are the ATT&CK techniques, here is which searu
-capabilities/tools cover them, here is what remains unaddressed." That join is the report's ATT&CK
-heat-map and the operator's menu.
+Coverage is then a *join*: "for tactic X, here are the ATT&CK techniques, here is which searu tools
+cover them, here is what remains unaddressed." That join is the report's ATT&CK heat-map and the
+operator's menu.
 
 ```mermaid
 graph TD
     STIX["MITRE ATT&CK STIX<br/>(pinned release)"] -->|cargo xtask attack-sync| GEN["generated.rs<br/>full Enterprise matrix"]
     GEN --> REF["ATT&CK reference layer<br/>(domain, offline, complete)"]
     REF -. tags .-> CAP
-    CAP["Capability overlay<br/>attack_id × tool × tier × gate<br/>(curated, grows)"]
+    CAP["Tool registry<br/>tool × ATT&CK techniques + tier_of<br/>(curated, grows)"]
     ROE["rules-of-engagement.json<br/>allow-list of exact ATT&CK IDs<br/>+ authorisers"] --> GATE
     SCOPE["scope (absolute)"] --> GATE
     CAP --> GATE{authorised?}
     GATE -->|no| STOP["refuse — no container"]
     GATE -->|yes| TOOL["searu run tool<br/>→ Docker image"]
-    TOOL --> FIND["findings + loot<br/>(ATT&CK-tagged)"]
+    TOOL --> FIND["findings + loot + observations<br/>(ATT&CK-tagged)"]
     REF -. names .-> REP
     FIND --> REP["report: RoE appendix<br/>+ ATT&CK heat-map"]
 ```
@@ -129,75 +133,91 @@ runtime:
 
 ## CLI surface (`searu` binary), organised around ATT&CK
 
+**Shipped today** (see `crates/cli/src/main.rs`):
+
 - `searu attack list [--tactic <TA…>]` — browse the full embedded matrix.
-- `searu attack show <Txxxx>` — technique detail + which searu capabilities/tools cover it.
-- `searu capability list [--tier <t>]` — what searu can *do* today, grouped by tactic.
-- `searu run <tool|capability> --roe <path> --target <t> [-- <args…>]` — the one execution path.
-  Scope (intrinsic, default-deny, most-specific-wins) + tier gate + the ROE's ATT&CK-technique
-  allow-list all enforced *before* any container starts. (No `check-scope` command — scope is
-  intrinsic.)
-- `searu assess --roe <path> --target <t>` — orchestrate the applicable capabilities against a
-  target end-to-end (detect → gated exploit → emit). The "full assessment" driver.
+- `searu attack show <Txxxx>` — technique detail (name, parent, tactics).
+- `searu run <tool> --technique <Txxxx> --target <t> [--roe <path>] [-- <args…>]` — the one execution
+  path (`--roe` defaults to `pentest/rules-of-engagement.json`). Scope (intrinsic, default-deny,
+  most-specific-wins) + the tier gate + the ROE's ATT&CK-technique allow-list are all enforced
+  *before* any container starts. (No `check-scope` command — scope is intrinsic.)
+- `searu findings [--technique|--severity|--tool]`, `searu loot [--category] [--reveal]`,
+  `searu observations [--kind]` — query the three engagement stores under `./pentest/`.
+- `searu tool list` — tools and the ATT&CK techniques each performs.
+- `searu tool advice <tool>` — the compiled-in `advice.md` telling Claude how to drive a tool.
+
+**Planned** (by milestone; not yet implemented):
+
 - `searu validate-roe` — schema-validate `./pentest/rules-of-engagement.json` (carry
-  `rules-of-engagement.schema.json`).
+  `rules-of-engagement.schema.json`). *M2.*
 - `searu scope-hook` — PreToolUse allowlist backstop: permit only `searu …` + file reads, block raw
-  `docker`/`curl`/scanners (exit 2). Does not read the ROE.
+  `docker`/`curl`/scanners (exit 2). Does not read the ROE. *M2.*
 - `searu emit-finding` / `searu report` — findings JSONL (with `attack_technique`) → PDF/Dradis,
   with a **Rules of Engagement appendix** (scope, authorised ATT&CK techniques, authorisers, limits)
   rendered immediately after the executive summary, then the ATT&CK coverage heat-map + CWE
-  attack-chains + KEV/EPSS exploitability.
-- `searu exploit <step> --roe <path> --target <t>` — **execute** an authorised exploitation/
-  destructive action directly (scope + tier + authorisation checked first).
+  attack-chains + KEV/EPSS exploitability. *M4.*
 - `searu propose-exploits` / `searu record-exploit` — optional planning aid: write/record an
-  exploitation plan without executing. An ROE setting can make review-before-execute mandatory per
-  tier.
+  exploitation plan without executing. *M4.*
+
+The "full assessment" is not a command: **Claude orchestrates** a sequence of gated `searu run`
+calls, querying findings/loot/observations between them to decide what to run next.
 
 ## Domain model (`crates/domain`, zero deps)
 
-- ATT&CK reference: `TacticId`, `TechniqueId`, `AttackTactic`, `AttackTechnique { id, name, tactic,
-  parent }`, plus `include!`d `generated.rs`.
-- Capability overlay: `Tier`, `Capability { id, attack_ids, tier, tools, gate }`.
-- ROE (`Roe`, loaded from `rules-of-engagement.json`): scope + an **allow-list of exact ATT&CK
-  technique/sub-technique IDs** + `authorization { exploitation_authorized_by, destructive_authorized,
-  require_review }`. `fn authorises(&self, id: &TechniqueId) -> bool` does exact, sub-technique-
-  specific matching (no parent↔child implication).
-- Scope (ported from `check_scope.py`): `EntryKind`, `ScopeEntry`, `Scope`, `is_in_scope`
+- ATT&CK reference (`attack` module): `AttackTactic { id, name }`, `AttackTechnique { id, name,
+  tactics, parent }`, plus `include!`d `generated.rs`, surfaced by plain functions (`tactics()`,
+  `techniques()`, `tactic(id)`, `technique(id)`, `techniques_in_tactic(id)`).
+- Tools & tiers: the `Tool` trait (`name`, `techniques`, `dockerfile`, `advice`, `invocation`,
+  `parse`) with `ParsedOutput { findings, loot, observations }`; `enum Tier { Passive, Active,
+  Exploitation, Destructive }` and `fn technique::tier_of(id) -> Tier` (unknown → Exploitation).
+- ROE (`Roe`, loaded from `rules-of-engagement.json`): `scope` + an **allow-list of exact ATT&CK
+  technique/sub-technique IDs** + `Authorisation { exploitation_authorised_by: Option<Authoriser>,
+  destructive_authorised: bool }`. `fn authorises(&self, id: &str) -> bool` does exact,
+  sub-technique-specific matching (no parent↔child implication).
+- Findings stores: `Finding { tool, target, title, severity, status, attack_technique, cwe, evidence,
+  loot_fingerprint }`, `Loot { fingerprint, category, value }`, `Observation { kind, value, detail }`;
+  `enum Severity`, `enum Status`.
+- Scope (ported from `check_scope.py`): `HostForm`, `ScopeEntry`, `Scope`, `is_host_in_scope`
   (default-deny; domain-suffix + v4/v6 CIDR containment with std only; exclusion overridden only by
   an exact target).
-- Authorisation gate: `Decision`/gate combining scope (absolute) + exact ATT&CK authorisation + the
-  tier's extra requirement (Exploitation → authoriser present; Destructive → `destructive_authorized`).
+- Authorisation gate: `Decision`/`gate::decide` combining scope (absolute) + exact ATT&CK
+  authorisation + the tier's extra requirement (Exploitation → authoriser present; Destructive →
+  `destructive_authorised`).
 - Port traits (co-located in `domain`, sync, DI via generics not `dyn`): `RoeRepository`,
-  `ToolRunner`, `FindingsStore`, `LootStore`, `AttackCatalogue`, `CapabilityCatalogue`.
+  `ToolRunner`, `FindingsStore`, `LootStore`, `ObservationStore`, `WordlistProvider`, and
+  `ToolRegistry` (in `domain::tools`).
 
 ## Crate layering — hexagonal / ports-and-adapters
 
-`cli → {app, adapter-docker, adapter-http, adapter-store, adapter-intel} → domain`; adapters depend
-on `domain` only; `domain` on nothing; `cli` is the sole composition root. Use-cases (`RunTool<R,T>`,
-`ValidateRoe`, `ProposeExploits`, `EmitFinding`, `Report`) generic over ports, tested with
-hand-written fakes. The load-bearing test: **an out-of-scope target never launches a container**
-(fake `ToolRunner` asserted never-called). The `xtask` crate (dev-only, not in the shipping graph)
-generates the ATT&CK matrix for `domain` via `attack-sync`.
+`cli → {app, adapter-docker, adapter-store, tools/registry} → domain`; the adapters, the tool
+wrappers, and `tools/parser` depend on `domain` only; `domain` on nothing; `cli` is the sole
+composition root. Shipped use-cases (`RunAction`, `QueryFindings`, `QueryLoot`, `QueryObservations`)
+are generic over ports, tested with hand-written fakes; reporting use-cases (`ValidateRoe`,
+`EmitFinding`, `Report`) are planned (M2/M4). The load-bearing test: **an out-of-scope target never
+launches a container** (fake `ToolRunner` asserted never-called). The `xtask` crate (dev-only, not in
+the shipping graph) generates the ATT&CK matrix for `domain` via `attack-sync`. There is no `infra`
+catch-all crate and no `adapter-http` — built-in HTTP injection was dropped in favour of
+containerised tools; `adapter-intel` (CWE/EPSS/KEV feeds) arrives with M4.
 
 ```mermaid
 graph TD
     cli["cli — bin: searu<br/>(composition root)"]
     app["app — use-cases, generic over ports"]
-    domain["domain — ATT&CK matrix + capabilities<br/>+ scope + authorisation gate + ports"]
+    domain["domain — ATT&CK matrix + tools/tiers<br/>+ scope + authorisation gate + ports"]
     ad["adapter-docker — ToolRunner via Docker"]
-    ah["adapter-http — HTTP exploitation execution"]
-    ast["adapter-store — ROE/findings/loot (serde + fs)"]
-    ai["adapter-intel — CWE/EPSS/KEV feeds (later)"]
+    ast["adapter-store — ROE/findings/loot/observations (serde + fs)"]
+    tr["tools/registry + wrappers + parser"]
+    ai["adapter-intel — CWE/EPSS/KEV feeds (M4)"]
     xt["xtask — attack-sync (dev only)"]
 
     cli --> app
     cli --> ad
-    cli --> ah
     cli --> ast
-    cli --> ai
+    cli --> tr
     app --> domain
     ad --> domain
-    ah --> domain
     ast --> domain
+    tr --> domain
     ai --> domain
     xt -. generates .-> domain
 ```
@@ -231,17 +251,18 @@ graph TD
 `~/.claude/skills/searu/sections/<x>.md` before executing"). Phases map PTES onto ATT&CK tactics so
 the operator flows Recon → Discovery → Initial Access → Credential Access → … each section calling
 the `searu` binary and, for heavy output, spawning a `specialists/*.md` subagent so scanner dumps
-never pollute the main context. Authored as `SKILL.md.tmpl` and committed generated (Claude reads it
-at load time), following gstack's pipeline.
+never pollute the main context. `SKILL.md`, the `sections/`, and the `specialists/` are **authored
+directly as committed files** (no `SKILL.md.tmpl` generator); a small CI/test check keeps
+`manifest.json` in sync with the section files and asserts every `specialists/*.md` names a `model:`.
 
 **Specialists are keyed by ATT&CK technique × tool.** Each `specialists/<Txxxx[.nnn]>-<tool>.md` is
 the agent-facing playbook for driving *one tool* to accomplish *one ATT&CK technique*: the invocation
 variants and hard-won defaults for that use case (expressed as `searu run <tool> -- <flags…>`), how
 to read the output, and the finding schema to emit. A tool spanning several techniques gets one file
 per technique (e.g. `T1046-nmap` service/version detection vs `T1595.001-nmap` host-block sweeps),
-which keeps each prompt narrow — and narrow is what lets it run on haiku. This mirrors the domain
-capability overlay exactly: every catalogue binding `(attack_id × tool)` has a matching specialist
-file, so the catalogue *routes and authorises* while the specialist *tells the agent how*. (Naming is
+which keeps each prompt narrow — and narrow is what lets it run on haiku. This mirrors the tool
+registry exactly: every `(attack_id × tool)` binding has a matching specialist file, so the registry
+*routes and authorises* while the specialist *tells the agent how*. (Naming is
 technique-first to match the ATT&CK spine; a tool-first alias index can be added if operators want
 "show me every nmap specialist".)
 
@@ -269,43 +290,51 @@ usually means context it should have been handed is missing.
 
 ## Install & distribution (gstack model, cross-platform)
 
-- `install.sh` + `install.ps1`: create the real dir `~/.claude/skills/searu/`, then symlink (Unix)
-  / copy (Windows without Developer Mode) `SKILL.md`, `sections/`, `specialists/`, `bin/` from the
-  repo checkout. Drop `.searu-owned` provenance markers; never clobber a user's same-named skill
-  (detect-and-skip); back up a pre-existing custom SKILL.md.
-- Rewrite the installed `SKILL.md` `hooks.PreToolUse` command to the absolute installed binary path.
-- Binary → `~/.searu/bin/searu` (`SEARU_HOME`): prebuilt static download from GitHub Releases per
-  OS/arch, `cargo build` fallback. Runtime state (binary + CWE/EPSS/KEV caches) lives in `~/.searu/`,
-  never in `~/.claude`. Engagement data stays per-project in `./pentest/`.
-- Tool images `ghcr.io/<ns>/searu-<tool>:<ver>`, pulled on first use, built from checked-in
-  `images/<tool>.Dockerfile` on pull failure.
+**Shipped today — binary bootstrap.** `install.sh` (macOS/Linux/Git-Bash/WSL) and `install.ps1`
+(Windows PowerShell) download a prebuilt `searu` binary from GitHub Releases per OS/arch and put it
+on PATH — `~/.local/bin` on Unix, `%LOCALAPPDATA%\Programs\searu` (added to the user PATH) on
+Windows — falling back to `cargo install --git … searu --locked` where no asset is published.
+`SEARU_BIN_DIR` overrides the location; `SEARU_VERSION` pins a release. For development,
+`mise run install-local` runs `cargo install --path crates/cli` into `~/.cargo/bin`.
+
+**Planned (M5) — the `~/.claude` skill pointer.** `install.sh`/`install.ps1` will additionally create
+the single real dir `~/.claude/skills/searu/`, then symlink (Unix) / copy (Windows without Developer
+Mode) `SKILL.md`, `sections/`, `specialists/`, `bin/` from the repo checkout; drop `.searu-owned`
+provenance markers; never clobber a user's same-named skill (detect-and-skip); back up a pre-existing
+custom `SKILL.md`; and rewrite the installed `SKILL.md` `hooks.PreToolUse` command to the absolute
+installed binary path.
+
+- Runtime caches (CWE/EPSS/KEV, M4) are planned to live in `~/.searu/` (`SEARU_HOME`), never in
+  `~/.claude`; engagement data stays per-project in `./pentest/`.
+- Tool images are built on first use from each tool crate's embedded `Dockerfile` (`include_str!`);
+  pulling prebuilt `ghcr.io/<ns>/searu-<tool>:<ver>` with a build fallback is planned.
 
 ## Exploitation posture (authorised = executable; propose optional)
 
-Authorisation *unlocks execution*, not merely a written proposal. `searu exploit` and `searu assess`
-run active — and, when authorised, destructive — actions directly. The gate is layered so scope is
-absolute and everything else is unlocked by the ROE:
+Authorisation *unlocks execution*, not merely a written proposal. `searu run` runs active — and, when
+authorised, destructive — actions directly; Claude orchestrates the sequence of runs. The gate is
+layered so scope is absolute and everything else is unlocked by the ROE:
 
 - **Scope is the one absolute gate.** The target must be in scope *now*, always, for every tier. No
   ROE field can bypass it (default-deny, most-specific-wins).
 - **ATT&CK authorisation unlocks the tier.** `Passive`/`Active` need only their techniques allowed.
-  `Exploitation` additionally needs `authorization.exploitation_authorized_by` (a person **and**
+  `Exploitation` additionally needs `authorisation.exploitation_authorised_by` (a person **and**
   email). `Destructive` (e.g. DoS, destructive-write) additionally needs an explicit
-  `authorization.destructive_authorized: true`.
+  `authorisation.destructive_authorised: true`.
 - **No absolute prohibitions; authorisation is granting the exact ATT&CK ID.** Nothing is banned
   outright — a technique runs iff its *exact* technique/sub-technique ID is present in the ROE's
   allow-list. Matching is exact and sub-technique-specific: authorising `T1498.002` (Reflection
   Amplification) authorises *only* that — **not** `T1498.001` (Direct Network Flood) nor the bare
   parent `T1498`. Even DoS is thus scoped precisely to the sanctioned method. Listing a technique in
   the ROE is the *sole* way to authorise it.
-- **Propose is optional.** `searu propose-exploits` writes `./pentest/exploitation-plan.md` (literal
-  command, blast radius, reversibility) and runs nothing — a planning aid, not a mandatory step. An
-  ROE `require_review: [<tier>…]` setting can make propose→review→`record-exploit`→execute mandatory
-  for chosen tiers.
+- **Propose is optional (planned, M4).** `searu propose-exploits` will write
+  `./pentest/exploitation-plan.md` (literal command, blast radius, reversibility) and run nothing — a
+  planning aid, not a mandatory step. An ROE `require_review: [<tier>…]` setting (aspirational; not in
+  the shipped ROE schema) could make propose→review→`record-exploit`→execute mandatory for chosen
+  tiers.
 
 The `Decision` type in `domain` encodes this precedence; `app` refuses execution the moment scope or
-the required authorisation is missing, and `adapter-docker`/`adapter-http` never see an unauthorised
-invocation.
+the required authorisation is missing, and `adapter-docker` never sees an unauthorised invocation.
 
 ```mermaid
 flowchart TD
@@ -318,7 +347,7 @@ flowchart TD
     D -- Exploitation --> E{authoriser<br/>name + email present?}
     E -- no --> R3["refuse — no authoriser"]
     E -- yes --> RUN
-    D -- Destructive --> F{destructive_authorized<br/>= true?}
+    D -- Destructive --> F{destructive_authorised<br/>= true?}
     F -- no --> R4["refuse — destructive not authorised"]
     F -- yes --> RUN
 ```
@@ -327,7 +356,7 @@ flowchart TD
 
 The first functional deliverable: **run a full assessment against
 `ghcr.io/ere-be-dragons/cwe-78:main`, locally, ending in a real exploit.** It is a deep vertical
-slice — a tracer bullet through scope → ROE → capability catalogue → containerised tool runner →
+slice — a tracer bullet through scope → ROE → tool registry → containerised tool runner →
 *authorised* exploitation gate → findings/loot — kept as thin as possible at each layer, then
 thickened by later milestones.
 
@@ -351,16 +380,16 @@ Interpreter); CWE-78; `Tier::Exploitation`.
 ```mermaid
 sequenceDiagram
     participant Op as Operator (/searu)
-    participant Cli as searu assess
-    participant Uc as app use-case
+    participant Cli as searu run
+    participant Uc as RunAction (app)
     participant Gate as authorisation gate (domain)
     participant Dk as adapter-docker
     participant Tgt as CWE-78 container :5000
     participant St as findings + loot
 
-    Op->>Cli: searu assess --roe rules-of-engagement.cwe-78.json --target http://localhost:5000
-    Cli->>Uc: capability command-injection (T1190, T1059)
-    Uc->>Gate: scope + exact ATT&CK ids + Exploitation authoriser
+    Op->>Cli: searu run commix --technique T1190 --target http://localhost:5000 --roe rules-of-engagement.cwe-78.json
+    Cli->>Uc: run(commix, T1190, target)
+    Uc->>Gate: scope + exact ATT&CK id + Exploitation authoriser
     Gate-->>Uc: authorised
     Uc->>Dk: run commix image
     Dk->>Tgt: GET /cmd/dig?ip_addr=;printenv DATABASE_URL
@@ -372,8 +401,8 @@ sequenceDiagram
 ### The lab ROE (ships as `examples/rules-of-engagement.cwe-78.json`)
 
 Self-owned lab, fully authorised: `targets` = `127.0.0.1` / `localhost:5000`; the ATT&CK allow-list
-carries the *exact* IDs the command-injection capability binds to (**`T1190`** and **`T1059`**); and
-`authorization.exploitation_authorized_by` names a person **and** email so the Exploitation tier is
+carries the *exact* IDs commix performs (**`T1190`** and **`T1059`**); and
+`authorisation.exploitation_authorised_by` names a person **and** email so the Exploitation tier is
 unlocked and the exploit actually runs — this is where the toolkit proves it can exploit, not just
 propose.
 
@@ -384,18 +413,17 @@ propose.
 2. **Scope + `searu run` refusal** — `domain::is_in_scope`; `app::RunTool`;
    `adapter-store::JsonRoeRepository`; `adapter-docker::DockerToolRunner` with pure `docker_argv`.
    Out-of-scope target **never** launches a container. No daemon.
-3. **Capability overlay + authorisation gate** — `Tier`, `Capability`, `CapabilityCatalogue` with one
-   entry (`command-injection` → commix → T1190/T1059 → Exploitation); authorisation `Decision`.
-   Unauthorised refuses cleanly; the lab ROE authorises both IDs + names an authoriser. Pure, no
-   daemon.
+3. **Tier + authorisation gate** — `Tier` + `technique::tier_of`; the commix wrapper declares its
+   techniques (T1190/T1059 → Exploitation); authorisation `Decision`/`gate::decide`. Unauthorised
+   refuses cleanly; the lab ROE authorises the IDs + names an authoriser. Pure, no daemon.
 4. **commix wrapper + live `DockerToolRunner` + findings/loot** (needs daemon) — shape the commix
    argv, `docker run` it against the running target, parse the credential, emit a finding
-   (`attack_technique: T1190`, cwe 78) + loot (the `DATABASE_URL`, redacted in any deliverable).
-   `images/commix.Dockerfile` fallback if no ghcr image.
-5. **`searu assess`** — drive the (currently N=1) capability set against the lab ROE end-to-end:
-   scope-check → detect → gated exploit → emit. Live acceptance test brings up the CWE-78 container,
-   runs `searu assess`, asserts the credential lands in loot and a T1190 finding is recorded; gated
-   on daemon availability (unit path always runs).
+   (`attack_technique: T1190`, cwe 78) + loot (the `DATABASE_URL`, redacted in any deliverable). The
+   commix crate's embedded `Dockerfile` is built on first use.
+5. **End-to-end via `searu run`** — no `assess` command; the walking skeleton is proven by a live
+   acceptance test that brings up the CWE-78 container, runs `searu run commix --technique T1190 …`,
+   and asserts the credential lands in loot and a T1190 finding is recorded; gated on daemon
+   availability (the unit/refusal path always runs). Claude, not the binary, sequences multiple runs.
 
 ## Later milestones (generalisation, once the skeleton walks)
 
@@ -403,16 +431,19 @@ Each still one ATDD slice per commit:
 
 - **M2 — ROE tooling & backstop:** `searu validate-roe` (carry `rules-of-engagement.schema.json`) +
   `searu scope-hook` allowlist (block raw `docker`/`curl`/scanners, exit 2).
-- **M3 — more capabilities:** port the old `techniques.py` ATT&CK map in full, remapping each entry
-  onto the NIST 800-115 tier ladder; add tools one slice each (nmap, httpx, nuclei, sqlmap, dalfox,
-  …), every one a new capability-overlay binding to its ATT&CK cell — never a new command.
+- **M3 — more tools (in progress):** remap the old `techniques.py` ATT&CK map onto the NIST 800-115
+  tier ladder and add tools one slice each — commix, httpx, katana, sqlmap and ffuf have shipped;
+  nmap, nuclei, dalfox, … follow. Every tool is a new crate bound to its ATT&CK cell, never a new
+  command.
 - **M4 — reporting & intel:** ATT&CK coverage heat-map, CWE attack-chains, KEV/EPSS exploitability,
   Dradis export (RoE appendix after the executive summary); `propose-exploits`/`record-exploit` for
   the optional review-before-execute branch.
-- **M5 — install & the `/searu` skill:** `install.sh`/`install.ps1` (single `searu/` pointer,
-  `.searu-owned` markers, hook rewrite, throwaway-HOME test); `/searu-upgrade` + release scaffolding;
-  the generated `SKILL.md` skeleton + `sections/` + `specialists/` + `manifest.json` + PreToolUse
-  hook.
+- **M5 — install & the `/searu` skill:** author the skill payload directly (no template generator),
+  then ship it. Planned ~5-slice sequence: (1) the `searu scope-hook` subcommand; (2) the `SKILL.md`
+  skeleton + `sections/` + `manifest.json`; (3) the `specialists/` (technique×tool, each with a
+  `model:` header); (4) extend `install.sh`/`install.ps1` to register the single `searu/` pointer +
+  `.searu-owned` markers + hook rewrite, tested against a throwaway HOME; (5) `/searu-upgrade` +
+  release scaffolding.
 
 ## Safety invariants to preserve (from old-version)
 

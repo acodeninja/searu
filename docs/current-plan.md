@@ -3,11 +3,10 @@
 Living plan and session-handoff for rebuilding the pen-testing toolkit as **Searu**. Detailed enough
 to resume in a fresh session. See [architecture.md](architecture.md) for crate diagrams.
 
-> **Superseded framing:** [product-plan.md](product-plan.md) is now the authoritative design (ATT&CK
-> as the organising spine, a single `/searu` skill, authorised-is-executable exploitation with
-> NIST SP 800-115 tiers). Work is re-sequenced into **milestones**; Milestone 1 is an end-to-end
-> exploit of the local CWE-78 lab target. The old "Slice 2 … Slice 11" numbering below is retained
-> for reference but the product-plan roadmap (M1.1–M1.5, then M2–M5) is the plan of record.
+> [product-plan.md](product-plan.md) is the authoritative design (ATT&CK as the organising spine, a
+> single `/searu` skill, authorised-is-executable exploitation with NIST SP 800-115 tiers). Work is
+> sequenced into **milestones** (M1–M5), one ATDD slice per commit. M1 (end-to-end exploit of the
+> local CWE-78 lab) has shipped; see *Current status* below for where we are.
 
 ## Why
 
@@ -28,36 +27,43 @@ to pass → refactor → **commit** (one commit per slice) → pause for review.
 
 ## Locked decisions
 
-- **Name** Searu — binary `searu` (alias `sr`); repo `searu`; ghcr prefix `searu-`; skill/agent prefix `searu-`; upgrade command `/searu-upgrade`.
+- **Name** Searu — binary `searu`; repo `searu`; ghcr prefix `searu-`; upgrade command `/searu-upgrade`.
+- **Single skill, no registered agents** — only `/searu` is registered. Context-heavy tool runs are
+  spawned as *ephemeral* subagents from prompt files under `searu/specialists/`; there are no
+  `searu-*` agents or skills registered anywhere.
+- **Skill payload authored directly** — `SKILL.md`, `sections/`, `specialists/` are committed files,
+  not generated from a `SKILL.md.tmpl`; a small CI/test check keeps `manifest.json` and the
+  specialist `model:` headers honest.
 - **Architecture** hexagonal / ports-and-adapters (the `../bellman` model): ports in `domain`, use-cases in `app` generic over ports, **one adapter crate per external system**, `cli` as the sole composition root. **No `infra` catch-all crate.** DI via generics; tests via hand-written fakes.
 - **Scope is intrinsic** — a domain rule enforced inside `searu run`; **no `check-scope` command**. The PreToolUse hook is a `searu`-only allowlist, not a scope check.
-- **`searu` delivery** — installer downloads a prebuilt static binary from GitHub Releases per OS/arch; `cargo build` fallback.
-- **Docker images** — pull `ghcr.io/<ns>/searu-<tool>` on first use; build from `images/<tool>.Dockerfile` on pull failure.
+- **`searu` delivery** — `install.sh`/`install.ps1` download a prebuilt binary from GitHub Releases per OS/arch with a `cargo install` fallback; `mise run install-local` builds the local checkout for development.
+- **Docker images** — built on first use from each tool crate's embedded `Dockerfile`; pull-through of `ghcr.io/<ns>/searu-<tool>` is planned.
 - **Hosting** — public GitHub repo (clone-install, Releases, ghcr, Actions).
 
-## Repo state right now
+## Current status
 
-Committed (`f382df4`, `chore: scaffold workspace, CLI, CI and git hooks`) — Slice 1:
+The hexagon is built and walking. Workspace crates (`Cargo.toml` members): `domain`, `app`,
+`adapter-store`, `adapter-docker`, `tools/parser`, `tools/registry`, the five tool wrappers
+(`commix`, `ffuf`, `httpx`, `katana`, `sqlmap`), `cli`, `xtask`.
 
-```
-Cargo.toml                     workspace: members = domain, cli
-mise.toml                      [tools] rust = "1.98.1"; [tasks.install-hooks]
-.gitattributes                 * text=auto eol=lf   (LF everywhere)
-.gitignore                     ignores /old-version/, /.idea/, /target/
-CLAUDE.md                      conventions (British English, no comments, latest deps, clean arch, ATDD, hooks)
-.github/workflows/ci.yml       jobs cli/fmt, cli/quality, cli/test (checkout@v7, jdx/mise-action@v4)
-.githooks/pre-commit  (100755) hygiene (trailing newline, no trailing ws) + fmt + clippy + test
-.githooks/commit-msg  (100755) Conventional Commits, subject ≤72, rejects AI trailers
-crates/domain/{Cargo.toml, src/lib.rs}   empty lib (doc line only)
-crates/cli/{Cargo.toml, src/main.rs, tests/cli.rs}   clap skeleton + version/bare-help tests
-```
+Shipped:
 
-Uncommitted working changes present in this session: `docs/architecture.md`, `docs/current-plan.md`.
+- **ATT&CK reference layer** — full Enterprise matrix embedded offline via `cargo xtask attack-sync`;
+  `searu attack list|show`.
+- **Scope + the authorisation gate** — `domain::is_host_in_scope`, `gate::decide`, `technique::tier_of`;
+  `searu run` refuses out-of-scope / unauthorised targets before any container starts.
+- **Containerised tool runner** — `DockerToolRunner` builds each tool crate's embedded `Dockerfile`
+  on first use, runs it with `--add-host=host.docker.internal:host-gateway`.
+- **Five tools** — commix (CWE-78, end-to-end against the live lab), httpx + katana (black-box
+  recon), sqlmap (CWE-89), ffuf (content discovery / CWE-22), plus a download-once SecLists wordlist
+  cache with read-only mounts.
+- **Three engagement stores** under `./pentest/` — findings, loot, observations — with
+  `searu findings|loot|observations` queries; ROE default path `pentest/rules-of-engagement.json`.
+- **Binary installers** — `install.sh`, `install.ps1`, and `mise run install-local` (see *Locked
+  decisions*). Release/CI scaffolding (release-please, cross-compiled Linux + Windows assets).
 
-**Not yet done / known deltas to apply in Slice 2:**
-- `crates/cli/src/main.rs` (committed) still declares a `check-scope` subcommand — **remove it**.
-- `crates/cli/tests/cli.rs` (committed) asserts bare help contains `"check-scope"` — **change to `"run"`**.
-- `app`, `adapter-docker`, `adapter-store` crates **do not exist yet** — create and add to workspace members.
+Not yet built: M2 backstop commands (`validate-roe`, `scope-hook`), M4 reporting/intel, and all of
+M5 (the `/searu` skill payload + the `~/.claude` pointer install).
 
 ## How to resume (build, test, commit)
 
@@ -67,76 +73,39 @@ Uncommitted working changes present in this session: `docs/architecture.md`, `do
   - `cargo test --all`
   - `cargo fmt --all --check`  (run `cargo fmt --all` to fix)
   - `cargo clippy --all-targets --all-features -- -D warnings`
-- Commit: Conventional Commits (`<type>[(scope)][!]: subject`, ≤72 chars, types feat/fix/docs/style/refactor/perf/test/build/ci/chore/revert). **Never** add AI attribution trailers. One commit per slice. Slice 1 was `chore`.
+- Commit: Conventional Commits (`<type>[(scope)][!]: subject`, ≤72 chars, types feat/fix/docs/style/refactor/perf/test/build/ci/chore/revert). **Never** add AI attribution trailers. One commit per slice.
 - The pre-commit hook runs fmt/clippy/test on commit; commit-msg validates the message.
 
-## Slice 2 — implementation spec (scope rule + `searu run`)
+## Remaining work (by milestone)
 
-Task #2 in the task list. Vertical slice through the hexagon; live `docker run` deferred to Slice 8.
+One ATDD slice per commit; pause for review between slices.
 
-**Crates to add** (workspace members): `crates/app`, `crates/adapter-docker`, `crates/adapter-store`.
-Dependency direction: `cli → {app, adapter-docker, adapter-store} → domain`; adapters depend on
-`domain` only.
+**M2 — ROE tooling & the scope-hook backstop**
+- `searu validate-roe` — carry a `rules-of-engagement.schema.json`; schema-validate
+  `./pentest/rules-of-engagement.json`, no default-allow.
+- `searu scope-hook` — PreToolUse allowlist: permit only `searu …` + file reads; block
+  `docker`/`curl`/raw scanners (exit 2). Does not read the ROE.
 
-**`domain`** (grow `crates/domain/src/lib.rs`, still no external deps):
-- `enum EntryKind { Domain, Ip, Cidr, Url }`, `struct ScopeEntry { kind, value: String }`,
-  `struct Scope { targets: Vec<ScopeEntry>, exclusions: Vec<ScopeEntry> }`.
-- `fn is_in_scope(target: &str, scope: &Scope) -> bool` — port faithfully from
-  `old-version/pentest-toolkit/scripts/check_scope.py`:
-  - `target_host(t)`: if `t` contains `"://"` take the URL host (strip scheme, userinfo, path, port); else `t.split(':').next()` (host before any `:port`).
-  - `host_matches(host, entry)`: Domain → `host == value || host.ends_with(&format!(".{value}"))`; Ip/Cidr → parse `host` as `IpAddr` and test membership of the network `value` (a bare IP is a /32 or /128; implement v4 + v6 CIDR containment with std only — mask compare); Url → `host == target_host(value)`.
-  - `host_matches_exact(host, entry)` (only rescues an exclusion): Domain → `host == value`; Url → `host == target_host(value)`; Ip → `IpAddr` equality; Cidr → false.
-  - `is_in_scope`: default-deny (no target matches → false); if any exclusion matches → return `any exact target matches`; else true.
-- Port traits (co-located in `domain`): `trait RoeRepository { fn load(&self) -> Result<Roe, RepoError>; }` with a minimal `struct Roe { scope: Scope }` for now (extend later); `struct ToolInvocation<'a> { tool: &'a str, target: &'a str, args: &'a [String] }`; `trait ToolRunner { fn run(&self, inv: &ToolInvocation) -> Result<i32, RunnerError>; }`. Error enums `RepoError`, `RunnerError` in `domain`. Sync traits (no async).
+**M3 — more tools (in progress)**
+- Remaining wrappers, one slice each (nmap, nuclei, dalfox, testssl, …), every one a new tool crate
+  bound to its ATT&CK cell — never a new command; preserve each tool's hard-won defaults.
 
-**`app`** (`RunTool`, generic over ports; dep: `domain`):
-- `struct RunTool<R: RoeRepository, T: ToolRunner> { roe: R, runner: T }`.
-- `fn execute(&self, tool: &str, target: &str, args: &[String]) -> Result<i32, RunError>`:
-  load ROE (→ `RunError::Repo`); if `!is_in_scope(target, &roe.scope)` → `Err(RunError::OutOfScope(target))` **without touching the runner**; else `runner.run(...)` (→ `RunError::Runner`).
-- `enum RunError { Repo(RepoError), OutOfScope(String), Runner(RunnerError) }`.
+**M4 — reporting & intel**
+- `emit-finding`, `report` (WeasyPrint container), Dradis export; CWE/EPSS/KEV via a new
+  `adapter-intel`; `propose-exploits`/`record-exploit`. ATT&CK coverage heat-map + CWE attack-chains;
+  RoE appendix after the executive summary; redaction at record- *and* report-time.
 
-**`adapter-store`** (`JsonRoeRepository`; deps: `domain`, serde, serde_json):
-- serde model `{ "scope": { "targets": [{ "type": "...", "value": "..." }], "exclusions": [...] } }` → map to `domain::Roe`. Map `type` string → `EntryKind`; unknown type → `RepoError`.
-- `JsonRoeRepository { path: PathBuf }` reads + parses the file. Keep a pure `fn parse_roe(json: &str) -> Result<Roe, RepoError>` to unit-test without a file.
-
-**`adapter-docker`** (`DockerToolRunner`; deps: `domain`):
-- `image_for(tool) = format!("{registry}/searu-{tool}:{version}")` (registry from a field/env, default a `ghcr.io/<owner>` placeholder — owner TBD when the GitHub repo exists; tag = crate `CARGO_PKG_VERSION`).
-- pure `fn docker_argv(image: &str, args: &[String]) -> Vec<String>` = `["run", "--rm", image, ...args]` (unit-tested).
-- `run` executes `docker` with that argv via `std::process::Command`, returns the exit code or `RunnerError`. Per-tool argument shaping (how the target/flags reach the tool) is **Slice 9**, not here.
-
-**`cli`** (add deps `app`, `adapter-docker`, `adapter-store`; dev-dep `tempfile`):
-- Remove the `check-scope` subcommand. Add `run`:
-  `searu run <tool> --roe <PATH> --target <TARGET> [-- <ARG>...]`.
-- Wire: build `JsonRoeRepository::new(roe)` + `DockerToolRunner::default()`, `RunTool { .. }.execute(tool, target, &args)`.
-- Exit codes: `Ok(code)` → that code; `Err(OutOfScope(t))` → eprintln `OUT OF SCOPE: {t}`, exit 1; `Err(Repo)`/`Err(Runner)` → eprintln reason, exit 1.
-
-**Tests (write first — ATDD):**
-- domain unit (`#[cfg(test)]` in lib.rs): in-scope exact domain; subdomain via suffix; unlisted → out (default-deny); IP inside CIDR → in, outside → out; URL target resolves to host; excluded host → out; exclusion rescued by an exact target entry → in; IP exact equality.
-- app unit (fakes): out-of-scope → `Err(OutOfScope)` and fake `ToolRunner` **never called** (assert with a flag/`unreachable!`); in-scope → runner called once, returns its code; repo failure → `Err(Repo)`.
-- adapter-store unit: `parse_roe(SAMPLE)` yields expected entries; unknown `type` → `Err`.
-- adapter-docker unit: `docker_argv("img", ["-x"])` == `["run","--rm","img","-x"]`.
-- cli acceptance (`crates/cli/tests/cli.rs`, uses `tempfile`): keep `--version` + bare-help (assert `"run"`); add `searu run scan --roe <f> --target evil.example.org` → exit 1 + stderr `OUT OF SCOPE` (no daemon needed). Sample ROE for tests:
-  ```json
-  { "scope": { "targets": [
-      { "type": "domain", "value": "staging.example.com" },
-      { "type": "cidr", "value": "10.20.0.0/24" } ],
-    "exclusions": [ { "type": "domain", "value": "billing.staging.example.com" } ] } }
-  ```
-
-**Pinned dep versions to use** (verified latest 2026-09): serde `1.0.229`, serde_json `1.0.151`,
-tempfile `3.27.0`. Already used: clap `4.6.6`, assert_cmd `2.2.2`, predicates `3.1.4`.
-
-## Remaining backlog (after Slice 2)
-
-- **Slice 3 — `searu validate-roe`**: carry `old-version/pentest-toolkit/schemas/roe.schema.json`; validate `./pentest/roe.json`, no default-allow.
-- **Slice 4 — `searu scope-hook` (allowlist)**: permit only `searu …` + file reads for target-facing agents; block `docker`/`curl`/raw scanners (exit 2). Does not read the ROE.
-- **Slice 5 — `install.sh` + `--check` (+ `install.ps1`)**: register pointers + `.searu-owned` markers into `~/.claude/{agents,skills,commands}/`; rewrite the agent hook command to the installed `searu` path; symlink on Unix, copy on Windows without Dev Mode. Test against a throwaway HOME.
-- **Slice 6 — `/searu-upgrade` + release scaffolding**: the upgrade skill + `release.yml` (cross-compile 5 targets) + installer download-with-cargo-fallback.
-- **Slice 7 — findings core**: `emit-finding`, tool-run records, `findings_model` (rank, coverage), `redact` (record + report), loot two-store, `secret_context`. Each its own ATDD sub-slice.
-- **Slice 8 — Docker tool runner** (needs daemon): pull-ghcr → build-fallback → `docker run` with the engagement dir mounted; first `images/nuclei.Dockerfile`. Live happy-path of Slice 2 completes here.
-- **Slice 9 — `searu run <tool>` wrappers** (needs daemon): port the 31 `run_*.py`, one slice per tool, preserving hard-won defaults.
-- **Slice 10 — reporting + intel**: `report` (WeasyPrint container), `export-dradis`, CWE/EPSS/KEV, propose/record-exploit.
-- **Slice 11 — entry point + agents**: `/searu` router skill (cwd inference + freeform args) + `searu-orchestrator` and `searu-*` tool-agents, wired to the binary + hook.
+**M5 — install & the `/searu` skill**
+Author the skill payload directly (no template generator). Planned slice sequence:
+1. `searu scope-hook` subcommand (the PreToolUse allowlist backstop; shared with M2).
+2. `SKILL.md` skeleton router + `sections/` (scoping, reconnaissance, discovery, initial-access,
+   credential-access, exploitation, reporting) + `manifest.json`.
+3. `specialists/` — one prompt per (technique × tool), each naming a `model:`; mirror the shipped
+   tools first (commix, ffuf, httpx, katana, sqlmap).
+4. Extend `install.sh`/`install.ps1` to register the single `~/.claude/skills/searu/` pointer +
+   `.searu-owned` markers + hook rewrite (symlink on Unix, copy on Windows without Dev Mode);
+   detect-and-skip a user's own skill; test against a throwaway HOME.
+5. `/searu-upgrade` command + release scaffolding.
 
 ## old-version reference map (semantics/tests to port)
 
@@ -155,7 +124,7 @@ tempfile `3.27.0`. Already used: clap `4.6.6`, assert_cmd `2.2.2`, predicates `3
 - **`core.filemode` is false on this Windows box**, so `chmod +x` is not recorded by git. Executable files (git hooks, shell scripts) must be staged with `git update-index --chmod=+x <file>` to land as mode `100755` (Unix clones skip non-executable hooks).
 - British English everywhere; **no code comments** (naming + clear logic; doc comments only where they earn it) — see `CLAUDE.md`.
 - **Pin every dependency to the current latest** — look it up online before adding/bumping (crates, Actions, toolchain, base images). Do not trust memory for versions.
-- Docker CLI is installed (29.6.2) but the **daemon may be down**; the Slice 2 scope-refusal path and all argv-construction tests need no daemon.
+- Docker CLI is installed (29.6.2) but the **daemon may be down**; the scope-refusal path and all argv-construction tests need no daemon.
 - `old-version/` is git-ignored on purpose; read it, never stage it.
 
 ## Invariants to preserve (safety properties from old-version)
