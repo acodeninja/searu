@@ -110,6 +110,13 @@ design). Everything below is **planned, not built**.
   model is preserved (state lives in a `./pentest/` registry + the broker container), and the crate
   layering rule (`domain` depends on nothing; adapters on `domain` only; `cli` the composition root)
   is unchanged.
+- **Storage (M6).** The append-only JSONL under `./pentest/` stays the **source of truth**; the
+  graph is a **derived, in-memory `petgraph` projection** built per query (a compiled-in library, no
+  service, no file-format change) — a networked graph DB is rejected, an embedded store is a
+  future-only option. `adapter-store` emit becomes an **upsert**: dedup on record identity (content
+  minus timestamps), stamping `first_seen`/`last_seen` at the adapter (domain stays clock-free). The
+  dedup identity includes the host, so `Loot`/`Observation` gain a `host` (loot keys on
+  `(fingerprint, host)`).
 
 ## Distribution and install
 

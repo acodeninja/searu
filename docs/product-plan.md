@@ -524,6 +524,31 @@ listener/relay may live on an intermediate host. CLI: `searu session start|exec|
 Exploitation-tier and scope-gated, transcripts redacted twice, everything torn down at engagement end.
 ATT&CK gains the C2 tactic (TA0011).
 
+### Storage: JSONL source of truth + in-memory graph
+
+The asset model is graph-shaped, but at engagement scale (tens–hundreds of assets) it needs **no
+database**. The append-only JSONL under `./pentest/` stays the **source of truth** — inspectable,
+git-diffable, portable, redaction-hardened (loot 0600). The graph is a **derived, in-memory
+projection** built per one-shot `searu` query with **petgraph** (a compiled-in Rust *library*, no
+runtime service): nodes are hosts/services/footholds/findings/loot/candidates/networks, edges are
+`has-service`/`foothold-on`/`unlocks`/`chained-to`/`discovered-behind`/`reachable-via`; traversals
+(attack chains, pivot paths, "what unlocks host B", host-identity correlation) run in memory and are
+discarded on exit. A **networked graph DB is rejected** (breaks "Docker + binary only" and the
+inspectable/redaction-controlled `./pentest/`); an embedded pure-Rust store (redb) or graph engine
+(Cozo) is a future-only option if scale ever demands it.
+
+Two storage rules make the model trustworthy:
+- **Automated dedup on insert (upsert).** Every JSONL store dedups on emit — an identical record is
+  never re-appended. Emit is an **upsert keyed on record identity** (content *excluding* timestamps):
+  a new identity is inserted; an existing one has its `last_seen` advanced in place. This collapses
+  the duplicate commix findings and applies to all three stores.
+- **`first_seen` / `last_seen` on every record**, stamped by the adapter (the domain stays
+  clock-free) — standard scanner semantics, and why timestamps are excluded from the dedup key.
+- **The dedup identity includes the host**, so two identical facts on *different* hosts stay distinct.
+  This makes the host id **load-bearing on `loot.jsonl` and `observations.jsonl`** (which lack it
+  today): findings/observations key on content + host, and loot keys on `(fingerprint, host)` so the
+  same secret found on two hosts is two provenance records.
+
 ## Later milestones (generalisation, once the skeleton walks)
 
 Each still one ATDD slice per commit:

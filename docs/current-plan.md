@@ -129,17 +129,21 @@ findings and discard the real command output (OS = Alpine, the user, files, a cr
 hosts / addresses / networks / services / footholds, deterministic fingerprint-based host identity,
 the `(host, service, network, tool, technique)` attribution tuple, credential subjects, candidate
 hosts, and the network-aware scope gate — is in `product-plan.md` (*Targets: hosts, services &
-networks*) and `architecture.md`. Sub-slice order:
-1. Thread `technique` into `Tool::parse` (all five wrappers); rework commix to label by technique,
-   parse `'<cmd>' execution output: <result>` into observations (`os`/`user`/`software`/`file`), keep
-   secrets → loot; dedup identical findings/observations on emit.
-2. Add `host` + `service` to `Observation`/`Loot`, resolve `--target` → (host, service), stamp
-   records, add a `--host` query filter (multi-target attribution).
-3. Credential subject (`principal` + `authenticates`) + the weak-credential-storage finding (CWE-522).
-4. Candidate hosts/services + pivot discipline (`searu run` refuses a candidate until the ROE names it).
-5. Foothold discovery — Discovery techniques (`T1016`/`T1018`/`T1046`/`T1049`) on commix + network
+networks*, incl. the storage decision: JSONL source of truth + in-memory `petgraph` projection, no
+DB) and `architecture.md`. Sub-slice order:
+1. **Store upsert.** Turn the three `adapter-store` emits into an upsert keyed on record identity
+   (content minus timestamps) with `first_seen`/`last_seen` — deduping every JSONL store. Collapses
+   the 4 duplicate commix findings on its own; later slices depend on it.
+2. Add `host` + `service` (+ `network`) to `Observation`/`Loot`, resolve `--target` → (host, service),
+   stamp records, add a `--host` query filter. Required for correct dedup (identity includes the host;
+   loot keys on `(fingerprint, host)`).
+3. Thread `technique` into `Tool::parse` (all five wrappers); rework commix to label by technique and
+   parse `'<cmd>' execution output: <result>` into observations (`os`/`user`/`software`/`file`).
+4. Credential subject (`principal` + `authenticates`) + the weak-credential-storage finding (CWE-522).
+5. Candidate hosts/services + pivot discipline (`searu run` refuses a candidate until the ROE names it).
+6. Foothold discovery — Discovery techniques (`T1016`/`T1018`/`T1046`/`T1049`) on commix + network
    observation parsers + candidate hosts + a `discovery` foothold-recon section.
-6. Scope & networks — the `network` label on scope entries + the network-aware gate.
+7. Scope & networks — the `network` label on scope entries + the network-aware gate.
 
 **M7 — interactive sessions (planned, depends on M6)**
 `Session`/`SessionBroker` + a new `adapter-session` crate; the per-session broker container (channel +
