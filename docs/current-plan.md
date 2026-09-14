@@ -122,6 +122,34 @@ Author the skill payload directly (no template generator). Planned slice sequenc
 
 **M5 is complete.**
 
+**M6 — the asset model (planned)**
+Prompted by a known gap: commix runs record 4 identical generic "OS command injection / T1190"
+findings and discard the real command output (OS = Alpine, the user, files, a credential), because
+`Tool::parse` isn't told the technique and `Loot`/`Observation` have no target. The full design —
+hosts / addresses / networks / services / footholds, deterministic fingerprint-based host identity,
+the `(host, service, network, tool, technique)` attribution tuple, credential subjects, candidate
+hosts, and the network-aware scope gate — is in `product-plan.md` (*Targets: hosts, services &
+networks*) and `architecture.md`. Sub-slice order:
+1. Thread `technique` into `Tool::parse` (all five wrappers); rework commix to label by technique,
+   parse `'<cmd>' execution output: <result>` into observations (`os`/`user`/`software`/`file`), keep
+   secrets → loot; dedup identical findings/observations on emit.
+2. Add `host` + `service` to `Observation`/`Loot`, resolve `--target` → (host, service), stamp
+   records, add a `--host` query filter (multi-target attribution).
+3. Credential subject (`principal` + `authenticates`) + the weak-credential-storage finding (CWE-522).
+4. Candidate hosts/services + pivot discipline (`searu run` refuses a candidate until the ROE names it).
+5. Foothold discovery — Discovery techniques (`T1016`/`T1018`/`T1046`/`T1049`) on commix + network
+   observation parsers + candidate hosts + a `discovery` foothold-recon section.
+6. Scope & networks — the `network` label on scope entries + the network-aware gate.
+
+**M7 — interactive sessions (planned, depends on M6)**
+`Session`/`SessionBroker` + a new `adapter-session` crate; the per-session broker container (channel +
+bundled ngrok/cloudflared/ssh-`R` redirectors); foothold-driven (default) and reverse-shell (opt-in,
+explicit `--callback`) modes; pivot relays hop-by-hop; `searu session start|exec|list|close`,
+Exploitation-tier + scope-gated, transcripts redacted, torn down at engagement end.
+
+**M8 — external scanners (planned)** nmap (host + `T1046`), dnsx/subfinder (`T1590`/`T1595`), one
+tool-wrapper slice each.
+
 ## old-version reference map (semantics/tests to port)
 
 - Scope: `old-version/pentest-toolkit/scripts/check_scope.py`; hook (redesign as allowlist): `scope_hook.py`.

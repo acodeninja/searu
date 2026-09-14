@@ -85,6 +85,32 @@ sequenceDiagram
     end
 ```
 
+## Planned: the asset model & sessions (M6–M7)
+
+Two milestones extend the domain without breaking the layering (see `product-plan.md` for the full
+design). Everything below is **planned, not built**.
+
+- **New domain types (M6).** `Host` (an opaque identity derived from a stable fingerprint — SSH
+  host-key / TLS-SPKI / `machine-id` / product-uuid / MACs / hostname, in that priority — never an
+  IP), `Address { network, value }`, `Network` (`internet` | `behind:<host>`, the vantage/pivot
+  graph), `Service { host, port, protocol, product }`, and `Foothold { host, service, shell_kind,
+  obtained_via }`. `Finding`/`Loot`/`Observation` gain the attribution tuple `(host, service,
+  network, tool, technique)`; credential `Loot` gains `principal` + `authenticates`. `Tool::parse`
+  gains the run's `technique` so wrappers label records correctly and turn command output into
+  observations.
+- **Network-aware gate (M6).** `gate::decide` keeps scope-absolute → exact-ATT&CK-id → tier, but
+  scope resolution takes `(address, network)`, matches per network, and for a non-`internet` network
+  additionally requires a foothold providing reachability and `T1021` allow-listed. Candidates are
+  never auto-promoted.
+- **Session subsystem (M7).** A new `SessionBroker` port (`open_listener`/`exec`/`close`) with a new
+  **`adapter-session`** crate (`cli → adapter-session → domain`) running a per-session **broker
+  container** that owns the channel and bundles the redirector tooling (socat/ncat + ngrok/cloudflared
+  /ssh `-R`). `app` use-cases `OpenSession`/`ExecInSession`/`CloseSession` are gated by `gate::decide`
+  exactly like `RunAction`; the CLI adds `searu session …`. The one-shot-CLI + everything-in-a-container
+  model is preserved (state lives in a `./pentest/` registry + the broker container), and the crate
+  layering rule (`domain` depends on nothing; adapters on `domain` only; `cli` the composition root)
+  is unchanged.
+
 ## Distribution and install
 
 - **Shipped today (binary).** `install.sh` (macOS/Linux/Git-Bash/WSL) and `install.ps1` (Windows

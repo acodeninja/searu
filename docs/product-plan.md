@@ -434,6 +434,96 @@ propose.
    and asserts the credential lands in loot and a T1190 finding is recorded; gated on daemon
    availability (the unit/refusal path always runs). Claude, not the binary, sequences multiple runs.
 
+## Targets: hosts, services & networks — the asset model (planned)
+
+Milestone 1's flat, free-text `target` is not enough for real engagements. Running commix against the
+CWE-78 lab showed the gaps: `Finding` carries a string `target` while `Loot`/`Observation` carry *no*
+target at all, so multi-target work is unattributable; and `Tool::parse(target, outcome)` isn't told
+which technique ran, so every commix run records the same generic "OS command injection / T1190"
+finding and the real command output (OS, user, files, discovered hosts, a credential) is discarded.
+A pivot — a command-injectable web host whose foothold yields an SSH password that unlocks a second,
+internal host — needs a proper **asset graph**. None of this is built yet; it is the plan of record
+for M6–M7.
+
+### Entities
+
+- **Host** — an **opaque identity**, *never* an IP. A host owns one or more addresses and has a
+  `status`: `in_scope` (an address matches the ROE) or `candidate` (discovered, never contacted).
+- **Address** — `{ network, value }`. An IP/hostname is unique only *within its network*: host-a owns
+  `1.2.3.4 @ internet` and `10.10.10.10 @ host-a-lan`; host-b owns `4.3.2.1 @ internet` and
+  `10.10.10.10 @ behind:host-a`. The same `10.10.10.10` is a different machine per network.
+- **Network / vantage** — where an address resolves and from where it is reachable: `internet`, or
+  `behind:<host>` (the LAN seen from a foothold). This *is* the pivot graph.
+- **Service** — `{ host, port, protocol, product }`; a host has 0..n. **A service is the unit a
+  technique acts on** (ATT&CK-aligned: T1190 hits an app/service, T1021 a remote service).
+- **Foothold** (first-class) — `{ host, service, shell_kind, obtained_via }`; the node where the
+  command-execution paths converge (see below).
+
+**Deterministic host identity.** The host id is *derived* from the strongest stable identity claim,
+in priority order, so the same machine yields the same id however reached: SSH host-key fingerprint →
+TLS/SPKI fingerprint → `/etc/machine-id` → SMBIOS `product_uuid` → hash of sorted MACs → hostname.
+`id = hash(claim_kind:value)`; candidates merge iff they share a strong claim, and an address with
+only a provisional `(network, value)` key is re-keyed once a strong claim appears. Caveat — cloned VM
+images share `machine-id`/host keys and shared LB certs span hosts, so correlation is
+evidence-with-confidence: flag same-claim/different-subnet as a *possible clone*, let the operator
+split/merge. The address is **never** an identity claim.
+
+**Attribution.** Every Finding/Observation/Loot carries the tuple **(host, service, network, tool,
+technique)**; the network disambiguates the address. Credential loot also carries a **subject** —
+`principal` (the account) and `authenticates` (the service/host it unlocks) — so a password found on
+host-a can be recorded as unlocking host-b:22.
+
+### Scope in the multi-network model
+
+Scope stays the one absolute gate; what it matches changes. Scope entries authorise
+`(network-label, matcher)` — never a bare IP or a host identity. Authorisation is authored up front
+(the operator declares `internet` and, say, `internal-lan: 10.10.10.0/24`); *reachability* of a
+non-`internet` network is discovered at runtime (bound to whichever in-scope host's foothold fronts
+it). Acting on `addr @ net` where `net ≠ internet` requires, before anything runs: the address in
+scope for `net` (default-deny, most-specific-wins, per network) **and** a foothold providing
+reachability **and** the pivot technique (`T1021`) allow-listed. A discovered candidate is out of
+scope until it matches an authorised `(network, matcher)` or the operator explicitly promotes it;
+searu never auto-promotes.
+
+### Command execution is a tool-agnostic foothold
+
+OS command execution (`T1059`) is an *effect*, not a commix feature. The same foothold is reachable
+via different entry-vulns: commix (direct injection, CWE-78), sqlmap (SQLi CWE-89 escalated to RCE via
+`COPY … TO PROGRAM` / `xp_cmdshell` / a UDF), later LFI+log-poisoning, SSTI, deserialization. So a
+**foothold is host/service state**, recording how it was obtained. Discovery/Collection techniques
+(`T1082`/`T1016`/`T1018`/`T1049`/`T1083`/`T1518`/`T1552`) run *through* whatever foothold exists, each
+command attributed to the tool+technique that executed it — so the collection specialists are **not
+commix-specific**; `T1059`/`T1082`/… bind to every tool that can execute a command. Findings stay
+per-defect and chained: SQLi (CWE-89) and the RCE it yields (`T1059`) are distinct findings linked by
+an attack-chain edge.
+
+### Host & network discovery
+
+Discovery splits by vantage. **External** (from our host, in-scope only): dedicated scanners — nmap
+(host + `T1046` service discovery), dnsx/subfinder (`T1590`/`T1595`). **Internal** (from a foothold):
+no single tool — run the target's own utilities and parse the output, each an ATT&CK Discovery
+technique: `resolv.conf` → DNS server (`T1016`), `ip route`/`ip addr` → gateway/subnets (`T1016`),
+`arp`/`/etc/hosts`/`~/.ssh/{known_hosts,config}` → neighbours (`T1018`), `dig`/`nslookup`
+(`T1046`/`T1590`), `ss -tnp` (`T1049`). The vehicle is commix `--os-cmd`; the intelligence is a
+discovery playbook + a parser turning output into network observations (`dns-server`/`gateway`/
+`subnet`) and **candidate hosts** (never contacted; acting on them is scope-gated).
+
+### Interactive & reverse-shell sessions (planned, own milestone)
+
+Single-command footholds fit run-and-capture; a foothold's `shell_kind` runs **single-command →
+interactive → reverse-shell**, and the last two are *persistent* sessions the one-shot model can't
+hold. A **session subsystem** adds a `Session` (engagement state), a `SessionBroker` port, and a
+per-session **broker container** that owns the channel and bundles the redirector tooling
+(socat/ncat + ngrok/cloudflared/ssh `-R`) — keeping third-party integrations and their credentials in
+the container, the binary provider-agnostic. Two modes: **foothold-driven** (default; push a command
+down the existing outbound foothold, read a sentinel-framed reply — no inbound needed, works for
+pivots) and **reverse-shell** (opt-in; needs a target→listener egress path and an explicit reachable
+`--callback` — a direct address, a tunnel redirector, or a relay `via-foothold <host>`). Reverse
+shells from a `behind:<host>` network chain hop-by-hop (`B → A → us`, relays `T1090`/`T1572`), so a
+listener/relay may live on an intermediate host. CLI: `searu session start|exec|list|close`,
+Exploitation-tier and scope-gated, transcripts redacted twice, everything torn down at engagement end.
+ATT&CK gains the C2 tactic (TA0011).
+
 ## Later milestones (generalisation, once the skeleton walks)
 
 Each still one ATDD slice per commit:
@@ -455,6 +545,14 @@ Each still one ATDD slice per commit:
   (4) `searu install-skill` — payload embedded in the binary, written to `~/.claude` with the hook
   rewritten to the binary's absolute path, `.searu-owned`, detect-and-skip; (5) the `/searu-upgrade`
   slash command — asks full-release vs release-candidate, then re-runs the installer at that channel.
+- **M6 — the asset model (planned):** hosts / addresses / networks / services / footholds and the
+  (host, service, network, tool, technique) attribution tuple; technique threaded into `Tool::parse`
+  (fixes the mislabelled/duplicated commix findings and captures command output as observations);
+  credential subjects; candidate hosts; the network-aware scope gate; foothold discovery. See
+  *Targets: hosts, services & networks* above; sequenced as sub-slices in `current-plan.md`.
+- **M7 — interactive sessions (planned):** `Session`/`SessionBroker` + `adapter-session`, the broker
+  container with bundled redirectors, foothold-driven and reverse-shell modes, pivot relays, and
+  `searu session start|exec|list|close`. The large one; depends on M6.
 
 ## Safety invariants to preserve (from old-version)
 
