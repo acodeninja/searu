@@ -3,6 +3,7 @@
 
 use searu_domain::tools::{Tool, ToolRegistry};
 use searu_tool_commix::COMMIX;
+use searu_tool_feroxbuster::FEROXBUSTER;
 use searu_tool_ffuf::FFUF;
 use searu_tool_httpx::HTTPX;
 use searu_tool_katana::KATANA;
@@ -13,7 +14,16 @@ use searu_tool_wafw00f::WAFW00F;
 use searu_tool_whatweb::WHATWEB;
 
 static TOOLS: &[&'static dyn Tool] = &[
-    &COMMIX, &HTTPX, &KATANA, &NMAP, &NUCLEI, &SQLMAP, &WAFW00F, &WHATWEB, &FFUF,
+    &COMMIX,
+    &FEROXBUSTER,
+    &HTTPX,
+    &KATANA,
+    &NMAP,
+    &NUCLEI,
+    &SQLMAP,
+    &WAFW00F,
+    &WHATWEB,
+    &FFUF,
 ];
 
 #[derive(Default)]
