@@ -5,11 +5,28 @@
 
 use searu_domain::findings::{Finding, Observation, Severity, Status};
 use searu_domain::ports::ToolOutcome;
-use searu_domain::tools::{ParsedOutput, Tool};
+use searu_domain::tools::{ParsedOutput, Phase, PhaseAdvice, Tool};
 
 pub struct Ffuf;
 
 pub static FFUF: Ffuf = Ffuf;
+
+static USES: &[PhaseAdvice] = &[
+    PhaseAdvice {
+        phase: Phase::Discovery,
+        when: "content discovery — find unlinked routes by fuzzing a `FUZZ` keyword against a wordlist",
+        invoke: "searu run ffuf --technique T1595 --target 'http://host:port/FUZZ' -- -w seclists:Discovery/Web-Content/common.txt -mc 200  (searu fetches the list once and mounts it read-only; `-mc 200` keeps only successful reads)",
+        interpret: "searu observations --kind endpoint — one per hit",
+        chain: "discovered routes/parameters feed Initial access — the parameters are where you test for injection",
+    },
+    PhaseAdvice {
+        phase: Phase::InitialAccess,
+        when: "LFI / path traversal — read files off the host by fuzzing a traversal wordlist against a file parameter (T1190, CWE-22; Exploitation tier, needs an authoriser)",
+        invoke: "searu run ffuf --technique T1190 --target 'http://host:port/download?file=FUZZ' -- -w seclists:Fuzzing/LFI/LFI-Jhaddix.txt -mc 200  (pick the OS-appropriate LFI list from recon's tech/server hints)",
+        interpret: "searu findings — a confirmed path-traversal finding (CWE-22) when the matched payloads are traversals",
+        chain: "a confirmed weakness with its evidence authorises moving to Exploitation",
+    },
+];
 
 impl Tool for Ffuf {
     fn name(&self) -> &'static str {
@@ -24,8 +41,8 @@ impl Tool for Ffuf {
         include_str!("../Dockerfile")
     }
 
-    fn advice(&self) -> &'static str {
-        include_str!("../advice.md")
+    fn uses(&self) -> &'static [PhaseAdvice] {
+        USES
     }
 
     fn invocation(&self, target: &str, args: &[String]) -> Vec<String> {

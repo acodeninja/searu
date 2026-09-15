@@ -284,7 +284,7 @@ mod tests {
     use searu_domain::findings::{Severity, Status};
     use searu_domain::ports::{Authorisation, Authoriser, Roe};
     use searu_domain::scope::{HostForm, Scope, ScopeEntry};
-    use searu_domain::tools::{ParsedOutput, Tool};
+    use searu_domain::tools::{ParsedOutput, PhaseAdvice, Tool};
     use std::cell::RefCell;
 
     struct FakeTool;
@@ -299,8 +299,8 @@ mod tests {
         fn dockerfile(&self) -> &'static str {
             ""
         }
-        fn advice(&self) -> &'static str {
-            ""
+        fn uses(&self) -> &'static [PhaseAdvice] {
+            &[]
         }
         fn invocation(&self, _target: &str, args: &[String]) -> Vec<String> {
             let mut argv = vec!["--built".to_string()];

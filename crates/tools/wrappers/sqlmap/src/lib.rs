@@ -4,11 +4,28 @@
 
 use searu_domain::findings::{Finding, Observation, Severity, Status};
 use searu_domain::ports::ToolOutcome;
-use searu_domain::tools::{ParsedOutput, Tool};
+use searu_domain::tools::{ParsedOutput, Phase, PhaseAdvice, Tool};
 
 pub struct Sqlmap;
 
 pub static SQLMAP: Sqlmap = Sqlmap;
+
+static USES: &[PhaseAdvice] = &[
+    PhaseAdvice {
+        phase: Phase::InitialAccess,
+        when: "SQL injection detection — confirm an injectable parameter (T1190, CWE-89). Exploitation tier: the ROE must allow-list T1190 and name an authoriser",
+        invoke: "searu run sqlmap --technique T1190 --target 'http://host:port/path?id=1' -- -p id  (POST body and flags after `--`). Blind login form: `-- -p username --level 3 --risk 3 --ignore-redirects --not-string login`, and `--suffix \"/*\"` if the query spans lines",
+        interpret: "searu findings — a confirmed SQL-injection finding (CWE-89); searu observations --kind tech — the back-end DBMS. A negative with no oracle means 'sqlmap could not tell', not 'clean'",
+        chain: "a confirmed injection with evidence authorises extraction in Exploitation",
+    },
+    PhaseAdvice {
+        phase: Phase::Exploitation,
+        when: "SQL injection extraction — enumerate/extract within what the ROE authorises, once detection confirmed the injection",
+        invoke: "searu run sqlmap --technique T1190 --target '...' -- -p id --dump / --current-db  (sqlmap's own flags after `--`)",
+        interpret: "searu findings / searu loot --reveal",
+        chain: "let recorded state guide the next command; stop when the ROE-authorised objective is met",
+    },
+];
 
 impl Tool for Sqlmap {
     fn name(&self) -> &'static str {
@@ -23,8 +40,8 @@ impl Tool for Sqlmap {
         include_str!("../Dockerfile")
     }
 
-    fn advice(&self) -> &'static str {
-        include_str!("../advice.md")
+    fn uses(&self) -> &'static [PhaseAdvice] {
+        USES
     }
 
     fn invocation(&self, target: &str, args: &[String]) -> Vec<String> {

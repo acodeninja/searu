@@ -118,12 +118,15 @@ fn cli() -> Command {
                 .subcommand_required(true)
                 .arg_required_else_help(true)
                 .subcommand(
-                    Command::new("list").about("List tools and the techniques they perform"),
+                    Command::new("list")
+                        .about("List tools; with --phase, the phase's tools and when to use each")
+                        .arg(Arg::new("phase").long("phase").value_name("PHASE")),
                 )
                 .subcommand(
                     Command::new("advice")
-                        .about("Print how Claude should drive a tool")
-                        .arg(Arg::new("tool").required(true).value_name("TOOL")),
+                        .about("How to drive a tool: invoke, interpret, chain (per phase)")
+                        .arg(Arg::new("tool").required(true).value_name("TOOL"))
+                        .arg(Arg::new("phase").long("phase").value_name("PHASE")),
                 ),
         )
 }
@@ -528,32 +531,87 @@ fn run_observations(matches: &ArgMatches) -> i32 {
 }
 
 fn run_tool(matches: &ArgMatches) -> i32 {
-    use searu_domain::tools::ToolRegistry;
+    use searu_domain::tools::{Phase, ToolRegistry};
     use searu_tool_registry::Registry;
 
     match matches.subcommand() {
-        Some(("list", _)) => {
-            for tool in Registry.all() {
-                println!("{}\t{}", tool.name(), tool.techniques().join(","));
+        Some(("list", args)) => match args.get_one::<String>("phase") {
+            None => {
+                for tool in Registry.all() {
+                    let phases: Vec<&str> =
+                        tool.uses().iter().map(|entry| entry.phase.id()).collect();
+                    println!(
+                        "{}\t{}\t{}",
+                        tool.name(),
+                        tool.techniques().join(","),
+                        phases.join(",")
+                    );
+                }
+                0
             }
-            0
-        }
+            Some(name) => {
+                let Some(phase) = Phase::parse(name) else {
+                    eprintln!("unknown phase: {name}");
+                    eprintln!("valid phases: {}", valid_phases());
+                    return 2;
+                };
+                for tool in Registry.all() {
+                    if let Some(entry) = tool.uses().iter().find(|entry| entry.phase == phase) {
+                        println!("{}\t{}", tool.name(), entry.when);
+                    }
+                }
+                0
+            }
+        },
         Some(("advice", args)) => {
             let name = args.get_one::<String>("tool").expect("required argument");
-            match Registry.tool(name) {
-                Some(tool) => {
-                    println!("{}", tool.advice());
-                    0
+            let Some(tool) = Registry.tool(name) else {
+                eprintln!("unknown tool: {name}");
+                return 1;
+            };
+            let phase = match args.get_one::<String>("phase") {
+                None => None,
+                Some(id) => match Phase::parse(id) {
+                    Some(phase) => Some(phase),
+                    None => {
+                        eprintln!("unknown phase: {id}");
+                        eprintln!("valid phases: {}", valid_phases());
+                        return 2;
+                    }
+                },
+            };
+            let mut printed = false;
+            for entry in tool.uses() {
+                if phase.is_some_and(|wanted| wanted != entry.phase) {
+                    continue;
                 }
-                None => {
-                    eprintln!("unknown tool: {name}");
-                    1
+                if printed {
+                    println!();
                 }
+                println!("{} — {}", tool.name(), entry.phase);
+                println!("  when:      {}", entry.when);
+                println!("  invoke:    {}", entry.invoke);
+                println!("  interpret: {}", entry.interpret);
+                println!("  chain:     {}", entry.chain);
+                printed = true;
             }
+            if !printed {
+                eprintln!("{name} has no advice for that phase");
+                return 1;
+            }
+            0
         }
         _ => {
             eprintln!("searu tool: unknown subcommand");
             2
         }
     }
+}
+
+fn valid_phases() -> String {
+    searu_domain::tools::Phase::ALL
+        .iter()
+        .map(|phase| phase.id())
+        .collect::<Vec<_>>()
+        .join(", ")
 }

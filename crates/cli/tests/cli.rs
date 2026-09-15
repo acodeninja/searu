@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use predicates::prelude::*;
 use predicates::str::contains;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -154,13 +155,36 @@ fn tool_list_includes_commix() {
 }
 
 #[test]
-fn tool_advice_prints_guidance() {
+fn tool_list_by_phase_lists_only_that_phases_tools() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args(["tool", "list", "--phase", "discovery"])
+        .assert()
+        .success()
+        .stdout(contains("ffuf"))
+        .stdout(contains("commix").not());
+}
+
+#[test]
+fn tool_list_rejects_an_unknown_phase() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args(["tool", "list", "--phase", "bogus"])
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(contains("valid phases"));
+}
+
+#[test]
+fn tool_advice_renders_the_manifest() {
     Command::cargo_bin("searu")
         .unwrap()
         .args(["tool", "advice", "commix"])
         .assert()
         .success()
-        .stdout(contains("commix"));
+        .stdout(contains("invoke:"))
+        .stdout(contains("searu run commix"));
 }
 
 #[test]

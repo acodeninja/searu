@@ -3,11 +3,28 @@
 
 use searu_domain::findings::{Finding, Loot, Severity, Status};
 use searu_domain::ports::ToolOutcome;
-use searu_domain::tools::{ParsedOutput, Tool};
+use searu_domain::tools::{ParsedOutput, Phase, PhaseAdvice, Tool};
 
 pub struct Commix;
 
 pub static COMMIX: Commix = Commix;
+
+static USES: &[PhaseAdvice] = &[
+    PhaseAdvice {
+        phase: Phase::InitialAccess,
+        when: "OS command injection — confirm a foothold with a harmless probe (T1190/T1059, CWE-78). Exploitation tier: allow-list the technique and name an authoriser",
+        invoke: "searu run commix --technique T1190 --target 'http://host:port/path?param=1' -- --os-cmd id  (confirm with a harmless command first; commix auto-detects GET parameters)",
+        interpret: "searu findings — an OS-command-injection finding; a run that confirms nothing records nothing",
+        chain: "a confirmed foothold authorises collection in Exploitation",
+    },
+    PhaseAdvice {
+        phase: Phase::Exploitation,
+        when: "post-exploitation collection through the confirmed foothold — pick the ATT&CK technique matching intent so the gate authorises it",
+        invoke: "searu run commix --target '...' -- --os-cmd <cmd> with the matching technique: `--technique T1552 -- --os-cmd env` (env credentials); `--technique T1518` (installed software); `--technique T1083 -- --os-cmd 'ls -la /app'` (files). Each technique needs allow-listing in its own right",
+        interpret: "searu findings / searu loot --reveal — secrets from the foothold land in loot; findings keep only a fingerprint, never the value",
+        chain: "let the recorded state guide the next command; stop when the objective the ROE authorised is met",
+    },
+];
 
 impl Tool for Commix {
     fn name(&self) -> &'static str {
@@ -22,8 +39,8 @@ impl Tool for Commix {
         include_str!("../Dockerfile")
     }
 
-    fn advice(&self) -> &'static str {
-        include_str!("../advice.md")
+    fn uses(&self) -> &'static [PhaseAdvice] {
+        USES
     }
 
     fn invocation(&self, _target: &str, args: &[String]) -> Vec<String> {

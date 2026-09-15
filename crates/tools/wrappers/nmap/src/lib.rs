@@ -3,11 +3,19 @@
 
 use searu_domain::findings::Observation;
 use searu_domain::ports::ToolOutcome;
-use searu_domain::tools::{ParsedOutput, Tool};
+use searu_domain::tools::{ParsedOutput, Phase, PhaseAdvice, Tool};
 
 pub struct Nmap;
 
 pub static NMAP: Nmap = Nmap;
+
+static USES: &[PhaseAdvice] = &[PhaseAdvice {
+    phase: Phase::Reconnaissance,
+    when: "port & service discovery — reach for it first to map a host's open TCP services",
+    invoke: "searu run nmap --technique T1046 --target <host>  (a host or IP, never a URL; TCP connect + version scan. Extra nmap flags after `--`, e.g. `-- -p-`, `-- --top-ports 2000`. SYN/OS-detection needs a privileged container, not available.)",
+    interpret: "searu observations --kind service — one line per open port: host:port + service/version. An empty result means nothing open in the scanned range, not host-down; widen the ports.",
+    chain: "the open services and versions pick the next tool and the weakness to probe (an HTTP port -> httpx/katana).",
+}];
 
 impl Tool for Nmap {
     fn name(&self) -> &'static str {
@@ -22,8 +30,8 @@ impl Tool for Nmap {
         include_str!("../Dockerfile")
     }
 
-    fn advice(&self) -> &'static str {
-        include_str!("../advice.md")
+    fn uses(&self) -> &'static [PhaseAdvice] {
+        USES
     }
 
     fn invocation(&self, target: &str, args: &[String]) -> Vec<String> {

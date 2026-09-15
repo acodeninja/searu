@@ -2,11 +2,19 @@
 
 use searu_domain::findings::Observation;
 use searu_domain::ports::ToolOutcome;
-use searu_domain::tools::{ParsedOutput, Tool};
+use searu_domain::tools::{ParsedOutput, Phase, PhaseAdvice, Tool};
 
 pub struct Httpx;
 
 pub static HTTPX: Httpx = Httpx;
+
+static USES: &[PhaseAdvice] = &[PhaseAdvice {
+    phase: Phase::Reconnaissance,
+    when: "HTTP fingerprint — identify the stack (status, title, server, technologies) before choosing an attack",
+    invoke: "searu run httpx --technique T1595 --target http://host:port  (target passed to httpx with `-u`; Active tier, allow-listing the technique is enough)",
+    interpret: "searu observations --kind server / --kind tech / --kind endpoint — the server/tech values are your stack and OS hints",
+    chain: "the stack hints pick the SecLists wordlist for Discovery and the weakness to look for in Initial access",
+}];
 
 impl Tool for Httpx {
     fn name(&self) -> &'static str {
@@ -21,8 +29,8 @@ impl Tool for Httpx {
         include_str!("../Dockerfile")
     }
 
-    fn advice(&self) -> &'static str {
-        include_str!("../advice.md")
+    fn uses(&self) -> &'static [PhaseAdvice] {
+        USES
     }
 
     fn invocation(&self, target: &str, args: &[String]) -> Vec<String> {

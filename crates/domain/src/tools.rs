@@ -12,6 +12,51 @@ pub struct ParsedOutput {
     pub observations: Vec<Observation>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Phase {
+    Reconnaissance,
+    Discovery,
+    InitialAccess,
+    Exploitation,
+}
+
+impl Phase {
+    pub const ALL: [Phase; 4] = [
+        Phase::Reconnaissance,
+        Phase::Discovery,
+        Phase::InitialAccess,
+        Phase::Exploitation,
+    ];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Phase::Reconnaissance => "reconnaissance",
+            Phase::Discovery => "discovery",
+            Phase::InitialAccess => "initial-access",
+            Phase::Exploitation => "exploitation",
+        }
+    }
+
+    pub fn parse(id: &str) -> Option<Phase> {
+        Phase::ALL.into_iter().find(|phase| phase.id() == id)
+    }
+}
+
+impl std::fmt::Display for Phase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.id())
+    }
+}
+
+/// A tool's manifest entry for one phase: when to reach for it, and how to drive, read and chain it.
+pub struct PhaseAdvice {
+    pub phase: Phase,
+    pub when: &'static str,
+    pub invoke: &'static str,
+    pub interpret: &'static str,
+    pub chain: &'static str,
+}
+
 pub trait Tool: Sync {
     /// The tool's short name, used to select it and to tag findings.
     fn name(&self) -> &'static str;
@@ -19,8 +64,8 @@ pub trait Tool: Sync {
     fn techniques(&self) -> &'static [&'static str];
     /// The build recipe for the tool's container image, compiled into the binary.
     fn dockerfile(&self) -> &'static str;
-    /// Prose guidance for Claude on how to drive the tool.
-    fn advice(&self) -> &'static str;
+    /// The tool's per-phase manifest: one entry per engagement phase it serves.
+    fn uses(&self) -> &'static [PhaseAdvice];
     /// The tool arguments (not `docker`) for a run against `target` with the caller's extra `args`.
     fn invocation(&self, target: &str, args: &[String]) -> Vec<String>;
     /// Normalise the tool's output into findings/loot for a run against `target`.

@@ -3,11 +3,28 @@
 
 use searu_domain::findings::Observation;
 use searu_domain::ports::ToolOutcome;
-use searu_domain::tools::{ParsedOutput, Tool};
+use searu_domain::tools::{ParsedOutput, Phase, PhaseAdvice, Tool};
 
 pub struct Katana;
 
 pub static KATANA: Katana = Katana;
+
+static USES: &[PhaseAdvice] = &[
+    PhaseAdvice {
+        phase: Phase::Reconnaissance,
+        when: "crawl the app to map its reachable endpoints and the parameters they take",
+        invoke: "searu run katana --technique T1595 --target http://host:port  (seed URL via `-u`; deeper crawl with `-- -d 3 -jc`)",
+        interpret: "searu observations --kind endpoint / --kind param",
+        chain: "the discovered endpoints/parameters are the surface Discovery and Initial access work on",
+    },
+    PhaseAdvice {
+        phase: Phase::Discovery,
+        when: "recover endpoints & parameters if Reconnaissance did not already crawl them",
+        invoke: "searu run katana --technique T1595 --target http://host:port",
+        interpret: "searu observations --kind endpoint / --kind param",
+        chain: "the parameters are where you test for injection next (Initial access)",
+    },
+];
 
 impl Tool for Katana {
     fn name(&self) -> &'static str {
@@ -22,8 +39,8 @@ impl Tool for Katana {
         include_str!("../Dockerfile")
     }
 
-    fn advice(&self) -> &'static str {
-        include_str!("../advice.md")
+    fn uses(&self) -> &'static [PhaseAdvice] {
+        USES
     }
 
     fn invocation(&self, target: &str, args: &[String]) -> Vec<String> {
