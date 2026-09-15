@@ -240,6 +240,18 @@ fn scope_hook_allows_a_file_read_tool() {
         .success();
 }
 
+#[test]
+fn scope_hook_blocks_a_network_tool() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .arg("scope-hook")
+        .write_stdin(r#"{"tool_name":"WebFetch","tool_input":{"url":"http://localhost:5000"}}"#)
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(contains("searu"));
+}
+
 fn install_skill_into(home: &std::path::Path) {
     Command::cargo_bin("searu")
         .unwrap()

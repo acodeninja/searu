@@ -7,16 +7,37 @@ pub enum HookDecision {
 }
 
 pub fn decide(tool_name: &str, command: Option<&str>) -> HookDecision {
-    if tool_name != "Bash" {
-        return HookDecision::Allow;
+    if tool_name == "Bash" {
+        return match command.and_then(program) {
+            Some(program) if is_searu(&program) => HookDecision::Allow,
+            _ => HookDecision::Block(
+                "searu scope-hook: only `searu` commands are permitted in Bash; run tools via `searu run`"
+                    .to_string(),
+            ),
+        };
     }
-    match command.and_then(program) {
-        Some(program) if is_searu(&program) => HookDecision::Allow,
-        _ => HookDecision::Block(
-            "searu scope-hook: only `searu` commands are permitted in Bash; run tools via `searu run`"
-                .to_string(),
-        ),
+    if is_allowed_local(tool_name) {
+        HookDecision::Allow
+    } else {
+        HookDecision::Block(format!(
+            "searu scope-hook: `{tool_name}` cannot reach a target during an engagement; reach targets only via `searu run`"
+        ))
     }
+}
+
+fn is_allowed_local(tool_name: &str) -> bool {
+    matches!(
+        tool_name,
+        "Read"
+            | "Write"
+            | "Edit"
+            | "Grep"
+            | "Glob"
+            | "Agent"
+            | "Task"
+            | "TodoWrite"
+            | "NotebookEdit"
+    )
 }
 
 fn program(command: &str) -> Option<String> {
@@ -104,8 +125,32 @@ mod tests {
     }
 
     #[test]
-    fn non_bash_tools_pass() {
+    fn local_file_tools_pass() {
         assert!(is_allowed(decide("Read", None)));
         assert!(is_allowed(decide("Grep", Some("pattern"))));
+        assert!(is_allowed(decide("Glob", None)));
+    }
+
+    #[test]
+    fn editing_and_spawning_tools_pass() {
+        assert!(is_allowed(decide("Write", None)));
+        assert!(is_allowed(decide("Edit", None)));
+        assert!(is_allowed(decide("Agent", None)));
+        assert!(is_allowed(decide("Task", None)));
+        assert!(is_allowed(decide("TodoWrite", None)));
+    }
+
+    #[test]
+    fn network_capable_tools_are_blocked() {
+        assert!(!is_allowed(decide("WebFetch", None)));
+        assert!(!is_allowed(decide("WebSearch", None)));
+        assert!(!is_allowed(decide("Skill", None)));
+        assert!(!is_allowed(decide("mcp__acme__fetch_url", None)));
+    }
+
+    #[test]
+    fn an_unknown_tool_is_blocked() {
+        assert!(!is_allowed(decide("SomeFutureTool", None)));
+        assert!(!is_allowed(decide("", None)));
     }
 }

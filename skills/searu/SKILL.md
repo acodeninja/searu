@@ -4,9 +4,10 @@ description: |
   Authorised pen-testing toolkit (searu). Use for security assessment, penetration testing, MITRE
   ATT&CK technique lookup, scanning, and authorised exploitation of in-scope targets. Triggers:
   "pentest", "security assessment", "exploit", "ATT&CK", "scope check", "assess a target".
+allowed-tools: Bash Read Write Edit Grep Glob Agent Task TodoWrite NotebookEdit
 hooks:
   PreToolUse:
-    - matcher: "Bash"
+    - matcher: "*"
       hooks:
         - type: command
           command: "searu scope-hook"
@@ -26,9 +27,10 @@ You decide what to do next; `searu` gates and runs each step and remembers the r
 - **Exploitation is gated by the ROE.** A technique runs only if its exact ATT&CK ID is allow-listed;
   the Exploitation tier also needs a named authoriser, and destructive techniques need
   `destructive_authorised: true`.
-- **Never invoke `docker`, `curl`, `wget` or a scanner directly against a target.** The PreToolUse
-  hook (`searu scope-hook`) blocks any Bash command that is not a `searu …` call. Drive tools only
-  through `searu run`.
+- **Never reach a target with anything but `searu`.** The PreToolUse hook (`searu scope-hook`) blocks
+  any Bash command that is not a `searu …` call, and blocks every network-capable tool outright —
+  `WebFetch`, `WebSearch`, other skills, MCP tools. Drive tools only through `searu run`. Nothing
+  else — `docker`, `curl`, `wget`, a scanner, a browser skill — may touch a target.
 
 ## Phases
 
