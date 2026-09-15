@@ -43,11 +43,12 @@ to pass → refactor → **commit** (one commit per slice) → pause for review.
 - **Docker images** — built on first use from each tool crate's embedded `Dockerfile`; pull-through of `ghcr.io/<ns>/searu-<tool>` is planned.
 - **Hosting** — public GitHub repo (clone-install, Releases, ghcr, Actions).
 - **Design-review decisions recorded** — eleven resolved issues (networked-only scope) in
-  `product-plan.md → Resolved design decisions`: an `allowed-tools`-hardened hook (no non-Bash
-  bypass); gate-enforced ROE limits (`windows`/`rate`/`stop_after`); an append-only
-  `./pentest/audit.jsonl`; identity-never-expands-scope; URL-subtree scope; ATT&CK as the sole
-  authorisation key with fail-closed unknown; opt-in C2 redirectors; a container privileged escape
-  hatch; a consequence-based model floor; and a report pulled ahead of the asset/session milestones.
+  `product-plan.md → Resolved design decisions`: hook hardening (default-deny hook + `searu harden`
+  project egress deny — **shipped**; frontmatter `allowed-tools` is advisory, not enforced);
+  gate-enforced ROE limits (`windows`/`rate`/`stop_after`); an append-only `./pentest/audit.jsonl`;
+  identity-never-expands-scope; URL-subtree scope; ATT&CK as the sole authorisation key with
+  fail-closed unknown; opt-in C2 redirectors; a container privileged escape hatch; a consequence-based
+  model floor; and a report pulled ahead of the asset/session milestones.
 
 ## Current status
 
@@ -69,8 +70,13 @@ Shipped:
 - **Three engagement stores** under `./pentest/` — findings, loot, observations — with
   `searu findings|loot|observations` queries; ROE default path `pentest/rules-of-engagement.json`.
 - **M2 — ROE tooling & backstop** — `searu validate-roe` (loads a ROE and checks every allow-listed
-  ID against the embedded ATT&CK matrix; `app::ValidateRoe`) and `searu scope-hook` (strict allowlist,
-  only `searu …` Bash passes else exit 2; pure `domain::scope_hook::decide`).
+  ID against the embedded ATT&CK matrix; `app::ValidateRoe`) and `searu scope-hook` (`domain::scope_hook`).
+- **Hook hardening (decision 1)** — `scope-hook` is now **default-deny** over all tools (matcher `*`):
+  `Bash` must be `searu …`, a small local-tool allow-set passes, every network-capable tool
+  (`WebFetch`/`WebSearch`/`Skill`/`mcp__*`) is blocked (exit 2). `searu harden` writes a project-scoped
+  `.claude/settings.json` `permissions.deny` (`domain::egress`, `app::HardenProject`,
+  `adapter-store::FileProjectSettings`) — the enforced layer that also covers spawned specialists,
+  since Claude Code does not enforce frontmatter `allowed-tools`/`tools:`.
 - **Binary installers** — `install.sh`, `install.ps1`, and `mise run install-local` (see *Locked
   decisions*). Release/CI scaffolding (release-please, cross-compiled Linux + Windows assets).
 - **M5 — `/searu` skill payload (router + sections + specialists)** — `skills/searu/SKILL.md` (router

@@ -56,17 +56,18 @@ Scope is a domain rule, not a command. There is no `check-scope` subcommand.
   `domain::is_in_scope`, and refuses an out-of-scope target with a hard error before the runner is
   ever invoked. Precedence: default-deny (a host matching no target is out), domain-suffix and CIDR
   matching, and an exclusion overridden only by an *exact* target entry for that host.
-- **Backstop — the PreToolUse allowlist hook plus `allowed-tools`.** `searu scope-hook` (shipped,
-  wired into the `/searu` `SKILL.md` `hooks.PreToolUse`) forces a target-facing agent through `searu`:
-  for a `Bash` call it allows only a `searu …` command (else exit 2). It does not read the ROE; its
-  sole job is to prevent bypass so scope always flows through `searu run`. **Because the hook today
-  only constrains `Bash`** — `domain::scope_hook::decide` returns `Allow` for every other tool — a
-  resolved decision hardens the boundary: `SKILL.md` and every `specialists/*.md` carry a tight
-  `allowed-tools` allow-list excluding every network-capable non-Bash tool (`WebFetch`, the
-  browser/scrape skills, network-capable MCP tools), the hook is extended to deny those tools
-  explicitly rather than allow-all-non-Bash, and a test asserts it fires inside Agent-tool-spawned
-  specialists — else specialists reach targets only via `searu`. See *product-plan.md → Resolved
-  design decisions* (1).
+- **Backstop — the PreToolUse hook plus a project egress deny-list.** `searu scope-hook` (shipped,
+  wired into the `/searu` `SKILL.md` `hooks.PreToolUse` with matcher `*`) forces a target-facing agent
+  through `searu`: `domain::scope_hook::decide` is **default-deny** — a `Bash` call must be `searu …`,
+  a small allow-set of local tools (`Read`/`Write`/`Edit`/`Grep`/`Glob`/`Agent`/`Task`/`TodoWrite`/
+  `NotebookEdit`) passes, and every network-capable tool (`WebFetch`/`WebSearch`/`Skill`/`mcp__*`) is
+  blocked with exit 2. It does not read the ROE; its sole job is to prevent bypass so scope always
+  flows through `searu run`. Because Claude Code does **not** reliably enforce frontmatter
+  tool-restrictions (skill `allowed-tools` or subagent `tools:`), and the hook's own propagation into
+  Agent-spawned specialists is undocumented, `searu harden` writes a project-scoped
+  `.claude/settings.json` `permissions.deny` (`WebFetch`/`WebSearch`/`mcp__*`) — the one enforced
+  mechanism that also covers specialists. The `SKILL.md` `allowed-tools` line is advisory only. See
+  *product-plan.md → Resolved design decisions* (1).
 
 ```mermaid
 sequenceDiagram
