@@ -11,6 +11,7 @@ members = [
     "crates/tools/wrappers/httpx",
     "crates/tools/wrappers/katana",
     "crates/tools/wrappers/nmap",
+    "crates/tools/wrappers/nuclei",
     "crates/tools/wrappers/sqlmap",
     "crates/tools/registry",
     "crates/cli",
