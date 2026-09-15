@@ -21,7 +21,8 @@ it.
   is: the tool must list that technique; the target must be in scope *now*; the exact ATT&CK ID must
   be in the ROE allow-list; and the technique's tier must be satisfied (Exploitation → a named
   authoriser; Destructive → authoriser + `destructive_authorised`). Tiers come from a curated
-  `domain::technique::tier_of` table (unknown → Exploitation).
+  `domain::technique::tier_of` table (unknown → Exploitation today; a resolved decision moves this to
+  fail-closed refuse-with-explanation — see *Resolved design decisions*).
 - **Queries:** `searu findings [--technique|--severity|--tool]`, `searu loot [--category] [--reveal]`,
   `searu observations [--kind]`, `searu tool list`, `searu tool advice <tool>`, `searu attack list|show`.
 - **Crate-per-tool.** Each tool is a thin crate under `crates/tools/wrappers/<tool>` implementing the
@@ -42,7 +43,10 @@ it.
 Searu is the security-assessment counterpart to gstack. It is a single cross-platform Rust binary
 (`searu`) plus one Claude Code skill, distributed as a self-contained cloneable payload that installs
 into `~/.claude` via thin pointers. Two outside dependencies only: **Docker** (every tool runs in a
-container) and the **`searu` binary** (zero runtime deps).
+container) and the **`searu` binary** (zero runtime deps). *(The M7 reverse-shell redirector path adds
+a named, opt-in third-party dependency — ngrok/cloudflared/ssh-`R`; see decision 7 in Resolved design
+decisions. Assessment and the default foothold-driven session mode stay within this two-dependency,
+offline envelope.)*
 
 A prior Python toolkit (now read-only in `old-version/`) proved the hard parts: an ROE-as-gate scope
 model, a technique vocabulary already tagged with ATT&CK IDs, an exploitation gate, coverage records,
@@ -69,6 +73,93 @@ fingerprint redaction, and PDF/Dradis reporting. Searu rebuilds it from first pr
   (so `T1498.002` reflection-amplification DoS can be sanctioned without sanctioning `T1498.001`
   direct flood). Exploitation tier also needs a named authoriser (person + email); Destructive tier
   also needs `destructive_authorised: true`.
+
+### Resolved design decisions
+
+Settled answers to a design review. **Scope is networked systems only** — web apps, single and
+multiple services, and multi-host/multi-network pivots; physical-hardware / USB-debugging targets are
+explicitly out of scope and not modelled. Each decision below is design-of-record; where it is not
+yet built it names the milestone.
+
+1. **Force *all* target-facing actions through `searu`, not just Bash.** The PreToolUse allowlist
+   hook (`domain::scope_hook`) only constrains `Bash` — it returns `Allow` for every other tool — so
+   a non-Bash capability (`WebFetch`, the globally-installed `/browse`·`/scrape` skills, a
+   network-capable MCP tool) could reach a target without ever passing through the gate. Decision:
+   `SKILL.md` and every `specialists/*.md` carry a tight `allowed-tools` allow-list that excludes
+   every network-capable non-Bash tool; the hook is extended to *deny* known network-capable non-Bash
+   tools rather than allow-all-non-Bash; and a test asserts the hook fires inside Agent-tool-spawned
+   specialists — if it cannot, specialists reach targets only via `searu`. Scope is absolute only if
+   there is no side door. *(M2 hardening.)*
+
+2. **The ROE gains enforceable operational limits.** A real rules-of-engagement carries more than
+   scope + technique: time windows, rate/intensity caps, and stop-conditions. Decision: model these
+   as first-class, **gate-enforced** ROE fields — `windows`, a per-technique `rate` ceiling, and
+   `stop_after` / blast-radius — adding `Decision::OutOfWindow` and `Decision::RateExceeded`; the
+   clock is stamped in the adapter so `domain` stays clock-free (the same pattern as `first_seen`),
+   and the rate ceiling is threaded to the runner. Anything genuinely un-enforceable stays labelled
+   *behavioural, not gated*, so the trust boundary is honest. *(Planned, M4-adjacent ROE milestone.)*
+
+3. **Every gate decision is logged to an immutable audit trail.** Findings/loot/observations record
+   what was *found*, not what was *done*. Decision: the `app` layer appends every `gate::decide`
+   outcome — authorised *and* refused, with the exact argv, target, technique and timestamp — to an
+   append-only `./pentest/audit.jsonl` *before* the runner is invoked. It is the engagement's
+   chain-of-custody record and the evidence behind the report's Rules-of-Engagement appendix. *(Small,
+   pull forward with reporting.)*
+
+4. **Identity correlation may never expand scope.** Deterministic host identity can *merge* distinct
+   machines — a shared load-balancer/CDN TLS certificate, or cloned golden-image VMs sharing SSH
+   host-keys / `machine-id`. Because the gate runs *before* the operator adjudicates a possible clone,
+   an out-of-scope host merging into an in-scope one could leak scope. Decision: a merge that would
+   pull a new address into scope is held as a *candidate* until the operator confirms — never
+   auto-acted — and shared-by-construction claims (TLS-SPKI) rank *below* per-host claims (`machine-id`,
+   SSH host-key) in the identity priority, merging only with corroboration. *(M6.)*
+
+5. **Scope matches URL subtrees, not just hosts.** `is_host_in_scope` is host/CIDR + optional port;
+   web engagements routinely need path scoping ("only `/api/*`, not `/admin`"). Decision: generalise
+   `ScopeEntry` into a small matcher sum type (host/CIDR, URL-prefix), preserving default-deny /
+   most-specific-wins; the gate resolves a richer target descriptor. *(Planned.)*
+
+6. **ATT&CK stays the *sole* authorisation key; web gets tier + CWE/WSTG, not a second vocabulary.**
+   Web-app testing fits ATT&CK Enterprise poorly — its unit is a weakness class (OWASP WSTG / CWE),
+   and *all* of web exploitation collapses into the single coarse `T1190`, so sub-technique precision
+   is largely illusory there. Decision: do **not** add a second authorisation vocabulary. Instead
+   (a) the detect-vs-exploit line is drawn by **technique choice + tier** — vulnerability *detection*
+   maps to `Active`-tier techniques (active scanning, `T1595.*`) while *exploitation* maps to `T1190`
+   (Exploitation tier), so an operator sanctions detection without sanctioning exploitation by
+   allow-listing the former and not the latter; (b) **CWE and OWASP-WSTG are first-class attribution
+   tags** on every finding — the report's native vocabulary — never authorisation keys; (c) an
+   unknown / untiered technique **fails closed (refuse-with-explanation)**, replacing the previous
+   silent default to the Exploitation tier. The documented limitation ATT&CK cannot express —
+   sanctioning one *type* of `T1190` exploit (SQLi) but not another (RCE) — is bounded by the tier
+   gate and stop-conditions instead. *(Attribution tags + refuse-on-unknown are small; deliverable.)*
+
+7. **The C2 / redirector path is an explicit, separately-authorised opt-in.** The M7 session broker
+   bundles ngrok / cloudflared / ssh-`R` — third-party network services that make the reverse-shell
+   path neither offline nor two-dependency. Decision: the "two dependencies / offline" promise holds
+   for *assessment* and for the **foothold-driven** session mode (default; no inbound, no third
+   party); external redirectors are a **named third-party trust dependency**, off by default,
+   separately authorised, and never folded into the baseline two-dependency claim. *(M7.)*
+
+8. **The container invariant has a named privileged escape hatch.** Raw-socket work (nmap SYN /
+   OS-detection) needs `--cap-add` / `--net=host`, restricted inside Docker Desktop's VM on
+   Windows/macOS. Decision: document the escape hatch — elevated caps on native Linux, and a stated
+   fallback where Docker Desktop cannot serve — gated identically to every other run, rather than
+   letting the invariant silently drop capabilities. *(M8, with the external scanners.)*
+
+9. **Model floor is set by consequence, not just prompt-completeness.** Decision: any specialist that
+   **selects or chains an exploitation payload, or makes a triage/severity judgement that reaches the
+   client report unreviewed**, runs at **Sonnet or above**; Haiku is reserved for deterministic
+   parse-and-emit of a scanner's own detection output. Specialist headers name specific model IDs
+   (Opus 4.8 / Sonnet 5 / Haiku 4.5), not bare tiers. See *Model selection*.
+
+10. **A minimal report lands before the asset-graph and session milestones.** The report is the
+    client deliverable yet currently trails M6–M7. Decision: pull a minimal defensible report forward
+    — findings + Rules-of-Engagement appendix + the audit trail (decision 3) — ahead of the asset
+    model and sessions.
+
+11. **Docs reconciled.** `architecture.md`'s install section is corrected to the shipped
+    embedded-in-binary `install-skill` (the symlink-from-checkout model is retired), and
+    `current-plan.md`'s milestone range is fixed (M1–M8).
 
 ## The core idea: two catalogues, ATT&CK as the spine
 
@@ -169,7 +260,8 @@ calls, querying findings/loot/observations between them to decide what to run ne
   `techniques()`, `tactic(id)`, `technique(id)`, `techniques_in_tactic(id)`).
 - Tools & tiers: the `Tool` trait (`name`, `techniques`, `dockerfile`, `advice`, `invocation`,
   `parse`) with `ParsedOutput { findings, loot, observations }`; `enum Tier { Passive, Active,
-  Exploitation, Destructive }` and `fn technique::tier_of(id) -> Tier` (unknown → Exploitation).
+  Exploitation, Destructive }` and `fn technique::tier_of(id) -> Tier` (unknown → Exploitation today; a resolved decision moves this to
+  fail-closed refuse — see *Resolved design decisions*).
 - ROE (`Roe`, loaded from `rules-of-engagement.json`): `scope` + an **allow-list of exact ATT&CK
   technique/sub-technique IDs** + `Authorisation { exploitation_authorised_by: Option<Authoriser>,
   destructive_authorised: bool }`. `fn authorises(&self, id: &str) -> bool` does exact,
@@ -279,7 +371,11 @@ Specialists are spawned via the Agent tool, so the model is chosen *per spawn* �
 passes the `model` named in each `specialists/*.md` header. The rule: **use the cheapest model that
 can do the task faithfully, which is only safe when the specialist prompt is fully self-contained**
 (target, the exact ATT&CK-authorised technique IDs, the precise `searu run …` invocation contract,
-and the finding-output schema all passed in — so the model reasons about nothing it wasn't given).
+and the finding-output schema all passed in — so the model reasons about nothing it wasn't given). A
+second floor is set by **consequence**: any specialist that selects or chains an exploitation payload,
+or makes a triage/severity judgement that reaches the client report unreviewed, runs at **Sonnet or
+above** regardless of how self-contained the prompt is. Headers name specific model IDs — **Opus 4.8**,
+**Sonnet 5**, **Haiku 4.5** — never bare tiers.
 
 - **Haiku** — deterministic single-tool specialists: shape the invocation from provided inputs, run
   it via `searu run`, parse stdout, emit a structured finding. sqlmap, nmap, nuclei, httpx, testssl,
@@ -563,7 +659,11 @@ Each still one ATDD slice per commit:
   command.
 - **M4 — reporting & intel:** ATT&CK coverage heat-map, CWE attack-chains, KEV/EPSS exploitability,
   Dradis export (RoE appendix after the executive summary); `propose-exploits`/`record-exploit` for
-  the optional review-before-execute branch.
+  the optional review-before-execute branch. Per *Resolved design decisions*: a **minimal defensible
+  report** (findings + RoE appendix + audit trail) is pulled *ahead* of M6–M7 (decision 10); the ROE
+  gains **gate-enforced** operational limits — `windows`, per-technique `rate`, `stop_after` — adding
+  `Decision::OutOfWindow`/`RateExceeded` (decision 2); and `app` writes every gate decision to an
+  append-only `./pentest/audit.jsonl` (decision 3).
 - **M5 — install & the `/searu` skill (shipped):** the skill payload is authored directly (no
   template generator). (1) `searu scope-hook` *(with M2)*; (2) `SKILL.md` + `sections/` +
   `manifest.json`; (3) the 11 `specialists/` (technique×tool, each with a `model:`, registry-enforced);
@@ -587,4 +687,8 @@ implication), with Exploitation/Destructive tiers additionally requiring the rec
 destructive flag; redaction twice (record + report, undisableable); two stores joined by fingerprint
 (findings keep `sha256_12`, loot keeps plaintext 0600/0700); coverage from tool-run records
 (`silent` vs `missing` distinct); attribution + third-party-hosting judgements stay behavioural in
-the skill prose; metasploit intentionally excluded (per-module scope ungateable).
+the skill prose; metasploit intentionally excluded (per-module scope ungateable). Two invariants added
+by this review: the PreToolUse allowlist is backed by a per-skill and per-`specialist` `allowed-tools`
+allow-list so no network-capable non-Bash tool can bypass `searu` (decision 1), and every gate
+decision — authorised *or* refused — is appended to an immutable `./pentest/audit.jsonl` before any
+container starts (decision 3).

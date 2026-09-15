@@ -56,11 +56,17 @@ Scope is a domain rule, not a command. There is no `check-scope` subcommand.
   `domain::is_in_scope`, and refuses an out-of-scope target with a hard error before the runner is
   ever invoked. Precedence: default-deny (a host matching no target is out), domain-suffix and CIDR
   matching, and an exclusion overridden only by an *exact* target entry for that host.
-- **Backstop — the PreToolUse allowlist hook.** `searu scope-hook` (shipped) forces a target-facing
-  agent to invoke `searu` and nothing else: it reads the hook payload on stdin and, for a `Bash`
-  call, allows only a `searu …` command (else exit 2); non-Bash tools such as `Read`/`Grep` pass. It
-  does not read the ROE; its sole job is to prevent bypass so scope always flows through `searu run`.
-  Wiring it into the `/searu` SKILL.md `hooks.PreToolUse` is the remaining M5 step.
+- **Backstop — the PreToolUse allowlist hook plus `allowed-tools`.** `searu scope-hook` (shipped,
+  wired into the `/searu` `SKILL.md` `hooks.PreToolUse`) forces a target-facing agent through `searu`:
+  for a `Bash` call it allows only a `searu …` command (else exit 2). It does not read the ROE; its
+  sole job is to prevent bypass so scope always flows through `searu run`. **Because the hook today
+  only constrains `Bash`** — `domain::scope_hook::decide` returns `Allow` for every other tool — a
+  resolved decision hardens the boundary: `SKILL.md` and every `specialists/*.md` carry a tight
+  `allowed-tools` allow-list excluding every network-capable non-Bash tool (`WebFetch`, the
+  browser/scrape skills, network-capable MCP tools), the hook is extended to deny those tools
+  explicitly rather than allow-all-non-Bash, and a test asserts it fires inside Agent-tool-spawned
+  specialists — else specialists reach targets only via `searu`. See *product-plan.md → Resolved
+  design decisions* (1).
 
 ```mermaid
 sequenceDiagram
@@ -97,11 +103,19 @@ design). Everything below is **planned, not built**.
   obtained_via }`. `Finding`/`Loot`/`Observation` gain the attribution tuple `(host, service,
   network, tool, technique)`; credential `Loot` gains `principal` + `authenticates`. `Tool::parse`
   gains the run's `technique` so wrappers label records correctly and turn command output into
-  observations.
+  observations. Host identity carries a review invariant — **correlation may never expand scope**: a
+  merge that would pull a new address into scope stays a *candidate* until the operator confirms, and
+  shared-by-construction claims (TLS-SPKI) rank *below* per-host claims (`machine-id` / SSH host-key).
+  Scope also generalises — `ScopeEntry` becomes a matcher sum type adding **URL-prefix** subtree
+  scoping alongside host/CIDR, default-deny / most-specific-wins preserved.
 - **Network-aware gate (M6).** `gate::decide` keeps scope-absolute → exact-ATT&CK-id → tier, but
   scope resolution takes `(address, network)`, matches per network, and for a non-`internet` network
   additionally requires a foothold providing reachability and `T1021` allow-listed. Candidates are
-  never auto-promoted.
+  never auto-promoted. Two review decisions extend the gate: the ROE gains **gate-enforced
+  operational limits** — `windows`, a per-technique `rate` ceiling, and `stop_after` / blast-radius —
+  adding `Decision::OutOfWindow` and `Decision::RateExceeded` (the clock stamped in the adapter so
+  `domain` stays clock-free, the rate ceiling threaded to the runner); and an **unknown / untiered
+  technique fails closed** (refuse-with-explanation) rather than defaulting to the Exploitation tier.
 - **Session subsystem (M7).** A new `SessionBroker` port (`open_listener`/`exec`/`close`) with a new
   **`adapter-session`** crate (`cli → adapter-session → domain`) running a per-session **broker
   container** that owns the channel and bundles the redirector tooling (socat/ncat + ngrok/cloudflared
@@ -116,7 +130,13 @@ design). Everything below is **planned, not built**.
   future-only option. `adapter-store` emit becomes an **upsert**: dedup on record identity (content
   minus timestamps), stamping `first_seen`/`last_seen` at the adapter (domain stays clock-free). The
   dedup identity includes the host, so `Loot`/`Observation` gain a `host` (loot keys on
-  `(fingerprint, host)`).
+  `(fingerprint, host)`). A fourth store lands with this band: an append-only **`./pentest/audit.jsonl`**
+  to which `app` writes every gate decision — authorised *and* refused, with the exact argv, target,
+  technique and timestamp — *before* the runner is invoked, the engagement's chain-of-custody record.
+- **Container privileged escape hatch (M8).** Raw-socket work (nmap SYN / OS-detection) that Docker
+  Desktop's VM on Windows/macOS cannot serve runs with elevated caps (`--cap-add` / `--net=host`) on
+  native Linux, gated identically to every other run — the container invariant keeps a documented,
+  authorised exception rather than silently dropping the capability.
 
 ## Distribution and install
 
@@ -126,10 +146,13 @@ design). Everything below is **planned, not built**.
   `cargo install --git … searu --locked` when no platform asset is published and a Rust toolchain is
   present. `SEARU_BIN_DIR`/`SEARU_VERSION` override the location/release; `mise run install-local`
   builds the local checkout into `~/.cargo/bin` for development.
-- **Planned (M5) — the `~/.claude` pointer.** `install.sh`/`install.ps1` will additionally clone the
-  self-contained payload to `~/.claude/skills/searu/` and register a single thin pointer (symlink on
-  Unix, copy on Windows without Developer Mode) carrying a `.searu-owned` provenance marker, rewriting
-  the SKILL.md PreToolUse hook command to the installed binary path.
+- **Shipped (M5) — the `/searu` skill install.** The skill payload is embedded in the `searu` binary
+  at build time (`include_dir`); `searu install-skill` writes it to `~/.claude/skills/searu/`,
+  rewrites the `SKILL.md` PreToolUse hook command to the binary's own absolute path, drops a
+  `.searu-owned` provenance marker, and refuses to clobber a user's own same-named skill. `install.sh`,
+  `install.ps1` and `mise run install-local` all call it (one cross-platform Rust path; `SEARU_NO_SKILL`
+  opts out). This replaced the earlier symlink-from-checkout idea, which could not work for the
+  binary-only `curl … | sh` install.
 - Runtime caches (CWE/EPSS/KEV, M4) are planned to live in `~/.searu/` (`SEARU_HOME`), never in
   `~/.claude`. Engagement data stays per-project in `./pentest/`.
 - Tool images are built on first use from each tool crate's embedded `Dockerfile`; pulling prebuilt

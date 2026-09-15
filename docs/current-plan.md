@@ -5,8 +5,9 @@ to resume in a fresh session. See [architecture.md](architecture.md) for crate d
 
 > [product-plan.md](product-plan.md) is the authoritative design (ATT&CK as the organising spine, a
 > single `/searu` skill, authorised-is-executable exploitation with NIST SP 800-115 tiers). Work is
-> sequenced into **milestones** (M1–M5), one ATDD slice per commit. M1 (end-to-end exploit of the
-> local CWE-78 lab) has shipped; see *Current status* below for where we are.
+> sequenced into **milestones** (M1–M8), one ATDD slice per commit. M1 (end-to-end exploit of the
+> local CWE-78 lab) has shipped; see *Current status* below for where we are. A design review settled
+> eleven decisions (networked-systems scope) recorded in `product-plan.md → Resolved design decisions`.
 
 ## Why
 
@@ -18,7 +19,9 @@ as a **read-only reference** (git-ignored, never committed) we port semantics an
 Searu is a clean-slate rebuild on gstack's model: a self-contained cloneable repo that installs and
 updates via one script, registers into `~/.claude` with thin pointers, keeps runtime state out of
 `~/.claude`, and runs on Windows/macOS/Linux. Outside dependencies collapse to two: **Docker** (every
-scanner containerised) and **one prebuilt `searu` Rust binary** (zero runtime deps).
+scanner containerised) and **one prebuilt `searu` Rust binary** (zero runtime deps). (The M7
+reverse-shell redirector path adds a named, opt-in third-party dependency; assessment and the default
+foothold-driven session mode stay within this envelope.)
 
 ## Working method
 
@@ -39,6 +42,12 @@ to pass → refactor → **commit** (one commit per slice) → pause for review.
 - **`searu` delivery** — `install.sh`/`install.ps1` download a prebuilt binary from GitHub Releases per OS/arch with a `cargo install` fallback; `mise run install-local` builds the local checkout for development.
 - **Docker images** — built on first use from each tool crate's embedded `Dockerfile`; pull-through of `ghcr.io/<ns>/searu-<tool>` is planned.
 - **Hosting** — public GitHub repo (clone-install, Releases, ghcr, Actions).
+- **Design-review decisions recorded** — eleven resolved issues (networked-only scope) in
+  `product-plan.md → Resolved design decisions`: an `allowed-tools`-hardened hook (no non-Bash
+  bypass); gate-enforced ROE limits (`windows`/`rate`/`stop_after`); an append-only
+  `./pentest/audit.jsonl`; identity-never-expands-scope; URL-subtree scope; ATT&CK as the sole
+  authorisation key with fail-closed unknown; opt-in C2 redirectors; a container privileged escape
+  hatch; a consequence-based model floor; and a report pulled ahead of the asset/session milestones.
 
 ## Current status
 
@@ -103,6 +112,12 @@ has shipped; see *Current status*.)
 - `emit-finding`, `report` (WeasyPrint container), Dradis export; CWE/EPSS/KEV via a new
   `adapter-intel`; `propose-exploits`/`record-exploit`. ATT&CK coverage heat-map + CWE attack-chains;
   RoE appendix after the executive summary; redaction at record- *and* report-time.
+- **Resolved-review additions (this band):** a *minimal defensible report* (findings + RoE appendix +
+  audit trail) is pulled *ahead* of M6–M7; the ROE gains **gate-enforced** `windows`/`rate`/`stop_after`
+  (`Decision::OutOfWindow`/`RateExceeded`); `app` writes every gate decision to append-only
+  `./pentest/audit.jsonl`; and CWE/OWASP-WSTG become first-class attribution tags on findings with an
+  unknown/untiered technique failing closed. See `product-plan.md → Resolved design decisions` (2, 3,
+  6, 10).
 
 **M5 — install & the `/searu` skill**
 Author the skill payload directly (no template generator). Planned slice sequence:
@@ -143,7 +158,10 @@ DB) and `architecture.md`. Sub-slice order:
 5. Candidate hosts/services + pivot discipline (`searu run` refuses a candidate until the ROE names it).
 6. Foothold discovery — Discovery techniques (`T1016`/`T1018`/`T1046`/`T1049`) on commix + network
    observation parsers + candidate hosts + a `discovery` foothold-recon section.
-7. Scope & networks — the `network` label on scope entries + the network-aware gate.
+7. Scope & networks — the `network` label on scope entries + the network-aware gate; generalise
+   `ScopeEntry` to a matcher sum type adding **URL-prefix** subtree scoping (decision 5); enforce
+   **identity-never-expands-scope** — a correlation merge that would widen scope stays *candidate*
+   until the operator confirms, and TLS-SPKI ranks below per-host identity claims (decision 4).
 
 **M7 — interactive sessions (planned, depends on M6)**
 `Session`/`SessionBroker` + a new `adapter-session` crate; the per-session broker container (channel +
@@ -152,7 +170,8 @@ explicit `--callback`) modes; pivot relays hop-by-hop; `searu session start|exec
 Exploitation-tier + scope-gated, transcripts redacted, torn down at engagement end.
 
 **M8 — external scanners (planned)** nmap (host + `T1046`), dnsx/subfinder (`T1590`/`T1595`), one
-tool-wrapper slice each.
+tool-wrapper slice each. nmap's SYN / OS-detection runs with a documented **privileged escape hatch**
+(`--cap-add` / `--net=host`) on native Linux, gated identically to every other run (decision 8).
 
 ## old-version reference map (semantics/tests to port)
 
