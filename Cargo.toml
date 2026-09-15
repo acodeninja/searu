@@ -9,6 +9,7 @@ members = [
     "crates/tools/wrappers/commix",
     "crates/tools/wrappers/feroxbuster",
     "crates/tools/wrappers/ffuf",
+    "crates/tools/wrappers/gobuster",
     "crates/tools/wrappers/httpx",
     "crates/tools/wrappers/katana",
     "crates/tools/wrappers/nmap",
