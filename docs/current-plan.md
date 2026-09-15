@@ -53,8 +53,8 @@ to pass → refactor → **commit** (one commit per slice) → pause for review.
 ## Current status
 
 The hexagon is built and walking. Workspace crates (`Cargo.toml` members): `domain`, `app`,
-`adapter-store`, `adapter-docker`, `tools/parser`, `tools/registry`, the five tool wrappers
-(`commix`, `ffuf`, `httpx`, `katana`, `sqlmap`), `cli`, `xtask`.
+`adapter-store`, `adapter-docker`, `tools/parser`, `tools/registry`, the six tool wrappers
+(`commix`, `ffuf`, `httpx`, `katana`, `nmap`, `sqlmap`), `cli`, `xtask`.
 
 Shipped:
 
@@ -64,9 +64,9 @@ Shipped:
   `searu run` refuses out-of-scope / unauthorised targets before any container starts.
 - **Containerised tool runner** — `DockerToolRunner` builds each tool crate's embedded `Dockerfile`
   on first use, runs it with `--add-host=host.docker.internal:host-gateway`.
-- **Five tools** — commix (CWE-78, end-to-end against the live lab), httpx + katana (black-box
-  recon), sqlmap (CWE-89), ffuf (content discovery / CWE-22), plus a download-once SecLists wordlist
-  cache with read-only mounts.
+- **Six tools** — commix (CWE-78, end-to-end against the live lab), httpx + katana (black-box
+  recon), nmap (port/service discovery / `T1046`), sqlmap (CWE-89), ffuf (content discovery / CWE-22),
+  plus a download-once SecLists wordlist cache with read-only mounts.
 - **Three engagement stores** under `./pentest/` — findings, loot, observations — with
   `searu findings|loot|observations` queries; ROE default path `pentest/rules-of-engagement.json`.
 - **M2 — ROE tooling & backstop** — `searu validate-roe` (loads a ROE and checks every allow-listed
@@ -115,7 +115,7 @@ One ATDD slice per commit; pause for review between slices. (M2 — `validate-ro
 has shipped; see *Current status*.)
 
 **M3 — more tools (in progress)**
-- Remaining wrappers, one slice each (nmap, nuclei, dalfox, testssl, …), every one a new tool crate
+- Remaining wrappers, one slice each (nuclei, dalfox, testssl, …), every one a new tool crate
   bound to its ATT&CK cell — never a new command; preserve each tool's hard-won defaults.
 
 **M4 — reporting & intel**
@@ -179,9 +179,9 @@ bundled ngrok/cloudflared/ssh-`R` redirectors); foothold-driven (default) and re
 explicit `--callback`) modes; pivot relays hop-by-hop; `searu session start|exec|list|close`,
 Exploitation-tier + scope-gated, transcripts redacted, torn down at engagement end.
 
-**M8 — external scanners (planned)** nmap (host + `T1046`), dnsx/subfinder (`T1590`/`T1595`), one
-tool-wrapper slice each. nmap's SYN / OS-detection runs with a documented **privileged escape hatch**
-(`--cap-add` / `--net=host`) on native Linux, gated identically to every other run (decision 8).
+**M8 — external scanners (planned)** dnsx/subfinder (`T1590`/`T1595`), one tool-wrapper slice each.
+nmap (`T1046`, connect scan) has **shipped**; its SYN / OS-detection modes still await the documented
+**privileged escape hatch** (`--cap-add` / `--net=host`) on native Linux, gated identically (decision 8).
 
 ## old-version reference map (semantics/tests to port)
 

@@ -661,8 +661,8 @@ Each still one ATDD slice per commit:
   is the structural check) + `searu scope-hook` (strict allowlist: only `searu …` Bash commands pass,
   else exit 2).
 - **M3 — more tools (in progress):** remap the old `techniques.py` ATT&CK map onto the NIST 800-115
-  tier ladder and add tools one slice each — commix, httpx, katana, sqlmap and ffuf have shipped;
-  nmap, nuclei, dalfox, … follow. Every tool is a new crate bound to its ATT&CK cell, never a new
+  tier ladder and add tools one slice each — commix, httpx, katana, sqlmap, ffuf and nmap have
+  shipped; nuclei, dalfox, … follow. Every tool is a new crate bound to its ATT&CK cell, never a new
   command.
 - **M4 — reporting & intel:** ATT&CK coverage heat-map, CWE attack-chains, KEV/EPSS exploitability,
   Dradis export (RoE appendix after the executive summary); `propose-exploits`/`record-exploit` for
