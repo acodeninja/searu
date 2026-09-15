@@ -13,6 +13,7 @@ members = [
     "crates/tools/wrappers/nmap",
     "crates/tools/wrappers/nuclei",
     "crates/tools/wrappers/sqlmap",
+    "crates/tools/wrappers/whatweb",
     "crates/tools/registry",
     "crates/cli",
     "crates/xtask",

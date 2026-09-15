@@ -13,3 +13,4 @@ searu-tool-katana = { path = "../wrappers/katana" }
 searu-tool-nmap = { path = "../wrappers/nmap" }
 searu-tool-nuclei = { path = "../wrappers/nuclei" }
 searu-tool-sqlmap = { path = "../wrappers/sqlmap" }
+searu-tool-whatweb = { path = "../wrappers/whatweb" }
