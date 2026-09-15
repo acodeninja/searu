@@ -5,35 +5,20 @@ technique in the ROE is enough — no authoriser needed.
 
 ## Tools
 
-- **nmap** (`T1046`) — discover open TCP services on a host (connect + version scan). The target is
-  a host or IP, not a URL.
-  ```
-  searu run nmap --technique T1046 --target host
-  ```
-- **httpx** (`T1595`) — probe and fingerprint: status, title, server, detected technologies.
-  ```
-  searu run httpx --technique T1595 --target http://host:port
-  ```
-- **katana** (`T1595`) — crawl for reachable endpoints (and parameters, which feed Discovery).
-  ```
-  searu run katana --technique T1595 --target http://host:port
-  ```
+Choose from this phase's tools — the roster is owned by the tools, not this file, so a new tool appears
+here automatically:
 
-Run `searu tool advice httpx` / `searu tool advice katana` for the per-tool detail; don't re-read raw
-tool output.
+    searu tool list --phase reconnaissance
+
+Each line says when to reach for that tool. Delegate a run to the tool's specialist, which fetches the
+how-to (`searu tool advice <tool>`) and keeps the scanner output out of this conversation.
 
 ## Read the results
 
-Recon lands in observations:
+Recon lands in observations — `service` (open ports + versions), `server`/`tech` (stack/OS hints) and
+`endpoint`:
 
-```
-searu observations --kind service
-searu observations --kind server
-searu observations --kind tech
-searu observations --kind endpoint
-```
+    searu observations
 
-The `service` values are the open ports and their versions; the `server`/`tech` values are your stack
-and OS hints — they decide which SecLists wordlist to pick
-in Discovery and which weakness to look for in Initial access. Recon is not a one-shot phase: fold
-what you learn back into the next steps.
+The stack hints decide which SecLists wordlist to pick in Discovery and which weakness to look for in
+Initial access. Recon is not a one-shot phase: fold what you learn back into the next steps.

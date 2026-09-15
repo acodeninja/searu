@@ -61,4 +61,5 @@ the specialist.
   against an in-scope, authorised target (needs Docker).
 - `searu findings [--technique|--severity|--tool]`, `searu loot [--category] [--reveal]`,
   `searu observations [--kind]` — query what was recorded under `./pentest/`.
-- `searu tool list` / `searu tool advice <tool>` — the tools, their ATT&CK techniques, and how to drive each.
+- `searu tool list [--phase <phase>]` — the tools; with `--phase`, the phase's tools and when to use each.
+- `searu tool advice <tool> [--phase <phase>]` — how to drive a tool: invoke, interpret, chain (per phase).
