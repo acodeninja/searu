@@ -24,11 +24,13 @@ it.
   `domain::technique::tier_of` table (unknown → Exploitation today; a resolved decision moves this to
   fail-closed refuse-with-explanation — see *Resolved design decisions*).
 - **Queries:** `searu findings [--technique|--severity|--tool]`, `searu loot [--category] [--reveal]`,
-  `searu observations [--kind]`, `searu tool list`, `searu tool advice <tool>`, `searu attack list|show`.
+  `searu observations [--kind]`, `searu tool list [--phase]`, `searu tool advice <tool> [--phase]`,
+  `searu attack list|show`.
 - **Crate-per-tool.** Each tool is a thin crate under `crates/tools/wrappers/<tool>` implementing the
-  `domain::tools::Tool` trait, with its `Dockerfile` and Claude-facing `advice.md` compiled in via
-  `include_str!`, and its own `parse` that normalises output into a
-  `ParsedOutput { findings, loot, observations }`.
+  `domain::tools::Tool` trait, with its `Dockerfile` compiled in via `include_str!`, its own `parse`
+  that normalises output into a `ParsedOutput { findings, loot, observations }`, and a per-phase
+  manifest `uses() -> &[PhaseAdvice]` (`{ phase, when, invoke, interpret, chain }`) that the wrapper
+  owns instead of a prose `advice.md`.
   Shared normalisation helpers (fingerprint, HTML-unescape, secret scan) live in
   `crates/tools/parser` (`searu-tool-parser`); `crates/tools/registry` (`searu-tool-registry`)
   exposes them through the `ToolRegistry` port. A generic SARIF parser will join the parser crate when
@@ -241,8 +243,10 @@ runtime:
   *before* any container starts. (No `check-scope` command — scope is intrinsic.)
 - `searu findings [--technique|--severity|--tool]`, `searu loot [--category] [--reveal]`,
   `searu observations [--kind]` — query the three engagement stores under `./pentest/`.
-- `searu tool list` — tools and the ATT&CK techniques each performs.
-- `searu tool advice <tool>` — the compiled-in `advice.md` telling Claude how to drive a tool.
+- `searu tool list [--phase <phase>]` — tools and the ATT&CK techniques each performs; with `--phase`,
+  the phase's tools and when to reach for each (the `when` of each tool's manifest).
+- `searu tool advice <tool> [--phase <phase>]` — how to drive a tool: invoke, interpret and chain,
+  rendered per phase from the tool's `uses()` manifest.
 - `searu validate-roe [--roe <path>]` — load a ROE and check every allow-listed ID against the
   embedded ATT&CK matrix; reports target/technique counts or names unknown IDs. (M2)
 - `searu scope-hook` — PreToolUse allowlist backstop reading the hook payload on stdin: only
@@ -265,8 +269,9 @@ calls, querying findings/loot/observations between them to decide what to run ne
 - ATT&CK reference (`attack` module): `AttackTactic { id, name }`, `AttackTechnique { id, name,
   tactics, parent }`, plus `include!`d `generated.rs`, surfaced by plain functions (`tactics()`,
   `techniques()`, `tactic(id)`, `technique(id)`, `techniques_in_tactic(id)`).
-- Tools & tiers: the `Tool` trait (`name`, `techniques`, `dockerfile`, `advice`, `invocation`,
-  `parse`) with `ParsedOutput { findings, loot, observations }`; `enum Tier { Passive, Active,
+- Tools & tiers: the `Tool` trait (`name`, `techniques`, `dockerfile`, `uses`, `invocation`,
+  `parse`) with `ParsedOutput { findings, loot, observations }` and the per-phase `PhaseAdvice`
+  manifest; `enum Tier { Passive, Active,
   Exploitation, Destructive }` and `fn technique::tier_of(id) -> Tier` (unknown → Exploitation today; a resolved decision moves this to
   fail-closed refuse — see *Resolved design decisions*).
 - ROE (`Roe`, loaded from `rules-of-engagement.json`): `scope` + an **allow-list of exact ATT&CK
