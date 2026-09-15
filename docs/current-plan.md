@@ -77,6 +77,10 @@ Shipped:
   `.claude/settings.json` `permissions.deny` (`domain::egress`, `app::HardenProject`,
   `adapter-store::FileProjectSettings`) — the enforced layer that also covers spawned specialists,
   since Claude Code does not enforce frontmatter `allowed-tools`/`tools:`.
+- **Audit trail (decision 3)** — `RunAction` appends every gate decision (authorised *and* refused:
+  tool, technique, target, decision, requested args) to append-only `./pentest/audit.jsonl` before the
+  runner runs, via an `AuditLog` port + `JsonlAuditLog` adapter (time stamped in the adapter). The
+  write is fail-closed. Pulled ahead of M6 (decision 10).
 - **Binary installers** — `install.sh`, `install.ps1`, and `mise run install-local` (see *Locked
   decisions*). Release/CI scaffolding (release-please, cross-compiled Linux + Windows assets).
 - **M5 — `/searu` skill payload (router + sections + specialists)** — `skills/searu/SKILL.md` (router
@@ -118,12 +122,12 @@ has shipped; see *Current status*.)
 - `emit-finding`, `report` (WeasyPrint container), Dradis export; CWE/EPSS/KEV via a new
   `adapter-intel`; `propose-exploits`/`record-exploit`. ATT&CK coverage heat-map + CWE attack-chains;
   RoE appendix after the executive summary; redaction at record- *and* report-time.
-- **Resolved-review additions (this band):** a *minimal defensible report* (findings + RoE appendix +
-  audit trail) is pulled *ahead* of M6–M7; the ROE gains **gate-enforced** `windows`/`rate`/`stop_after`
-  (`Decision::OutOfWindow`/`RateExceeded`); `app` writes every gate decision to append-only
-  `./pentest/audit.jsonl`; and CWE/OWASP-WSTG become first-class attribution tags on findings with an
-  unknown/untiered technique failing closed. See `product-plan.md → Resolved design decisions` (2, 3,
-  6, 10).
+- **Resolved-review additions (this band):** the append-only `./pentest/audit.jsonl` audit trail is
+  **shipped** (decision 3); still to build — a *minimal defensible report* (findings + RoE appendix +
+  audit trail) pulled *ahead* of M6–M7; **gate-enforced** ROE `windows`/`rate`/`stop_after`
+  (`Decision::OutOfWindow`/`RateExceeded`); and CWE/OWASP-WSTG as first-class attribution tags on
+  findings with an unknown/untiered technique failing closed. See `product-plan.md → Resolved design
+  decisions` (2, 3, 6, 10).
 
 **M5 — install & the `/searu` skill**
 Author the skill payload directly (no template generator). Planned slice sequence:

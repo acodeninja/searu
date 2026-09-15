@@ -131,9 +131,10 @@ design). Everything below is **planned, not built**.
   future-only option. `adapter-store` emit becomes an **upsert**: dedup on record identity (content
   minus timestamps), stamping `first_seen`/`last_seen` at the adapter (domain stays clock-free). The
   dedup identity includes the host, so `Loot`/`Observation` gain a `host` (loot keys on
-  `(fingerprint, host)`). A fourth store lands with this band: an append-only **`./pentest/audit.jsonl`**
-  to which `app` writes every gate decision — authorised *and* refused, with the exact argv, target,
-  technique and timestamp — *before* the runner is invoked, the engagement's chain-of-custody record.
+  `(fingerprint, host)`). A fourth store is already shipped: an append-only **`./pentest/audit.jsonl`**
+  to which `RunAction` writes every gate decision — authorised *and* refused, with the tool, technique,
+  target, decision and requested args — *before* the runner is invoked (an `AuditLog` port +
+  `JsonlAuditLog` adapter stamping the time), the engagement's chain-of-custody record. Fail-closed.
 - **Container privileged escape hatch (M8).** Raw-socket work (nmap SYN / OS-detection) that Docker
   Desktop's VM on Windows/macOS cannot serve runs with elevated caps (`--cap-add` / `--net=host`) on
   native Linux, gated identically to every other run — the container invariant keeps a documented,

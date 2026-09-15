@@ -105,11 +105,13 @@ yet built it names the milestone.
    *behavioural, not gated*, so the trust boundary is honest. *(Planned, M4-adjacent ROE milestone.)*
 
 3. **Every gate decision is logged to an immutable audit trail.** Findings/loot/observations record
-   what was *found*, not what was *done*. Decision: the `app` layer appends every `gate::decide`
-   outcome — authorised *and* refused, with the exact argv, target, technique and timestamp — to an
-   append-only `./pentest/audit.jsonl` *before* the runner is invoked. It is the engagement's
-   chain-of-custody record and the evidence behind the report's Rules-of-Engagement appendix. *(Small,
-   pull forward with reporting.)*
+   what was *found*, not what was *done*. Decision (**shipped**): `RunAction` appends every
+   `gate::decide` outcome — authorised *and* refused, with the tool, technique, target, decision and
+   requested args — to an append-only `./pentest/audit.jsonl` *before* the runner is invoked, via an
+   `AuditLog` port + `JsonlAuditLog` adapter that stamps the time (`domain` stays clock-free). The
+   write is **fail-closed**: if the audit cannot be recorded the run does not proceed. It is the
+   engagement's chain-of-custody record and the evidence behind the report's Rules-of-Engagement
+   appendix. *(Shipped.)*
 
 4. **Identity correlation may never expand scope.** Deterministic host identity can *merge* distinct
    machines — a shared load-balancer/CDN TLS certificate, or cloned golden-image VMs sharing SSH
