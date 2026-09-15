@@ -46,3 +46,16 @@ searu validate-roe --roe ./pentest/rules-of-engagement.json
 Fix anything it reports (unknown ATT&CK IDs, unreadable file) before moving on. Scope and
 authorisation are enforced by `searu` on every run — a target that is not in scope *now* is refused
 before any network call.
+
+## Deny uncontrolled egress
+
+Before any tool runs, close the network side-doors so every target-facing action must go through
+`searu` — including inside spawned specialists:
+
+```
+searu harden
+```
+
+This writes a project-scoped `.claude/settings.json` that denies `WebFetch`, `WebSearch` and MCP
+tools for this engagement (merged with any existing settings, idempotent). It is the enforced backstop
+to the PreToolUse hook: reach a target only via `searu run`.

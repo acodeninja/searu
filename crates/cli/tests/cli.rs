@@ -252,6 +252,36 @@ fn scope_hook_blocks_a_network_tool() {
         .stderr(contains("searu"));
 }
 
+#[test]
+fn harden_writes_an_idempotent_egress_deny_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let settings = dir.path().join(".claude").join("settings.json");
+
+    Command::cargo_bin("searu")
+        .unwrap()
+        .arg("harden")
+        .arg("--dir")
+        .arg(dir.path())
+        .assert()
+        .success();
+
+    let text = std::fs::read_to_string(&settings).unwrap();
+    assert!(text.contains("WebFetch"));
+    assert!(text.contains("WebSearch"));
+    assert!(text.contains("mcp__*"));
+
+    Command::cargo_bin("searu")
+        .unwrap()
+        .arg("harden")
+        .arg("--dir")
+        .arg(dir.path())
+        .assert()
+        .success();
+
+    let text = std::fs::read_to_string(&settings).unwrap();
+    assert_eq!(text.matches("WebFetch").count(), 1);
+}
+
 fn install_skill_into(home: &std::path::Path) {
     Command::cargo_bin("searu")
         .unwrap()

@@ -1,11 +1,13 @@
 //! Application use-cases, generic over the domain ports. searu gates and runs a tool, lets the tool
 //! normalise its own output into findings/loot, stores them, and answers queries over that state.
 
+use searu_domain::egress::merge_deny;
 use searu_domain::findings::{Finding, Loot, Observation};
 use searu_domain::gate::{decide, Decision};
 use searu_domain::ports::{
-    FindingsStore, LootStore, Mount, ObservationStore, RepoError, RoeRepository, RunnerError,
-    StoreError, ToolInvocation, ToolOutcome, ToolRunner, WordlistError, WordlistProvider,
+    FindingsStore, LootStore, Mount, ObservationStore, ProjectSettings, RepoError, RoeRepository,
+    RunnerError, SettingsError, StoreError, ToolInvocation, ToolOutcome, ToolRunner, WordlistError,
+    WordlistProvider,
 };
 use searu_domain::tools::ToolRegistry;
 
@@ -238,6 +240,28 @@ impl<R: RoeRepository> ValidateRoe<R> {
             targets: roe.scope.targets.len(),
             allowed: roe.allowed_techniques.len(),
             unknown_techniques,
+        })
+    }
+}
+
+pub struct HardenProject<S> {
+    pub settings: S,
+}
+
+pub struct HardenReport {
+    pub added: usize,
+    pub total: usize,
+}
+
+impl<S: ProjectSettings> HardenProject<S> {
+    pub fn harden(&self) -> Result<HardenReport, SettingsError> {
+        let current = self.settings.denied_egress()?;
+        let merged = merge_deny(&current);
+        let added = merged.len() - current.len();
+        self.settings.set_denied_egress(&merged)?;
+        Ok(HardenReport {
+            added,
+            total: merged.len(),
         })
     }
 }
@@ -675,5 +699,58 @@ mod tests {
     fn validate_roe_propagates_a_parse_error() {
         let use_case = ValidateRoe { roe: FailingRoe };
         assert!(matches!(use_case.validate(), Err(RepoError::Parse(_))));
+    }
+
+    #[derive(Default)]
+    struct MemSettings {
+        deny: RefCell<Vec<String>>,
+    }
+    impl ProjectSettings for MemSettings {
+        fn denied_egress(&self) -> Result<Vec<String>, SettingsError> {
+            Ok(self.deny.borrow().clone())
+        }
+        fn set_denied_egress(&self, deny: &[String]) -> Result<(), SettingsError> {
+            *self.deny.borrow_mut() = deny.to_vec();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn hardening_denies_every_egress_tool_on_an_empty_project() {
+        let use_case = HardenProject {
+            settings: MemSettings::default(),
+        };
+        let report = use_case.harden().unwrap();
+        assert_eq!(report.added, 3);
+        assert_eq!(report.total, 3);
+        assert_eq!(
+            *use_case.settings.deny.borrow(),
+            vec![
+                "WebFetch".to_string(),
+                "WebSearch".to_string(),
+                "mcp__*".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn hardening_preserves_existing_denials_and_is_idempotent() {
+        let use_case = HardenProject {
+            settings: MemSettings::default(),
+        };
+        *use_case.settings.deny.borrow_mut() =
+            vec!["Bash(rm *)".to_string(), "WebFetch".to_string()];
+        assert_eq!(use_case.harden().unwrap().added, 2);
+        assert_eq!(use_case.harden().unwrap().added, 0);
+        assert_eq!(
+            use_case
+                .settings
+                .deny
+                .borrow()
+                .iter()
+                .filter(|entry| *entry == "WebFetch")
+                .count(),
+            1
+        );
     }
 }

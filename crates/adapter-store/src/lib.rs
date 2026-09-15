@@ -2,11 +2,12 @@
 
 use searu_domain::findings::{Finding, Loot, Observation, Severity, Status};
 use searu_domain::ports::{
-    Authorisation, Authoriser, FindingsStore, LootStore, ObservationStore, RepoError, Roe,
-    RoeRepository, StoreError,
+    Authorisation, Authoriser, FindingsStore, LootStore, ObservationStore, ProjectSettings,
+    RepoError, Roe, RoeRepository, SettingsError, StoreError,
 };
 use searu_domain::scope::{HostForm, Scope, ScopeEntry};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -131,6 +132,64 @@ impl RoeRepository for JsonRoeRepository {
     fn load(&self) -> Result<Roe, RepoError> {
         let text = std::fs::read_to_string(&self.path).map_err(|e| RepoError::Io(e.to_string()))?;
         parse_roe(&text)
+    }
+}
+
+pub struct FileProjectSettings {
+    path: PathBuf,
+}
+
+impl FileProjectSettings {
+    pub fn new(dir: impl Into<PathBuf>) -> Self {
+        Self {
+            path: dir.into().join(".claude").join("settings.json"),
+        }
+    }
+
+    fn read_document(&self) -> Result<serde_json::Value, SettingsError> {
+        match std::fs::read_to_string(&self.path) {
+            Ok(text) => {
+                serde_json::from_str(&text).map_err(|e| SettingsError::Parse(e.to_string()))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(json!({})),
+            Err(e) => Err(SettingsError::Io(e.to_string())),
+        }
+    }
+}
+
+impl ProjectSettings for FileProjectSettings {
+    fn denied_egress(&self) -> Result<Vec<String>, SettingsError> {
+        let document = self.read_document()?;
+        Ok(document
+            .get("permissions")
+            .and_then(|permissions| permissions.get("deny"))
+            .and_then(|deny| deny.as_array())
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|entry| entry.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    fn set_denied_egress(&self, deny: &[String]) -> Result<(), SettingsError> {
+        let mut document = self.read_document()?;
+        let object = document.as_object_mut().ok_or_else(|| {
+            SettingsError::Parse("settings.json is not a JSON object".to_string())
+        })?;
+        let permissions = object.entry("permissions").or_insert_with(|| json!({}));
+        let permissions = permissions.as_object_mut().ok_or_else(|| {
+            SettingsError::Parse("\"permissions\" is not a JSON object".to_string())
+        })?;
+        permissions.insert("deny".to_string(), json!(deny));
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| SettingsError::Io(e.to_string()))?;
+        }
+        let text = serde_json::to_string_pretty(&document)
+            .map_err(|e| SettingsError::Parse(e.to_string()))?;
+        std::fs::write(&self.path, format!("{text}\n"))
+            .map_err(|e| SettingsError::Io(e.to_string()))
     }
 }
 
@@ -578,6 +637,42 @@ mod tests {
             .unwrap()
             .is_empty());
         assert!(JsonlLootStore::new(dir.path()).list().unwrap().is_empty());
+    }
+
+    #[test]
+    fn egress_deny_round_trips_and_defaults_to_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = FileProjectSettings::new(dir.path());
+        assert!(settings.denied_egress().unwrap().is_empty());
+        settings
+            .set_denied_egress(&["WebFetch".to_string(), "WebSearch".to_string()])
+            .unwrap();
+        assert_eq!(
+            settings.denied_egress().unwrap(),
+            vec!["WebFetch".to_string(), "WebSearch".to_string()]
+        );
+    }
+
+    #[test]
+    fn setting_egress_deny_preserves_other_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let claude = dir.path().join(".claude");
+        std::fs::create_dir_all(&claude).unwrap();
+        std::fs::write(
+            claude.join("settings.json"),
+            r#"{"model":"opus","permissions":{"allow":["Bash(ls)"]}}"#,
+        )
+        .unwrap();
+
+        FileProjectSettings::new(dir.path())
+            .set_denied_egress(&["WebFetch".to_string()])
+            .unwrap();
+
+        let text = std::fs::read_to_string(claude.join("settings.json")).unwrap();
+        assert!(text.contains("\"model\""));
+        assert!(text.contains("opus"));
+        assert!(text.contains("Bash(ls)"));
+        assert!(text.contains("WebFetch"));
     }
 
     #[test]

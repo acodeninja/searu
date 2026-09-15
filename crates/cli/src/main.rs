@@ -74,6 +74,18 @@ fn cli() -> Command {
                 .about("PreToolUse allowlist backstop; reads a hook payload on stdin"),
         )
         .subcommand(
+            Command::new("harden")
+                .about(
+                    "Deny uncontrolled network egress for this engagement (.claude/settings.json)",
+                )
+                .arg(
+                    Arg::new("dir")
+                        .long("dir")
+                        .value_name("DIR")
+                        .help("Engagement directory to harden (default: current directory)"),
+                ),
+        )
+        .subcommand(
             Command::new("install-skill")
                 .about("Install the /searu skill into ~/.claude/skills/searu"),
         )
@@ -123,6 +135,7 @@ fn main() {
         Some(("run", matches)) => std::process::exit(run_action(matches)),
         Some(("validate-roe", matches)) => std::process::exit(run_validate_roe(matches)),
         Some(("scope-hook", _)) => std::process::exit(run_scope_hook()),
+        Some(("harden", matches)) => std::process::exit(run_harden(matches)),
         Some(("install-skill", _)) => std::process::exit(run_install_skill()),
         Some(("findings", matches)) => std::process::exit(run_findings(matches)),
         Some(("loot", matches)) => std::process::exit(run_loot(matches)),
@@ -398,6 +411,32 @@ fn run_scope_hook() -> i32 {
         HookDecision::Block(reason) => {
             eprintln!("{reason}");
             2
+        }
+    }
+}
+
+fn run_harden(matches: &ArgMatches) -> i32 {
+    use searu_adapter_store::FileProjectSettings;
+    use searu_app::HardenProject;
+
+    let dir = matches
+        .get_one::<String>("dir")
+        .map(String::as_str)
+        .unwrap_or(".");
+    let use_case = HardenProject {
+        settings: FileProjectSettings::new(dir),
+    };
+    match use_case.harden() {
+        Ok(report) => {
+            println!(
+                "egress guard: {} added, {} denied in {dir}/.claude/settings.json",
+                report.added, report.total
+            );
+            0
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            1
         }
     }
 }

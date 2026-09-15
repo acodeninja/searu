@@ -144,3 +144,27 @@ pub trait WordlistProvider {
     fn root(&self) -> String;
     fn ensure(&self, relative: &str) -> Result<(), WordlistError>;
 }
+
+#[derive(Debug)]
+pub enum SettingsError {
+    Io(String),
+    Parse(String),
+}
+
+impl std::fmt::Display for SettingsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SettingsError::Io(message) => {
+                write!(f, "could not access the project settings: {message}")
+            }
+            SettingsError::Parse(message) => write!(f, "invalid project settings: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for SettingsError {}
+
+pub trait ProjectSettings {
+    fn denied_egress(&self) -> Result<Vec<String>, SettingsError>;
+    fn set_denied_egress(&self, deny: &[String]) -> Result<(), SettingsError>;
+}
