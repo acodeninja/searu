@@ -2,8 +2,8 @@
 
 use searu_domain::findings::{Finding, Loot, Observation, Severity, Status};
 use searu_domain::ports::{
-    Authorisation, Authoriser, FindingsStore, LootStore, ObservationStore, ProjectSettings,
-    RepoError, Roe, RoeRepository, SettingsError, StoreError,
+    AuditEntry, AuditLog, Authorisation, Authoriser, FindingsStore, LootStore, ObservationStore,
+    ProjectSettings, RepoError, Roe, RoeRepository, SettingsError, StoreError,
 };
 use searu_domain::scope::{HostForm, Scope, ScopeEntry};
 use serde::{Deserialize, Serialize};
@@ -417,6 +417,50 @@ impl ObservationStore for JsonlObservationStore {
     }
 }
 
+#[derive(Serialize)]
+struct AuditRecord<'a> {
+    kind: &'a str,
+    at: u64,
+    tool: &'a str,
+    technique: &'a str,
+    target: &'a str,
+    decision: &'a str,
+    args: &'a [String],
+}
+
+pub struct JsonlAuditLog {
+    path: PathBuf,
+}
+
+impl JsonlAuditLog {
+    pub fn new(dir: impl Into<PathBuf>) -> Self {
+        Self {
+            path: dir.into().join("audit.jsonl"),
+        }
+    }
+}
+
+impl AuditLog for JsonlAuditLog {
+    fn record(&self, entry: &AuditEntry) -> Result<(), StoreError> {
+        let at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_secs())
+            .unwrap_or(0);
+        let record = AuditRecord {
+            kind: "audit",
+            at,
+            tool: entry.tool,
+            technique: entry.technique,
+            target: entry.target,
+            decision: entry.decision,
+            args: entry.args,
+        };
+        let line =
+            serde_json::to_string(&record).map_err(|e| StoreError::Serialise(e.to_string()))?;
+        append_line(&self.path, &line)
+    }
+}
+
 fn append_line(path: &Path, line: &str) -> Result<(), StoreError> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| StoreError::Io(e.to_string()))?;
@@ -637,6 +681,28 @@ mod tests {
             .unwrap()
             .is_empty());
         assert!(JsonlLootStore::new(dir.path()).list().unwrap().is_empty());
+    }
+
+    #[test]
+    fn audit_records_the_decision_the_args_and_a_timestamp() {
+        let dir = tempfile::tempdir().unwrap();
+        let audit = JsonlAuditLog::new(dir.path());
+        audit
+            .record(&AuditEntry {
+                tool: "commix",
+                technique: "T1190",
+                target: "http://evil.example.org",
+                decision: "OUT OF SCOPE",
+                args: &["--batch".to_string()],
+            })
+            .unwrap();
+
+        let text = std::fs::read_to_string(dir.path().join("audit.jsonl")).unwrap();
+        assert!(text.contains("\"kind\":\"audit\""));
+        assert!(text.contains("OUT OF SCOPE"));
+        assert!(text.contains("T1190"));
+        assert!(text.contains("--batch"));
+        assert!(text.contains("\"at\":"));
     }
 
     #[test]

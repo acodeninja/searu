@@ -72,9 +72,10 @@ fn attack_list_filters_by_tactic() {
 
 #[test]
 fn run_refuses_an_out_of_scope_target() {
-    let (_dir, roe) = roe_file(LAB_ROE);
+    let (dir, roe) = roe_file(LAB_ROE);
     Command::cargo_bin("searu")
         .unwrap()
+        .current_dir(dir.path())
         .args([
             "run",
             "commix",
@@ -89,13 +90,18 @@ fn run_refuses_an_out_of_scope_target() {
         .failure()
         .code(1)
         .stderr(contains("OUT OF SCOPE"));
+
+    let audit = std::fs::read_to_string(dir.path().join("pentest").join("audit.jsonl")).unwrap();
+    assert!(audit.contains("OUT OF SCOPE"));
+    assert!(audit.contains("evil.example.org"));
 }
 
 #[test]
 fn run_refuses_exploitation_without_an_authoriser() {
-    let (_dir, roe) = roe_file(UNAUTHORISED_ROE);
+    let (dir, roe) = roe_file(UNAUTHORISED_ROE);
     Command::cargo_bin("searu")
         .unwrap()
+        .current_dir(dir.path())
         .args([
             "run",
             "commix",
@@ -110,6 +116,9 @@ fn run_refuses_exploitation_without_an_authoriser() {
         .failure()
         .code(1)
         .stderr(contains("exploitation not authorised"));
+
+    let audit = std::fs::read_to_string(dir.path().join("pentest").join("audit.jsonl")).unwrap();
+    assert!(audit.contains("exploitation not authorised"));
 }
 
 #[test]

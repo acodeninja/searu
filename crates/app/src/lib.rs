@@ -5,16 +5,16 @@ use searu_domain::egress::merge_deny;
 use searu_domain::findings::{Finding, Loot, Observation};
 use searu_domain::gate::{decide, Decision};
 use searu_domain::ports::{
-    FindingsStore, LootStore, Mount, ObservationStore, ProjectSettings, RepoError, RoeRepository,
-    RunnerError, SettingsError, StoreError, ToolInvocation, ToolOutcome, ToolRunner, WordlistError,
-    WordlistProvider,
+    AuditEntry, AuditLog, FindingsStore, LootStore, Mount, ObservationStore, ProjectSettings,
+    RepoError, RoeRepository, RunnerError, SettingsError, StoreError, ToolInvocation, ToolOutcome,
+    ToolRunner, WordlistError, WordlistProvider,
 };
 use searu_domain::tools::ToolRegistry;
 
 const SECLISTS_TOKEN: &str = "seclists:";
 const SECLISTS_MOUNT: &str = "/seclists";
 
-pub struct RunAction<R, Reg, T, FS, LS, OS, W> {
+pub struct RunAction<R, Reg, T, FS, LS, OS, W, A> {
     pub roe: R,
     pub registry: Reg,
     pub runner: T,
@@ -22,6 +22,7 @@ pub struct RunAction<R, Reg, T, FS, LS, OS, W> {
     pub loot: LS,
     pub observations: OS,
     pub wordlists: W,
+    pub audit: A,
 }
 
 pub enum RunReport {
@@ -61,7 +62,7 @@ impl std::fmt::Display for RunError {
 
 impl std::error::Error for RunError {}
 
-impl<R, Reg, T, FS, LS, OS, W> RunAction<R, Reg, T, FS, LS, OS, W>
+impl<R, Reg, T, FS, LS, OS, W, A> RunAction<R, Reg, T, FS, LS, OS, W, A>
 where
     R: RoeRepository,
     Reg: ToolRegistry,
@@ -70,6 +71,7 @@ where
     LS: LootStore,
     OS: ObservationStore,
     W: WordlistProvider,
+    A: AuditLog,
 {
     pub fn run(
         &self,
@@ -94,7 +96,17 @@ where
             });
         }
 
-        match decide(&roe, technique, target) {
+        let decision = decide(&roe, technique, target);
+        self.audit
+            .record(&AuditEntry {
+                tool: tool_name,
+                technique,
+                target,
+                decision: &decision.to_string(),
+                args,
+            })
+            .map_err(RunError::Store)?;
+        match decision {
             Decision::Authorised => {}
             refused => return Ok(RunReport::Refused(refused)),
         }
@@ -454,6 +466,19 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct MemAudit {
+        entries: RefCell<Vec<(String, String)>>,
+    }
+    impl AuditLog for MemAudit {
+        fn record(&self, entry: &AuditEntry) -> Result<(), StoreError> {
+            self.entries
+                .borrow_mut()
+                .push((entry.tool.to_string(), entry.decision.to_string()));
+            Ok(())
+        }
+    }
+
     const LOCAL: &str = "http://localhost:5000/cmd/dig?ip_addr=1";
 
     #[test]
@@ -466,6 +491,7 @@ mod tests {
             loot: MemLoot::default(),
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
         };
         let report = use_case
             .run(
@@ -498,6 +524,7 @@ mod tests {
             loot: MemLoot::default(),
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
         };
         use_case
             .run("faketool", "T1190", LOCAL, &["--os-cmd".to_string()])
@@ -518,6 +545,7 @@ mod tests {
             loot: MemLoot::default(),
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
         };
         use_case
             .run(
@@ -563,6 +591,7 @@ mod tests {
             loot: MemLoot::default(),
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
         };
         use_case
             .run("faketool", "T1190", LOCAL, &["--os-cmd".to_string()])
@@ -581,6 +610,7 @@ mod tests {
             loot: MemLoot::default(),
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
         };
         let report = use_case
             .run("faketool", "T1190", "http://evil.example.org/x", &[])
@@ -588,6 +618,47 @@ mod tests {
         assert!(matches!(report, RunReport::Refused(Decision::OutOfScope)));
         assert!(use_case.findings.items.borrow().is_empty());
         assert!(use_case.loot.items.borrow().is_empty());
+    }
+
+    #[test]
+    fn an_authorised_run_is_audited() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising),
+            registry: FakeRegistry,
+            runner: SpyRunner,
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
+            observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
+        };
+        use_case.run("faketool", "T1190", LOCAL, &[]).unwrap();
+        assert_eq!(
+            *use_case.audit.entries.borrow(),
+            vec![("faketool".to_string(), "authorised".to_string())]
+        );
+    }
+
+    #[test]
+    fn a_refused_run_is_audited_before_it_is_refused() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising),
+            registry: FakeRegistry,
+            runner: PanicRunner,
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
+            observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
+        };
+        let report = use_case
+            .run("faketool", "T1190", "http://evil.example.org/x", &[])
+            .unwrap();
+        assert!(matches!(report, RunReport::Refused(_)));
+        assert_eq!(
+            *use_case.audit.entries.borrow(),
+            vec![("faketool".to_string(), "OUT OF SCOPE".to_string())]
+        );
     }
 
     #[test]
@@ -600,6 +671,7 @@ mod tests {
             loot: MemLoot::default(),
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
         };
         assert!(matches!(
             use_case.run("nope", "T1190", LOCAL, &[]),
@@ -617,6 +689,7 @@ mod tests {
             loot: MemLoot::default(),
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
         };
         assert!(matches!(
             use_case.run("faketool", "T9999", LOCAL, &[]),

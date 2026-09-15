@@ -168,3 +168,15 @@ pub trait ProjectSettings {
     fn denied_egress(&self) -> Result<Vec<String>, SettingsError>;
     fn set_denied_egress(&self, deny: &[String]) -> Result<(), SettingsError>;
 }
+
+pub struct AuditEntry<'a> {
+    pub tool: &'a str,
+    pub technique: &'a str,
+    pub target: &'a str,
+    pub decision: &'a str,
+    pub args: &'a [String],
+}
+
+pub trait AuditLog {
+    fn record(&self, entry: &AuditEntry) -> Result<(), StoreError>;
+}

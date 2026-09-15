@@ -201,7 +201,7 @@ fn run_attack(matches: &ArgMatches) -> i32 {
 fn run_action(matches: &ArgMatches) -> i32 {
     use searu_adapter_docker::{DockerToolRunner, DockerWordlistProvider};
     use searu_adapter_store::{
-        JsonRoeRepository, JsonlFindingsStore, JsonlLootStore, JsonlObservationStore,
+        JsonRoeRepository, JsonlAuditLog, JsonlFindingsStore, JsonlLootStore, JsonlObservationStore,
     };
     use searu_app::{RunAction, RunError, RunReport};
     use searu_tool_registry::Registry;
@@ -232,6 +232,7 @@ fn run_action(matches: &ArgMatches) -> i32 {
         loot: JsonlLootStore::new(ENGAGEMENT_DIR),
         observations: JsonlObservationStore::new(ENGAGEMENT_DIR),
         wordlists: DockerWordlistProvider::default(),
+        audit: JsonlAuditLog::new(ENGAGEMENT_DIR),
     };
     match use_case.run(tool, technique, target, &args) {
         Ok(RunReport::Ran {
