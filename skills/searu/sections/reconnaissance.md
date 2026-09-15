@@ -5,6 +5,11 @@ technique in the ROE is enough — no authoriser needed.
 
 ## Tools
 
+- **nmap** (`T1046`) — discover open TCP services on a host (connect + version scan). The target is
+  a host or IP, not a URL.
+  ```
+  searu run nmap --technique T1046 --target host
+  ```
 - **httpx** (`T1595`) — probe and fingerprint: status, title, server, detected technologies.
   ```
   searu run httpx --technique T1595 --target http://host:port
@@ -22,11 +27,13 @@ tool output.
 Recon lands in observations:
 
 ```
+searu observations --kind service
 searu observations --kind server
 searu observations --kind tech
 searu observations --kind endpoint
 ```
 
-The `server`/`tech` values are your stack and OS hints — they decide which SecLists wordlist to pick
+The `service` values are the open ports and their versions; the `server`/`tech` values are your stack
+and OS hints — they decide which SecLists wordlist to pick
 in Discovery and which weakness to look for in Initial access. Recon is not a one-shot phase: fold
 what you learn back into the next steps.

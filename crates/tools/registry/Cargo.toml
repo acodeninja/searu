@@ -10,4 +10,5 @@ searu-tool-commix = { path = "../wrappers/commix" }
 searu-tool-ffuf = { path = "../wrappers/ffuf" }
 searu-tool-httpx = { path = "../wrappers/httpx" }
 searu-tool-katana = { path = "../wrappers/katana" }
+searu-tool-nmap = { path = "../wrappers/nmap" }
 searu-tool-sqlmap = { path = "../wrappers/sqlmap" }
