@@ -2,6 +2,7 @@
 //! `ToolRegistry` port. Adding a tool = depending on its crate and adding it to `TOOLS`.
 
 use searu_domain::tools::{Tool, ToolRegistry};
+use searu_tool_arjun::ARJUN;
 use searu_tool_commix::COMMIX;
 use searu_tool_feroxbuster::FEROXBUSTER;
 use searu_tool_ffuf::FFUF;
@@ -15,6 +16,7 @@ use searu_tool_wafw00f::WAFW00F;
 use searu_tool_whatweb::WHATWEB;
 
 static TOOLS: &[&'static dyn Tool] = &[
+    &ARJUN,
     &COMMIX,
     &FEROXBUSTER,
     &GOBUSTER,

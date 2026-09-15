@@ -6,6 +6,7 @@ members = [
     "crates/adapter-store",
     "crates/adapter-docker",
     "crates/tools/parser",
+    "crates/tools/wrappers/arjun",
     "crates/tools/wrappers/commix",
     "crates/tools/wrappers/feroxbuster",
     "crates/tools/wrappers/ffuf",
