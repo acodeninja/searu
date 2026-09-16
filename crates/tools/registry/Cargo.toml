@@ -12,6 +12,7 @@ searu-tool-brakeman = { path = "../wrappers/brakeman" }
 searu-tool-checkov = { path = "../wrappers/checkov" }
 searu-tool-commix = { path = "../wrappers/commix" }
 searu-tool-dalfox = { path = "../wrappers/dalfox" }
+searu-tool-dnsx = { path = "../wrappers/dnsx" }
 searu-tool-feroxbuster = { path = "../wrappers/feroxbuster" }
 searu-tool-ffuf = { path = "../wrappers/ffuf" }
 searu-tool-ghauri = { path = "../wrappers/ghauri" }
