@@ -7,6 +7,7 @@ use searu_tool_commix::COMMIX;
 use searu_tool_dalfox::DALFOX;
 use searu_tool_feroxbuster::FEROXBUSTER;
 use searu_tool_ffuf::FFUF;
+use searu_tool_ghauri::GHAURI;
 use searu_tool_gobuster::GOBUSTER;
 use searu_tool_httpx::HTTPX;
 use searu_tool_katana::KATANA;
@@ -22,6 +23,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &COMMIX,
     &DALFOX,
     &FEROXBUSTER,
+    &GHAURI,
     &GOBUSTER,
     &HTTPX,
     &KATANA,

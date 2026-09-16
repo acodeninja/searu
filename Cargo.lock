@@ -451,6 +451,13 @@ name = "searu-domain"
 version = "0.0.1"
 
 [[package]]
+name = "searu-tool-arjun"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+]
+
+[[package]]
 name = "searu-tool-commix"
 version = "0.0.1"
 dependencies = [
@@ -459,7 +466,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-dalfox"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
+name = "searu-tool-feroxbuster"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
 name = "searu-tool-ffuf"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+]
+
+[[package]]
+name = "searu-tool-ghauri"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+]
+
+[[package]]
+name = "searu-tool-gobuster"
 version = "0.0.1"
 dependencies = [
  "searu-domain",
@@ -482,6 +519,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-nikto"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+]
+
+[[package]]
+name = "searu-tool-nmap"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+]
+
+[[package]]
+name = "searu-tool-nuclei"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
 name = "searu-tool-parser"
 version = "0.0.1"
 dependencies = [
@@ -494,11 +553,21 @@ name = "searu-tool-registry"
 version = "0.0.1"
 dependencies = [
  "searu-domain",
+ "searu-tool-arjun",
  "searu-tool-commix",
+ "searu-tool-dalfox",
+ "searu-tool-feroxbuster",
  "searu-tool-ffuf",
+ "searu-tool-ghauri",
+ "searu-tool-gobuster",
  "searu-tool-httpx",
  "searu-tool-katana",
+ "searu-tool-nikto",
+ "searu-tool-nmap",
+ "searu-tool-nuclei",
  "searu-tool-sqlmap",
+ "searu-tool-wafw00f",
+ "searu-tool-whatweb",
 ]
 
 [[package]]
@@ -506,6 +575,22 @@ name = "searu-tool-sqlmap"
 version = "0.0.1"
 dependencies = [
  "searu-domain",
+]
+
+[[package]]
+name = "searu-tool-wafw00f"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
+name = "searu-tool-whatweb"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
 ]
 
 [[package]]
