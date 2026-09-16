@@ -41,9 +41,14 @@ pub struct Scope {
     pub exclusions: Vec<ScopeEntry>,
 }
 
+/// The read-only in-container mount point for a source-tree target. A tool whose invocation needs a
+/// sub-path or a language-specific pattern (e.g. Go's `/src/...`) builds it from this constant.
+pub const SOURCE_MOUNT: &str = "/src";
+
 /// A source-tree target, written `src:<workspace-relative-path>`. Static-analysis tools read a local
-/// source tree rather than a network host; the app enforces workspace confinement and mounts it, so the
-/// gate treats a recognised source target as in scope and authorises it on the ROE allow-list alone.
+/// source tree rather than a network host; the app enforces workspace confinement and mounts it at
+/// [`SOURCE_MOUNT`], so the gate treats a recognised source target as in scope and authorises it on the
+/// ROE allow-list alone.
 pub fn source_target(target: &str) -> Option<&str> {
     target.strip_prefix("src:")
 }

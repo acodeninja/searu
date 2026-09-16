@@ -9,12 +9,11 @@ use searu_domain::ports::{
     RepoError, RoeRepository, RunnerError, SettingsError, SourceError, SourceProvider, StoreError,
     ToolInvocation, ToolOutcome, ToolRunner, WordlistError, WordlistProvider,
 };
-use searu_domain::scope::source_target;
+use searu_domain::scope::{source_target, SOURCE_MOUNT};
 use searu_domain::tools::ToolRegistry;
 
 const SECLISTS_TOKEN: &str = "seclists:";
 const SECLISTS_MOUNT: &str = "/seclists";
-const SOURCE_MOUNT: &str = "/src";
 
 pub struct RunAction<R, Reg, T, FS, LS, OS, W, A, S> {
     pub roe: R,
@@ -117,7 +116,7 @@ where
             refused => return Ok(RunReport::Refused(refused)),
         }
 
-        let (argv, mounts) = self.resolve_mounts(tool.invocation(target, args))?;
+        let (argv, mounts) = self.resolve_mounts(target, tool.invocation(target, args))?;
         let invocation = ToolInvocation {
             tool: tool.name(),
             target,
@@ -146,25 +145,30 @@ where
         })
     }
 
-    /// Rewrite mount tokens in the tool argv to their in-container paths: `seclists:<path>` fetches the
-    /// referenced list once and mounts the shared cache read-only; `src:<path>` resolves a confined
-    /// workspace source tree and mounts it read-only at `/src`. Only the referenced mounts are added.
-    fn resolve_mounts(&self, argv: Vec<String>) -> Result<(Vec<String>, Vec<Mount>), RunError> {
-        let mut resolved = Vec::with_capacity(argv.len());
+    /// Resolve the run's mounts and rewrite mount tokens in the tool argv. A `src:<path>` target
+    /// resolves to a confined workspace tree mounted read-only at [`SOURCE_MOUNT`]; any `src:` token in
+    /// the argv is rewritten to that mount point (a tool needing a sub-path builds it from the
+    /// constant). A `seclists:<path>` token fetches the referenced list once and mounts the shared cache
+    /// read-only. Only the referenced mounts are added.
+    fn resolve_mounts(
+        &self,
+        target: &str,
+        argv: Vec<String>,
+    ) -> Result<(Vec<String>, Vec<Mount>), RunError> {
         let mut mounts = Vec::new();
+        if let Some(relative) = source_target(target) {
+            let host = self.source.resolve(relative).map_err(RunError::Source)?;
+            mounts.push(Mount {
+                host,
+                container: SOURCE_MOUNT.to_string(),
+                readonly: true,
+            });
+        }
+
+        let mut resolved = Vec::with_capacity(argv.len());
         let mut uses_seclists = false;
-        let mut source_host: Option<String> = None;
         for arg in argv {
-            if let Some(relative) = source_target(&arg) {
-                let host = self.source.resolve(relative).map_err(RunError::Source)?;
-                match &source_host {
-                    Some(existing) if *existing != host => {
-                        return Err(RunError::Source(SourceError::Invalid(
-                            "a run may reference only one source tree".to_string(),
-                        )));
-                    }
-                    _ => source_host = Some(host),
-                }
+            if source_target(&arg).is_some() {
                 resolved.push(SOURCE_MOUNT.to_string());
             } else if let Some(relative) = arg.strip_prefix(SECLISTS_TOKEN) {
                 self.wordlists
@@ -180,13 +184,6 @@ where
             mounts.push(Mount {
                 host: self.wordlists.root(),
                 container: SECLISTS_MOUNT.to_string(),
-                readonly: true,
-            });
-        }
-        if let Some(host) = source_host {
-            mounts.push(Mount {
-                host,
-                container: SOURCE_MOUNT.to_string(),
                 readonly: true,
             });
         }
