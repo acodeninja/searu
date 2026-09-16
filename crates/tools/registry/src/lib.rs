@@ -20,6 +20,7 @@ use searu_tool_nikto::NIKTO;
 use searu_tool_njsscan::NJSSCAN;
 use searu_tool_nmap::NMAP;
 use searu_tool_nuclei::NUCLEI;
+use searu_tool_osv_scanner::OSV_SCANNER;
 use searu_tool_semgrep::SEMGREP;
 use searu_tool_sqlmap::SQLMAP;
 use searu_tool_trivy::TRIVY;
@@ -45,6 +46,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &NJSSCAN,
     &NMAP,
     &NUCLEI,
+    &OSV_SCANNER,
     &SEMGREP,
     &SQLMAP,
     &TRIVY,

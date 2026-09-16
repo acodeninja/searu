@@ -24,6 +24,7 @@ searu-tool-nikto = { path = "../wrappers/nikto" }
 searu-tool-njsscan = { path = "../wrappers/njsscan" }
 searu-tool-nmap = { path = "../wrappers/nmap" }
 searu-tool-nuclei = { path = "../wrappers/nuclei" }
+searu-tool-osv-scanner = { path = "../wrappers/osv-scanner" }
 searu-tool-semgrep = { path = "../wrappers/semgrep" }
 searu-tool-sqlmap = { path = "../wrappers/sqlmap" }
 searu-tool-trivy = { path = "../wrappers/trivy" }

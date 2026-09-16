@@ -589,6 +589,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-osv-scanner"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
 name = "searu-tool-parser"
 version = "0.0.1"
 dependencies = [
@@ -619,6 +627,7 @@ dependencies = [
  "searu-tool-njsscan",
  "searu-tool-nmap",
  "searu-tool-nuclei",
+ "searu-tool-osv-scanner",
  "searu-tool-semgrep",
  "searu-tool-sqlmap",
  "searu-tool-trivy",
