@@ -521,6 +521,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-gau"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+]
+
+[[package]]
 name = "searu-tool-ghauri"
 version = "0.0.1"
 dependencies = [
@@ -650,6 +657,7 @@ dependencies = [
  "searu-tool-dnsx",
  "searu-tool-feroxbuster",
  "searu-tool-ffuf",
+ "searu-tool-gau",
  "searu-tool-ghauri",
  "searu-tool-gitleaks",
  "searu-tool-gobuster",

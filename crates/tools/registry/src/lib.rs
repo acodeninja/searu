@@ -11,6 +11,7 @@ use searu_tool_dalfox::DALFOX;
 use searu_tool_dnsx::DNSX;
 use searu_tool_feroxbuster::FEROXBUSTER;
 use searu_tool_ffuf::FFUF;
+use searu_tool_gau::GAU;
 use searu_tool_ghauri::GHAURI;
 use searu_tool_gitleaks::GITLEAKS;
 use searu_tool_gobuster::GOBUSTER;
@@ -43,6 +44,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &DALFOX,
     &DNSX,
     &FEROXBUSTER,
+    &GAU,
     &GHAURI,
     &GITLEAKS,
     &GOBUSTER,
