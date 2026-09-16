@@ -184,6 +184,16 @@ yet built it names the milestone.
     kind. *(Shipped: semgrep, gitleaks, trufflehog, bandit, gosec, brakeman, njsscan, grype, trivy,
     osv-scanner, checkov, hadolint.)*
 
+13. **Recon lands on the existing model; a shared multi-vuln lab backs its tests.** The M8 external
+    scanners — subdomain/DNS/URL/TLS recon — needed **no scope change**: the `HostForm::Domain` target
+    (with its subdomain suffix rule) and the already-tiered `T1590`/`T1593` (Passive) and `T1595`
+    (Active) ids carried them, as additive `Observation`-emitting wrappers. Decision: adopt **OWASP
+    Juice Shop** (`bkimminich/juice-shop`, referenced by image, `examples/rules-of-engagement.
+    juice-shop.json`) as a **shared, durable lab** — a hermetic content-rich target for the crawlers
+    now and the deliberately-vulnerable target for exploitation rounds later — rather than building a
+    per-class lab per tool. *(Shipped: subfinder, dnsx, gospider, tlsx, gau. Deferred: gowitness, which
+    needs a writable output mount for screenshots.)*
+
 ## The core idea: two catalogues, ATT&CK as the spine
 
 Everything hangs off two layers that both live in `domain` (zero external deps):

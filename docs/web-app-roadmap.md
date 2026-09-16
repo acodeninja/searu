@@ -114,6 +114,17 @@ one with a live test that scans a planted vulnerable fixture: **semgrep (43), tr
 this list, plus **gitleaks, bandit, gosec, brakeman, njsscan** (SAST + secrets) and **grype, trivy,
 osv-scanner, checkov, hadolint** (SCA + IaC) drawn from `tool-catalogue.md` §5.
 
+## Recon batch (attack surface)
+
+Shipped after the analysis batch: the **reconnaissance phase**, filling the front-of-chain gap. Five
+wrappers, one commit each, all emitting `Observation`s (not findings) under `Phase::Reconnaissance` on
+the existing `T1590`/`T1593` (Passive) and `T1595` (Active) tiers — **no scope-model change** (the
+domain-target form already matched). **subfinder (10)** subdomain enum, **dnsx (11)** DNS resolution,
+**gospider (18)** web crawl, **gau (17)** historical-URL mining, **tlsx (25)** TLS/cert surface. This
+round also stood up a **shared multi-vuln lab — OWASP Juice Shop** (`examples/rules-of-engagement.
+juice-shop.json`) — a hermetic, content-rich crawl target now and the exploitation lab for later
+rounds. **gowitness (19)** is deferred: screenshots need a writable output mount (a new capability).
+
 ## Coverage
 
 recon 10 · discovery 11 · web vuln/exploit 20 · auth/crack 3 · analysis 4 · supporting 2 = **50**.

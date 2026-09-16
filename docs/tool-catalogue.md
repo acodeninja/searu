@@ -58,13 +58,13 @@ into one row (each still named) to keep the list navigable.
 
 | tool                                              | function                                       | source                | fit       | wrapped   |
 |---------------------------------------------------|------------------------------------------------|-----------------------|-----------|-----------|
-| dnsx                                              | fast multipurpose DNS toolkit                  | kali,blackarch        | container | old       |
+| dnsx                                              | fast multipurpose DNS toolkit                  | kali,blackarch        | container | searu     |
 | massdns / zdns                                    | high-performance bulk DNS resolvers            | kali,blackarch        | container |           |
 | dnsenum / dnsrecon / dnsmap / fierce              | DNS enum, AXFR, subdomain brute                | kali,parrot,blackarch | container |           |
 | dnswalk / dnstracer / dnsdiag / fpdns             | zone/delegation audit & server fingerprint     | kali,blackarch        | container |           |
 | dnsvalidator                                      | curate working resolver lists                  | kali,blackarch        | container |           |
 | dnstwist                                          | domain permutation / typosquat detection       | kali,blackarch        | container |           |
-| subfinder                                         | passive subdomain discovery                    | kali,blackarch        | container | old       |
+| subfinder                                         | passive subdomain discovery                    | kali,blackarch        | container | searu     |
 | amass                                             | in-depth subdomain/asset enumeration & mapping | kali,parrot,blackarch | container |           |
 | sublist3r / assetfinder / findomain / subbrute    | subdomain enumeration                          | kali,blackarch        | container |           |
 | puredns / shuffledns                              | massdns-wrapped brute with wildcard filtering  | blackarch             | container |           |
@@ -102,7 +102,7 @@ into one row (each still named) to keep the list navigable.
 | testssl.sh                                   | thorough TLS cipher/protocol/flaw checker  | kali,parrot,blackarch | container | old               |
 | sslscan / sslscan2                           | enumerate SSL/TLS ciphers, protocols, cert | kali,parrot,blackarch | container |                   |
 | sslyze                                       | fast scriptable TLS configuration analyzer | kali,parrot,blackarch | container |                   |
-| tlsx                                         | bulk TLS grabber / cert-cipher harvest     | kali,blackarch        | container | old               |
+| tlsx                                         | bulk TLS grabber / cert-cipher harvest     | kali,blackarch        | container | searu             |
 | cipherscan / tls-prober / tls-fingerprinting | ciphersuite report & stack fingerprint     | blackarch             | container |                   |
 | o-saft                                       | OWASP deep TLS/cert audit                  | kali,blackarch        | container |                   |
 | massbleed                                    | mass SSL vuln (Heartbleed etc.) sweep      | blackarch             | container |                   |
@@ -193,10 +193,10 @@ into one row (each still named) to keep the list navigable.
 |--------------------------------------------------|--------------------------------------------|----------------|-----------|---------|
 | httpx                                            | fast multipurpose HTTP probe/toolkit       | kali,blackarch | container | searu   |
 | httprobe / meg / proxify-style probes            | liveness probing & bulk path fetch         | blackarch      | container |         |
-| gau / waybackurls / waymore / urx                | known-URL mining (Wayback/CommonCrawl/OTX) | kali,blackarch | container |         |
+| gau / waybackurls / waymore / urx                | known-URL mining (Wayback/CommonCrawl/OTX) | kali,blackarch | container | searu (gau) |
 | urlfinder                                        | high-speed passive URL discovery           | ecosystem      | container | old     |
 | katana                                           | next-gen crawling & spidering framework    | kali,blackarch | container | searu   |
-| hakrawler / gospider / gocolly / cariddi         | fast crawlers / endpoint & secret harvest  | kali,blackarch | container |         |
+| hakrawler / gospider / gocolly / cariddi         | fast crawlers / endpoint & secret harvest  | kali,blackarch | container | searu (gospider) |
 | evine / dcrawl / crawlic / ycrawler / finalrecon | crawlers & all-in-one web recon            | blackarch      | container |         |
 
 ### 3.2 Directory / content / vhost discovery
