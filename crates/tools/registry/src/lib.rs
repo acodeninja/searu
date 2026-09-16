@@ -16,6 +16,7 @@ use searu_tool_gosec::GOSEC;
 use searu_tool_httpx::HTTPX;
 use searu_tool_katana::KATANA;
 use searu_tool_nikto::NIKTO;
+use searu_tool_njsscan::NJSSCAN;
 use searu_tool_nmap::NMAP;
 use searu_tool_nuclei::NUCLEI;
 use searu_tool_semgrep::SEMGREP;
@@ -38,6 +39,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &HTTPX,
     &KATANA,
     &NIKTO,
+    &NJSSCAN,
     &NMAP,
     &NUCLEI,
     &SEMGREP,

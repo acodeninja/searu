@@ -558,6 +558,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-njsscan"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
 name = "searu-tool-nmap"
 version = "0.0.1"
 dependencies = [
@@ -599,6 +607,7 @@ dependencies = [
  "searu-tool-httpx",
  "searu-tool-katana",
  "searu-tool-nikto",
+ "searu-tool-njsscan",
  "searu-tool-nmap",
  "searu-tool-nuclei",
  "searu-tool-semgrep",
