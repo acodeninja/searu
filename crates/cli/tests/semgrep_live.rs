@@ -5,13 +5,8 @@
 
 use assert_cmd::Command;
 
-const VULN_PY: &str = "import subprocess\n\
-\n\
-def run(cmd):\n\
-    return subprocess.call(cmd, shell=True)\n\
-\n\
-def calc(expr):\n\
-    return eval(expr)\n";
+const VULN_PY: &str =
+    "import subprocess\n\ndef run(cmd):\n    return subprocess.call(cmd, shell=True)\n\ndef calc(expr):\n    return eval(expr)\n";
 
 const ROE: &str = r#"{
     "scope": { "targets": [] },
