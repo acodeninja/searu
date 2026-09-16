@@ -29,6 +29,7 @@ members = [
     "crates/tools/wrappers/osv-scanner",
     "crates/tools/wrappers/semgrep",
     "crates/tools/wrappers/sqlmap",
+    "crates/tools/wrappers/subfinder",
     "crates/tools/wrappers/trivy",
     "crates/tools/wrappers/trufflehog",
     "crates/tools/wrappers/wafw00f",

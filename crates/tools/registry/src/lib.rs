@@ -25,6 +25,7 @@ use searu_tool_nuclei::NUCLEI;
 use searu_tool_osv_scanner::OSV_SCANNER;
 use searu_tool_semgrep::SEMGREP;
 use searu_tool_sqlmap::SQLMAP;
+use searu_tool_subfinder::SUBFINDER;
 use searu_tool_trivy::TRIVY;
 use searu_tool_trufflehog::TRUFFLEHOG;
 use searu_tool_wafw00f::WAFW00F;
@@ -53,6 +54,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &OSV_SCANNER,
     &SEMGREP,
     &SQLMAP,
+    &SUBFINDER,
     &TRIVY,
     &TRUFFLEHOG,
     &WAFW00F,
