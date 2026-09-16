@@ -15,6 +15,7 @@ members = [
     "crates/tools/wrappers/ghauri",
     "crates/tools/wrappers/gitleaks",
     "crates/tools/wrappers/gobuster",
+    "crates/tools/wrappers/gosec",
     "crates/tools/wrappers/httpx",
     "crates/tools/wrappers/katana",
     "crates/tools/wrappers/nikto",

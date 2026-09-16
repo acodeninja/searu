@@ -1,0 +1,3 @@
+FROM securego/gosec:2.24.6
+
+ENTRYPOINT ["gosec"]

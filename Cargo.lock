@@ -519,6 +519,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-gosec"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
 name = "searu-tool-httpx"
 version = "0.0.1"
 dependencies = [
@@ -578,6 +586,7 @@ dependencies = [
  "searu-tool-ghauri",
  "searu-tool-gitleaks",
  "searu-tool-gobuster",
+ "searu-tool-gosec",
  "searu-tool-httpx",
  "searu-tool-katana",
  "searu-tool-nikto",
