@@ -100,6 +100,11 @@ The fastest ROI — all `container`, mostly `old`-vetted, no new subsystem neede
 dalfox (9), jwt_tool (13), ghauri (15).** Do `wpscan` (2) right after (needs a Ruby image) and
 `zaproxy` (16) once its headless daemon is wired.
 
+**Shipped:** nuclei, whatweb, wafw00f, feroxbuster, gobuster, arjun, nikto, dalfox, ghauri — nine
+wrappers, one commit each, every one with a live integration test run against its lab. **jwt_tool is
+deferred:** its input is a token string, not a host/URL, so it does not fit `searu run <tool>
+--target <t>` — it needs a separate decision on how a token-input tool maps to the target/scope model.
+
 ## Coverage
 
 recon 10 · discovery 11 · web vuln/exploit 20 · auth/crack 3 · analysis 4 · supporting 2 = **50**.
