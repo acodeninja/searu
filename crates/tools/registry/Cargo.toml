@@ -12,6 +12,7 @@ searu-tool-dalfox = { path = "../wrappers/dalfox" }
 searu-tool-feroxbuster = { path = "../wrappers/feroxbuster" }
 searu-tool-ffuf = { path = "../wrappers/ffuf" }
 searu-tool-ghauri = { path = "../wrappers/ghauri" }
+searu-tool-gitleaks = { path = "../wrappers/gitleaks" }
 searu-tool-gobuster = { path = "../wrappers/gobuster" }
 searu-tool-httpx = { path = "../wrappers/httpx" }
 searu-tool-katana = { path = "../wrappers/katana" }
