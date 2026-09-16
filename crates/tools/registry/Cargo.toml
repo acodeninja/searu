@@ -8,6 +8,7 @@ license.workspace = true
 searu-domain = { path = "../../domain" }
 searu-tool-arjun = { path = "../wrappers/arjun" }
 searu-tool-commix = { path = "../wrappers/commix" }
+searu-tool-dalfox = { path = "../wrappers/dalfox" }
 searu-tool-feroxbuster = { path = "../wrappers/feroxbuster" }
 searu-tool-ffuf = { path = "../wrappers/ffuf" }
 searu-tool-gobuster = { path = "../wrappers/gobuster" }

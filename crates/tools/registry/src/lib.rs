@@ -4,6 +4,7 @@
 use searu_domain::tools::{Tool, ToolRegistry};
 use searu_tool_arjun::ARJUN;
 use searu_tool_commix::COMMIX;
+use searu_tool_dalfox::DALFOX;
 use searu_tool_feroxbuster::FEROXBUSTER;
 use searu_tool_ffuf::FFUF;
 use searu_tool_gobuster::GOBUSTER;
@@ -19,6 +20,7 @@ use searu_tool_whatweb::WHATWEB;
 static TOOLS: &[&'static dyn Tool] = &[
     &ARJUN,
     &COMMIX,
+    &DALFOX,
     &FEROXBUSTER,
     &GOBUSTER,
     &HTTPX,
