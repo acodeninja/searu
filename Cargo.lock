@@ -576,6 +576,7 @@ dependencies = [
  "searu-tool-nuclei",
  "searu-tool-semgrep",
  "searu-tool-sqlmap",
+ "searu-tool-trufflehog",
  "searu-tool-wafw00f",
  "searu-tool-whatweb",
 ]
@@ -593,6 +594,14 @@ name = "searu-tool-sqlmap"
 version = "0.0.1"
 dependencies = [
  "searu-domain",
+]
+
+[[package]]
+name = "searu-tool-trufflehog"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
 ]
 
 [[package]]

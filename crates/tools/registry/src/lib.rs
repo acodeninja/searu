@@ -17,6 +17,7 @@ use searu_tool_nmap::NMAP;
 use searu_tool_nuclei::NUCLEI;
 use searu_tool_semgrep::SEMGREP;
 use searu_tool_sqlmap::SQLMAP;
+use searu_tool_trufflehog::TRUFFLEHOG;
 use searu_tool_wafw00f::WAFW00F;
 use searu_tool_whatweb::WHATWEB;
 
@@ -35,6 +36,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &NUCLEI,
     &SEMGREP,
     &SQLMAP,
+    &TRUFFLEHOG,
     &WAFW00F,
     &WHATWEB,
     &FFUF,
