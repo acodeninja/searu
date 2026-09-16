@@ -19,6 +19,7 @@ members = [
     "crates/tools/wrappers/gitleaks",
     "crates/tools/wrappers/gobuster",
     "crates/tools/wrappers/gosec",
+    "crates/tools/wrappers/gospider",
     "crates/tools/wrappers/grype",
     "crates/tools/wrappers/hadolint",
     "crates/tools/wrappers/httpx",
