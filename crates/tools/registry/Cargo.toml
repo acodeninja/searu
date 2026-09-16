@@ -7,6 +7,7 @@ license.workspace = true
 [dependencies]
 searu-domain = { path = "../../domain" }
 searu-tool-arjun = { path = "../wrappers/arjun" }
+searu-tool-bandit = { path = "../wrappers/bandit" }
 searu-tool-commix = { path = "../wrappers/commix" }
 searu-tool-dalfox = { path = "../wrappers/dalfox" }
 searu-tool-feroxbuster = { path = "../wrappers/feroxbuster" }

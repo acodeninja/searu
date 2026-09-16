@@ -3,6 +3,7 @@
 
 use searu_domain::tools::{Tool, ToolRegistry};
 use searu_tool_arjun::ARJUN;
+use searu_tool_bandit::BANDIT;
 use searu_tool_commix::COMMIX;
 use searu_tool_dalfox::DALFOX;
 use searu_tool_feroxbuster::FEROXBUSTER;
@@ -23,6 +24,7 @@ use searu_tool_whatweb::WHATWEB;
 
 static TOOLS: &[&'static dyn Tool] = &[
     &ARJUN,
+    &BANDIT,
     &COMMIX,
     &DALFOX,
     &FEROXBUSTER,
