@@ -13,6 +13,7 @@ searu-tool-ffuf = { path = "../wrappers/ffuf" }
 searu-tool-gobuster = { path = "../wrappers/gobuster" }
 searu-tool-httpx = { path = "../wrappers/httpx" }
 searu-tool-katana = { path = "../wrappers/katana" }
+searu-tool-nikto = { path = "../wrappers/nikto" }
 searu-tool-nmap = { path = "../wrappers/nmap" }
 searu-tool-nuclei = { path = "../wrappers/nuclei" }
 searu-tool-sqlmap = { path = "../wrappers/sqlmap" }
