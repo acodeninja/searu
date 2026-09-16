@@ -26,6 +26,7 @@ searu-tool-nmap = { path = "../wrappers/nmap" }
 searu-tool-nuclei = { path = "../wrappers/nuclei" }
 searu-tool-semgrep = { path = "../wrappers/semgrep" }
 searu-tool-sqlmap = { path = "../wrappers/sqlmap" }
+searu-tool-trivy = { path = "../wrappers/trivy" }
 searu-tool-trufflehog = { path = "../wrappers/trufflehog" }
 searu-tool-wafw00f = { path = "../wrappers/wafw00f" }
 searu-tool-whatweb = { path = "../wrappers/whatweb" }

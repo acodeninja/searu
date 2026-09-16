@@ -26,6 +26,7 @@ members = [
     "crates/tools/wrappers/nuclei",
     "crates/tools/wrappers/semgrep",
     "crates/tools/wrappers/sqlmap",
+    "crates/tools/wrappers/trivy",
     "crates/tools/wrappers/trufflehog",
     "crates/tools/wrappers/wafw00f",
     "crates/tools/wrappers/whatweb",
