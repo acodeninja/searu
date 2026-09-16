@@ -3,7 +3,8 @@
 use searu_domain::findings::{Finding, Loot, Observation, Severity, Status};
 use searu_domain::ports::{
     AuditEntry, AuditLog, Authorisation, Authoriser, FindingsStore, LootStore, ObservationStore,
-    ProjectSettings, RepoError, Roe, RoeRepository, SettingsError, StoreError,
+    ProjectSettings, RepoError, Roe, RoeRepository, SettingsError, SourceError, SourceProvider,
+    StoreError,
 };
 use searu_domain::scope::{HostForm, Scope, ScopeEntry};
 use serde::{Deserialize, Serialize};
@@ -483,6 +484,49 @@ fn harden_loot(dir: &Path, path: &Path) {
 #[cfg(not(unix))]
 fn harden_loot(_dir: &Path, _path: &Path) {}
 
+/// Resolves a `src:<path>` source target to a confined absolute host path. The path is workspace
+/// relative (against the engagement directory); `..`, absolute and missing paths are refused, so a
+/// static-analysis container only ever mounts a tree inside the engagement.
+pub struct FsSourceProvider {
+    root: PathBuf,
+}
+
+impl FsSourceProvider {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+}
+
+impl Default for FsSourceProvider {
+    fn default() -> Self {
+        Self {
+            root: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+        }
+    }
+}
+
+impl SourceProvider for FsSourceProvider {
+    fn resolve(&self, relative: &str) -> Result<String, SourceError> {
+        if relative.is_empty()
+            || Path::new(relative).is_absolute()
+            || relative
+                .split(['/', '\\'])
+                .any(|segment| segment == ".." || segment.is_empty())
+        {
+            return Err(SourceError::Invalid(format!(
+                "source path must be workspace-relative without `..`: {relative}"
+            )));
+        }
+        let path = self.root.join(relative);
+        if !path.exists() {
+            return Err(SourceError::Invalid(format!(
+                "source path not found in the workspace: {relative}"
+            )));
+        }
+        Ok(path.to_string_lossy().into_owned())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -518,6 +562,25 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn source_provider_resolves_a_workspace_relative_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("app/web")).unwrap();
+        let provider = FsSourceProvider::new(dir.path());
+        let resolved = provider.resolve("app/web").unwrap();
+        assert!(resolved.replace('\\', "/").ends_with("app/web"));
+    }
+
+    #[test]
+    fn source_provider_refuses_escapes_absolutes_and_missing_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider = FsSourceProvider::new(dir.path());
+        assert!(provider.resolve("../etc").is_err());
+        assert!(provider.resolve("/etc").is_err());
+        assert!(provider.resolve("nope").is_err());
+        assert!(provider.resolve("").is_err());
     }
 
     #[test]

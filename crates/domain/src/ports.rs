@@ -146,6 +146,26 @@ pub trait WordlistProvider {
 }
 
 #[derive(Debug)]
+pub enum SourceError {
+    Invalid(String),
+}
+
+impl std::fmt::Display for SourceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SourceError::Invalid(message) => write!(f, "invalid source target: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for SourceError {}
+
+pub trait SourceProvider {
+    /// Resolve a workspace-relative source path to a confined absolute host path to mount read-only.
+    fn resolve(&self, relative: &str) -> Result<String, SourceError>;
+}
+
+#[derive(Debug)]
 pub enum SettingsError {
     Io(String),
     Parse(String),

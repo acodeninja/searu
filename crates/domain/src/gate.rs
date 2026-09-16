@@ -3,7 +3,7 @@
 //! matching is exact and sub-technique-specific, so a parent never implies a child.
 
 use crate::ports::Roe;
-use crate::scope::is_host_in_scope;
+use crate::scope::{is_host_in_scope, source_target};
 use crate::technique::{tier_of, Tier};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -36,7 +36,9 @@ impl std::fmt::Display for Decision {
 }
 
 pub fn decide(roe: &Roe, technique: &str, target: &str) -> Decision {
-    if !is_host_in_scope(target, &roe.scope) {
+    // A source-tree target carries its own confinement (the app mounts only a workspace-relative
+    // path), so it bypasses host-scope matching and is gated on the allow-list and tier alone.
+    if source_target(target).is_none() && !is_host_in_scope(target, &roe.scope) {
         return Decision::OutOfScope;
     }
     if !roe.authorises(technique) {
@@ -149,6 +151,22 @@ mod tests {
         assert_eq!(
             decide(&roe(&["T1485"], true, true), "T1485", LOCAL),
             Decision::Authorised
+        );
+    }
+
+    #[test]
+    fn a_source_target_bypasses_host_scope_and_needs_only_allow_listing() {
+        assert_eq!(
+            decide(&roe(&["T1593.003"], false, false), "T1593.003", "src:app"),
+            Decision::Authorised
+        );
+    }
+
+    #[test]
+    fn a_source_target_still_needs_the_technique_allow_listed() {
+        assert_eq!(
+            decide(&roe(&[], false, false), "T1593.003", "src:app"),
+            Decision::TechniqueNotAllowed("T1593.003".to_string())
         );
     }
 

@@ -18,14 +18,16 @@ pub enum Phase {
     Discovery,
     InitialAccess,
     Exploitation,
+    Analysis,
 }
 
 impl Phase {
-    pub const ALL: [Phase; 4] = [
+    pub const ALL: [Phase; 5] = [
         Phase::Reconnaissance,
         Phase::Discovery,
         Phase::InitialAccess,
         Phase::Exploitation,
+        Phase::Analysis,
     ];
 
     pub fn id(self) -> &'static str {
@@ -34,6 +36,7 @@ impl Phase {
             Phase::Discovery => "discovery",
             Phase::InitialAccess => "initial-access",
             Phase::Exploitation => "exploitation",
+            Phase::Analysis => "analysis",
         }
     }
 

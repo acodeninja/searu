@@ -6,15 +6,17 @@ use searu_domain::findings::{Finding, Loot, Observation};
 use searu_domain::gate::{decide, Decision};
 use searu_domain::ports::{
     AuditEntry, AuditLog, FindingsStore, LootStore, Mount, ObservationStore, ProjectSettings,
-    RepoError, RoeRepository, RunnerError, SettingsError, StoreError, ToolInvocation, ToolOutcome,
-    ToolRunner, WordlistError, WordlistProvider,
+    RepoError, RoeRepository, RunnerError, SettingsError, SourceError, SourceProvider, StoreError,
+    ToolInvocation, ToolOutcome, ToolRunner, WordlistError, WordlistProvider,
 };
+use searu_domain::scope::source_target;
 use searu_domain::tools::ToolRegistry;
 
 const SECLISTS_TOKEN: &str = "seclists:";
 const SECLISTS_MOUNT: &str = "/seclists";
+const SOURCE_MOUNT: &str = "/src";
 
-pub struct RunAction<R, Reg, T, FS, LS, OS, W, A> {
+pub struct RunAction<R, Reg, T, FS, LS, OS, W, A, S> {
     pub roe: R,
     pub registry: Reg,
     pub runner: T,
@@ -23,6 +25,7 @@ pub struct RunAction<R, Reg, T, FS, LS, OS, W, A> {
     pub observations: OS,
     pub wordlists: W,
     pub audit: A,
+    pub source: S,
 }
 
 pub enum RunReport {
@@ -43,6 +46,7 @@ pub enum RunError {
     Runner(RunnerError),
     Store(StoreError),
     Wordlist(WordlistError),
+    Source(SourceError),
 }
 
 impl std::fmt::Display for RunError {
@@ -56,13 +60,14 @@ impl std::fmt::Display for RunError {
             RunError::Runner(error) => write!(f, "{error}"),
             RunError::Store(error) => write!(f, "{error}"),
             RunError::Wordlist(error) => write!(f, "{error}"),
+            RunError::Source(error) => write!(f, "{error}"),
         }
     }
 }
 
 impl std::error::Error for RunError {}
 
-impl<R, Reg, T, FS, LS, OS, W, A> RunAction<R, Reg, T, FS, LS, OS, W, A>
+impl<R, Reg, T, FS, LS, OS, W, A, S> RunAction<R, Reg, T, FS, LS, OS, W, A, S>
 where
     R: RoeRepository,
     Reg: ToolRegistry,
@@ -72,6 +77,7 @@ where
     OS: ObservationStore,
     W: WordlistProvider,
     A: AuditLog,
+    S: SourceProvider,
 {
     pub fn run(
         &self,
@@ -111,7 +117,7 @@ where
             refused => return Ok(RunReport::Refused(refused)),
         }
 
-        let (argv, mounts) = self.resolve_wordlists(tool.invocation(target, args))?;
+        let (argv, mounts) = self.resolve_mounts(tool.invocation(target, args))?;
         let invocation = ToolInvocation {
             tool: tool.name(),
             target,
@@ -140,32 +146,50 @@ where
         })
     }
 
-    /// Rewrite `seclists:<path>` argument tokens to their in-container path, fetching each referenced
-    /// list once and mounting the shared cache read-only when any token is present.
-    fn resolve_wordlists(&self, argv: Vec<String>) -> Result<(Vec<String>, Vec<Mount>), RunError> {
+    /// Rewrite mount tokens in the tool argv to their in-container paths: `seclists:<path>` fetches the
+    /// referenced list once and mounts the shared cache read-only; `src:<path>` resolves a confined
+    /// workspace source tree and mounts it read-only at `/src`. Only the referenced mounts are added.
+    fn resolve_mounts(&self, argv: Vec<String>) -> Result<(Vec<String>, Vec<Mount>), RunError> {
         let mut resolved = Vec::with_capacity(argv.len());
+        let mut mounts = Vec::new();
         let mut uses_seclists = false;
+        let mut source_host: Option<String> = None;
         for arg in argv {
-            match arg.strip_prefix(SECLISTS_TOKEN) {
-                Some(relative) => {
-                    self.wordlists
-                        .ensure(relative)
-                        .map_err(RunError::Wordlist)?;
-                    resolved.push(format!("{SECLISTS_MOUNT}/{relative}"));
-                    uses_seclists = true;
+            if let Some(relative) = source_target(&arg) {
+                let host = self.source.resolve(relative).map_err(RunError::Source)?;
+                match &source_host {
+                    Some(existing) if *existing != host => {
+                        return Err(RunError::Source(SourceError::Invalid(
+                            "a run may reference only one source tree".to_string(),
+                        )));
+                    }
+                    _ => source_host = Some(host),
                 }
-                None => resolved.push(arg),
+                resolved.push(SOURCE_MOUNT.to_string());
+            } else if let Some(relative) = arg.strip_prefix(SECLISTS_TOKEN) {
+                self.wordlists
+                    .ensure(relative)
+                    .map_err(RunError::Wordlist)?;
+                resolved.push(format!("{SECLISTS_MOUNT}/{relative}"));
+                uses_seclists = true;
+            } else {
+                resolved.push(arg);
             }
         }
-        let mounts = if uses_seclists {
-            vec![Mount {
+        if uses_seclists {
+            mounts.push(Mount {
                 host: self.wordlists.root(),
                 container: SECLISTS_MOUNT.to_string(),
                 readonly: true,
-            }]
-        } else {
-            Vec::new()
-        };
+            });
+        }
+        if let Some(host) = source_host {
+            mounts.push(Mount {
+                host,
+                container: SOURCE_MOUNT.to_string(),
+                readonly: true,
+            });
+        }
         Ok((resolved, mounts))
     }
 }
@@ -334,10 +358,39 @@ mod tests {
         }
     }
 
+    struct FakeSourceTool;
+    static FAKE_SOURCE_TOOL: FakeSourceTool = FakeSourceTool;
+    impl Tool for FakeSourceTool {
+        fn name(&self) -> &'static str {
+            "sourcetool"
+        }
+        fn techniques(&self) -> &'static [&'static str] {
+            &["T1593.003"]
+        }
+        fn dockerfile(&self) -> &'static str {
+            ""
+        }
+        fn uses(&self) -> &'static [PhaseAdvice] {
+            &[]
+        }
+        fn invocation(&self, target: &str, args: &[String]) -> Vec<String> {
+            let mut argv = vec!["scan".to_string(), target.to_string()];
+            argv.extend(args.iter().cloned());
+            argv
+        }
+        fn parse(&self, _target: &str, _outcome: &ToolOutcome) -> ParsedOutput {
+            ParsedOutput::default()
+        }
+    }
+
     struct FakeRegistry;
     impl ToolRegistry for FakeRegistry {
         fn tool(&self, name: &str) -> Option<&'static dyn Tool> {
-            (name == "faketool").then_some(&FAKE_TOOL as &dyn Tool)
+            match name {
+                "faketool" => Some(&FAKE_TOOL as &dyn Tool),
+                "sourcetool" => Some(&FAKE_SOURCE_TOOL as &dyn Tool),
+                _ => None,
+            }
         }
         fn tools_for(&self, _technique: &str) -> Vec<&'static dyn Tool> {
             vec![&FAKE_TOOL]
@@ -372,6 +425,14 @@ mod tests {
                 }),
                 destructive_authorised: false,
             },
+        }
+    }
+
+    fn authorising_source() -> Roe {
+        Roe {
+            scope: Scope::default(),
+            allowed_techniques: vec!["T1593.003".to_string()],
+            authorisation: Authorisation::default(),
         }
     }
 
@@ -467,6 +528,19 @@ mod tests {
     }
 
     #[derive(Default)]
+    struct MemSource;
+    impl SourceProvider for MemSource {
+        fn resolve(&self, relative: &str) -> Result<String, SourceError> {
+            if relative.split(['/', '\\']).any(|segment| segment == "..") {
+                return Err(SourceError::Invalid(format!(
+                    "source path escapes the workspace: {relative}"
+                )));
+            }
+            Ok(format!("/work/{relative}"))
+        }
+    }
+
+    #[derive(Default)]
     struct MemAudit {
         entries: RefCell<Vec<(String, String)>>,
     }
@@ -492,6 +566,7 @@ mod tests {
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
+            source: MemSource,
         };
         let report = use_case
             .run(
@@ -525,6 +600,7 @@ mod tests {
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
+            source: MemSource,
         };
         use_case
             .run("faketool", "T1190", LOCAL, &["--os-cmd".to_string()])
@@ -546,6 +622,7 @@ mod tests {
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
+            source: MemSource,
         };
         use_case
             .run(
@@ -582,6 +659,56 @@ mod tests {
     }
 
     #[test]
+    fn a_source_target_is_confined_mounted_readonly_and_rewritten() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising_source),
+            registry: FakeRegistry,
+            runner: CapturingRunner::default(),
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
+            observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
+            source: MemSource,
+        };
+        use_case
+            .run("sourcetool", "T1593.003", "src:app/web", &[])
+            .unwrap();
+
+        assert_eq!(
+            *use_case.runner.args.borrow(),
+            vec!["scan".to_string(), "/src".to_string()]
+        );
+        assert_eq!(
+            *use_case.runner.mounts.borrow(),
+            vec![Mount {
+                host: "/work/app/web".to_string(),
+                container: "/src".to_string(),
+                readonly: true,
+            }]
+        );
+    }
+
+    #[test]
+    fn a_source_target_that_escapes_the_workspace_is_refused() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising_source),
+            registry: FakeRegistry,
+            runner: PanicRunner,
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
+            observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
+            source: MemSource,
+        };
+        assert!(matches!(
+            use_case.run("sourcetool", "T1593.003", "src:../etc", &[]),
+            Err(RunError::Source(_))
+        ));
+    }
+
+    #[test]
     fn a_run_without_a_seclists_token_mounts_nothing() {
         let use_case = RunAction {
             roe: StubRoe(authorising),
@@ -592,6 +719,7 @@ mod tests {
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
+            source: MemSource,
         };
         use_case
             .run("faketool", "T1190", LOCAL, &["--os-cmd".to_string()])
@@ -611,6 +739,7 @@ mod tests {
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
+            source: MemSource,
         };
         let report = use_case
             .run("faketool", "T1190", "http://evil.example.org/x", &[])
@@ -631,6 +760,7 @@ mod tests {
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
+            source: MemSource,
         };
         use_case.run("faketool", "T1190", LOCAL, &[]).unwrap();
         assert_eq!(
@@ -650,6 +780,7 @@ mod tests {
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
+            source: MemSource,
         };
         let report = use_case
             .run("faketool", "T1190", "http://evil.example.org/x", &[])
@@ -672,6 +803,7 @@ mod tests {
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
+            source: MemSource,
         };
         assert!(matches!(
             use_case.run("nope", "T1190", LOCAL, &[]),
@@ -690,6 +822,7 @@ mod tests {
             observations: MemObservations::default(),
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
+            source: MemSource,
         };
         assert!(matches!(
             use_case.run("faketool", "T9999", LOCAL, &[]),

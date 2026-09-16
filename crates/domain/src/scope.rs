@@ -41,6 +41,13 @@ pub struct Scope {
     pub exclusions: Vec<ScopeEntry>,
 }
 
+/// A source-tree target, written `src:<workspace-relative-path>`. Static-analysis tools read a local
+/// source tree rather than a network host; the app enforces workspace confinement and mounts it, so the
+/// gate treats a recognised source target as in scope and authorises it on the ROE allow-list alone.
+pub fn source_target(target: &str) -> Option<&str> {
+    target.strip_prefix("src:")
+}
+
 pub fn is_host_in_scope(target: &str, scope: &Scope) -> bool {
     let host = target_host(target);
     let port = target_port(target);
