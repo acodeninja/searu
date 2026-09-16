@@ -105,6 +105,15 @@ wrappers, one commit each, every one with a live integration test run against it
 deferred:** its input is a token string, not a host/URL, so it does not fit `searu run <tool>
 --target <t>` — it needs a separate decision on how a token-input tool maps to the target/scope model.
 
+## Analysis batch (source-tree tools)
+
+Shipped after the first-10 batch: the **analysis phase**, which resolved the deferred non-host-input
+question with a workspace-confined `src:<path>` target model (product-plan decision 12), all bound to
+`T1593.003`/Passive and served under a new `Phase::Analysis`. Twelve wrappers, one commit each, every
+one with a live test that scans a planted vulnerable fixture: **semgrep (43), trufflehog (42)** from
+this list, plus **gitleaks, bandit, gosec, brakeman, njsscan** (SAST + secrets) and **grype, trivy,
+osv-scanner, checkov, hadolint** (SCA + IaC) drawn from `tool-catalogue.md` §5.
+
 ## Coverage
 
 recon 10 · discovery 11 · web vuln/exploit 20 · auth/crack 3 · analysis 4 · supporting 2 = **50**.

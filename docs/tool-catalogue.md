@@ -24,7 +24,7 @@ steganography, and GUI-only apps with no headless mode.
 - **fit** — how it maps to searu's containerised model: `container` (clean headless non-interactive
   run), `session` (needs the interactive/reverse-shell session subsystem, M7), `gui-daemon` (GUI or
   service; note any headless mode), `excluded` (listed for completeness but won't fit — reason given).
-- **wrapped** — `searu` (one of the 6 shipped wrappers), `old` (present in the `old-version/` Python
+- **wrapped** — `searu` (a shipped searu wrapper), `old` (present in the `old-version/` Python
   toolkit's manifests), or blank (candidate).
 
 Tools are placed in a single primary category; long tails of near-identical micro-tools are grouped
@@ -380,12 +380,12 @@ into one row (each still named) to keep the list navigable.
 
 | tool                                                                    | function                                        | source                   | fit        | wrapped          |
 |-------------------------------------------------------------------------|-------------------------------------------------|--------------------------|------------|------------------|
-| semgrep                                                                 | multi-language pattern SAST with taint tracking | blackarch,ecosystem      | container  |                  |
+| semgrep                                                                 | multi-language pattern SAST with taint tracking | blackarch,ecosystem      | container  | searu            |
 | opengrep                                                                | LGPL semgrep fork (taint/interprocedural free)  | ecosystem                | container  | old              |
-| bandit                                                                  | Python SAST                                     | ecosystem                | container  |                  |
-| brakeman                                                                | Ruby on Rails SAST                              | blackarch,ecosystem      | container  |                  |
-| gosec / govulncheck                                                     | Go SAST & vuln check                            | ecosystem                | container  |                  |
-| nodejsscan / njsscan                                                    | Node.js SAST                                    | blackarch,ecosystem      | container  |                  |
+| bandit                                                                  | Python SAST                                     | ecosystem                | container  | searu            |
+| brakeman                                                                | Ruby on Rails SAST                              | blackarch,ecosystem      | container  | searu            |
+| gosec / govulncheck                                                     | Go SAST & vuln check                            | ecosystem                | container  | searu (gosec)    |
+| nodejsscan / njsscan                                                    | Node.js SAST                                    | blackarch,ecosystem      | container  | searu (njsscan)  |
 | phpcs-security-audit / phpstan / psalm                                  | PHP SAST (taint via psalm)                      | ecosystem                | container  |                  |
 | flawfinder / cppcheck / rats / pscan / bof-detector                     | C/C++ SAST                                      | kali,blackarch,ecosystem | container  |                  |
 | spotbugs / find-sec-bugs / pmd                                          | Java/JVM bytecode SAST                          | blackarch,ecosystem      | container  |                  |
@@ -400,9 +400,9 @@ into one row (each still named) to keep the list navigable.
 
 | tool                                                                    | function                                | source              | fit        | wrapped |
 |-------------------------------------------------------------------------|-----------------------------------------|---------------------|------------|---------|
-| grype                                                                   | container/filesystem/SBOM vuln scanner  | ecosystem           | container  | old     |
-| trivy                                                                   | all-in-one vuln/SBOM/secret/IaC scanner | ecosystem           | container  | old     |
-| osv-scanner / osv-detector                                              | scan deps against Google OSV            | ecosystem           | container  | old     |
+| grype                                                                   | container/filesystem/SBOM vuln scanner  | ecosystem           | container  | searu   |
+| trivy                                                                   | all-in-one vuln/SBOM/secret/IaC scanner | ecosystem           | container  | searu   |
+| osv-scanner / osv-detector                                              | scan deps against Google OSV            | ecosystem           | container  | searu (osv-scanner) |
 | dependency-check                                                        | OWASP SCA against NVD                   | blackarch,ecosystem | container  |         |
 | dep-scan                                                                | OWASP dep-scan SCA + reachability       | ecosystem           | container  |         |
 | snyk (cli)                                                              | SAST+SCA+container+IaC (auth token)     | blackarch,ecosystem | container  |         |
@@ -416,8 +416,8 @@ into one row (each still named) to keep the list navigable.
 
 | tool                                                                           | function                                        | source              | fit       | wrapped |
 |--------------------------------------------------------------------------------|-------------------------------------------------|---------------------|-----------|---------|
-| trufflehog                                                                     | git/filesystem secret scanner with verification | blackarch,ecosystem | container | old     |
-| gitleaks                                                                       | fast Go secret scanner                          | ecosystem           | container | old     |
+| trufflehog                                                                     | git/filesystem secret scanner with verification | blackarch,ecosystem | container | searu   |
+| gitleaks                                                                       | fast Go secret scanner                          | ecosystem           | container | searu   |
 | detect-secrets                                                                 | baseline-oriented secret scanner                | blackarch,ecosystem | container |         |
 | ggshield / git-secrets / ripsecrets                                            | secret scanning / pre-commit                    | ecosystem           | container |         |
 | noseyparker / kingfisher / whispers / tell-me-your-secrets / gitrob / githound | secret detection in history/repos               | blackarch,ecosystem | container |         |
@@ -426,8 +426,8 @@ into one row (each still named) to keep the list navigable.
 
 | tool                                                                | function                                    | source              | fit                  | wrapped    |
 |---------------------------------------------------------------------|---------------------------------------------|---------------------|----------------------|------------|
-| checkov                                                             | IaC + misconfig scanner (Terraform/K8s/CFN) | blackarch,ecosystem | container            | old        |
-| hadolint                                                            | Dockerfile linter / best-practice           | ecosystem           | container            | old        |
+| checkov                                                             | IaC + misconfig scanner (Terraform/K8s/CFN) | blackarch,ecosystem | container            | searu      |
+| hadolint                                                            | Dockerfile linter / best-practice           | ecosystem           | container            | searu      |
 | tfsec / terrascan / kics / conftest                                 | Terraform / multi-IaC policy scanners       | ecosystem           | container            |            |
 | dockle / clair                                                      | container image lint & vuln scan            | ecosystem           | container/gui-daemon |            |
 | kube-bench / kube-hunter / kubescape / kubeaudit / polaris / datree | Kubernetes benchmark & misconfig            | ecosystem           | container            |            |

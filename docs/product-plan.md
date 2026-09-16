@@ -170,6 +170,20 @@ yet built it names the milestone.
     embedded-in-binary `install-skill` (the symlink-from-checkout model is retired), and
     `current-plan.md`'s milestone range is fixed (M1–M8).
 
+12. **Static analysis reads a workspace-confined source tree, gated Passive under `T1593.003`.**
+    SAST, secret-, dependency- (SCA) and IaC-scanners take a *local source tree*, not a network host,
+    so they do not fit `is_host_in_scope`. Decision: a source target is written `src:<path>` where the
+    path resolves inside the engagement workspace; the app canonicalises it, refuses any `..` escape,
+    and mounts it **read-only at `/src`** (the `SourceProvider` port; the seclists mount is the
+    precedent). Being inside the workspace *is* the authorisation — no new ROE scope entry — so the
+    gate treats a recognised source target as in scope and falls through to the allow-list + tier.
+    These tools bind to **`T1593.003` (Search Open Websites/Domains: Code Repositories)**, a real
+    **Passive**-tier ATT&CK id that authorises on the allow-list alone; consistent with decision 6,
+    CWE stays per-finding attribution, never the key. A `Phase::Analysis` names the engagement phase.
+    This is a concrete extension of decision 5's planned scope-matcher generalisation to a source
+    kind. *(Shipped: semgrep, gitleaks, trufflehog, bandit, gosec, brakeman, njsscan, grype, trivy,
+    osv-scanner, checkov, hadolint.)*
+
 ## The core idea: two catalogues, ATT&CK as the spine
 
 Everything hangs off two layers that both live in `domain` (zero external deps):
