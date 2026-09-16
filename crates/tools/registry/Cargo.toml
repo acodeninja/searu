@@ -19,6 +19,7 @@ searu-tool-gitleaks = { path = "../wrappers/gitleaks" }
 searu-tool-gobuster = { path = "../wrappers/gobuster" }
 searu-tool-gosec = { path = "../wrappers/gosec" }
 searu-tool-grype = { path = "../wrappers/grype" }
+searu-tool-hadolint = { path = "../wrappers/hadolint" }
 searu-tool-httpx = { path = "../wrappers/httpx" }
 searu-tool-katana = { path = "../wrappers/katana" }
 searu-tool-nikto = { path = "../wrappers/nikto" }

@@ -15,6 +15,7 @@ use searu_tool_gitleaks::GITLEAKS;
 use searu_tool_gobuster::GOBUSTER;
 use searu_tool_gosec::GOSEC;
 use searu_tool_grype::GRYPE;
+use searu_tool_hadolint::HADOLINT;
 use searu_tool_httpx::HTTPX;
 use searu_tool_katana::KATANA;
 use searu_tool_nikto::NIKTO;
@@ -42,6 +43,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &GOBUSTER,
     &GOSEC,
     &GRYPE,
+    &HADOLINT,
     &HTTPX,
     &KATANA,
     &NIKTO,
