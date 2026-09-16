@@ -18,6 +18,7 @@ searu-tool-katana = { path = "../wrappers/katana" }
 searu-tool-nikto = { path = "../wrappers/nikto" }
 searu-tool-nmap = { path = "../wrappers/nmap" }
 searu-tool-nuclei = { path = "../wrappers/nuclei" }
+searu-tool-semgrep = { path = "../wrappers/semgrep" }
 searu-tool-sqlmap = { path = "../wrappers/sqlmap" }
 searu-tool-wafw00f = { path = "../wrappers/wafw00f" }
 searu-tool-whatweb = { path = "../wrappers/whatweb" }

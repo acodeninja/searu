@@ -565,9 +565,18 @@ dependencies = [
  "searu-tool-nikto",
  "searu-tool-nmap",
  "searu-tool-nuclei",
+ "searu-tool-semgrep",
  "searu-tool-sqlmap",
  "searu-tool-wafw00f",
  "searu-tool-whatweb",
+]
+
+[[package]]
+name = "searu-tool-semgrep"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
 ]
 
 [[package]]

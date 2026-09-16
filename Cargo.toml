@@ -18,6 +18,7 @@ members = [
     "crates/tools/wrappers/nikto",
     "crates/tools/wrappers/nmap",
     "crates/tools/wrappers/nuclei",
+    "crates/tools/wrappers/semgrep",
     "crates/tools/wrappers/sqlmap",
     "crates/tools/wrappers/wafw00f",
     "crates/tools/wrappers/whatweb",
