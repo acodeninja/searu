@@ -667,6 +667,7 @@ dependencies = [
  "searu-tool-semgrep",
  "searu-tool-sqlmap",
  "searu-tool-subfinder",
+ "searu-tool-tlsx",
  "searu-tool-trivy",
  "searu-tool-trufflehog",
  "searu-tool-wafw00f",
@@ -690,6 +691,14 @@ dependencies = [
 
 [[package]]
 name = "searu-tool-subfinder"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
+name = "searu-tool-tlsx"
 version = "0.0.1"
 dependencies = [
  "searu-domain",
