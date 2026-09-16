@@ -474,6 +474,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-checkov"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
 name = "searu-tool-commix"
 version = "0.0.1"
 dependencies = [
@@ -612,6 +620,7 @@ dependencies = [
  "searu-tool-arjun",
  "searu-tool-bandit",
  "searu-tool-brakeman",
+ "searu-tool-checkov",
  "searu-tool-commix",
  "searu-tool-dalfox",
  "searu-tool-feroxbuster",

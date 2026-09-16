@@ -5,6 +5,7 @@ use searu_domain::tools::{Tool, ToolRegistry};
 use searu_tool_arjun::ARJUN;
 use searu_tool_bandit::BANDIT;
 use searu_tool_brakeman::BRAKEMAN;
+use searu_tool_checkov::CHECKOV;
 use searu_tool_commix::COMMIX;
 use searu_tool_dalfox::DALFOX;
 use searu_tool_feroxbuster::FEROXBUSTER;
@@ -32,6 +33,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &ARJUN,
     &BANDIT,
     &BRAKEMAN,
+    &CHECKOV,
     &COMMIX,
     &DALFOX,
     &FEROXBUSTER,

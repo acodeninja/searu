@@ -9,6 +9,7 @@ searu-domain = { path = "../../domain" }
 searu-tool-arjun = { path = "../wrappers/arjun" }
 searu-tool-bandit = { path = "../wrappers/bandit" }
 searu-tool-brakeman = { path = "../wrappers/brakeman" }
+searu-tool-checkov = { path = "../wrappers/checkov" }
 searu-tool-commix = { path = "../wrappers/commix" }
 searu-tool-dalfox = { path = "../wrappers/dalfox" }
 searu-tool-feroxbuster = { path = "../wrappers/feroxbuster" }
