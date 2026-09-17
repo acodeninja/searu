@@ -426,6 +426,7 @@ impl<R: RoeRepository> ValidateRoe<R> {
 
 pub struct HardenProject<S> {
     pub settings: S,
+    pub hook_command: String,
 }
 
 pub struct HardenReport {
@@ -439,6 +440,7 @@ impl<S: ProjectSettings> HardenProject<S> {
         let merged = merge_deny(&current);
         let added = merged.len() - current.len();
         self.settings.set_denied_egress(&merged)?;
+        self.settings.set_pretooluse_hook(&self.hook_command)?;
         Ok(HardenReport {
             added,
             total: merged.len(),
@@ -1303,6 +1305,7 @@ mod tests {
     #[derive(Default)]
     struct MemSettings {
         deny: RefCell<Vec<String>>,
+        hook: RefCell<Option<String>>,
     }
     impl ProjectSettings for MemSettings {
         fn denied_egress(&self) -> Result<Vec<String>, SettingsError> {
@@ -1312,34 +1315,57 @@ mod tests {
             *self.deny.borrow_mut() = deny.to_vec();
             Ok(())
         }
+        fn set_pretooluse_hook(&self, command: &str) -> Result<(), SettingsError> {
+            *self.hook.borrow_mut() = Some(command.to_string());
+            Ok(())
+        }
+    }
+
+    fn harden_project() -> HardenProject<MemSettings> {
+        HardenProject {
+            settings: MemSettings::default(),
+            hook_command: "/opt/searu scope-hook".to_string(),
+        }
     }
 
     #[test]
     fn hardening_denies_every_egress_tool_on_an_empty_project() {
-        let use_case = HardenProject {
-            settings: MemSettings::default(),
-        };
+        let use_case = harden_project();
         let report = use_case.harden().unwrap();
-        assert_eq!(report.added, 3);
-        assert_eq!(report.total, 3);
+        assert_eq!(report.added, 9);
+        assert_eq!(report.total, 9);
         assert_eq!(
             *use_case.settings.deny.borrow(),
             vec![
                 "WebFetch".to_string(),
                 "WebSearch".to_string(),
-                "mcp__*".to_string()
+                "mcp__*".to_string(),
+                "Bash(docker:*)".to_string(),
+                "Bash(curl:*)".to_string(),
+                "Bash(wget:*)".to_string(),
+                "Bash(nc:*)".to_string(),
+                "Bash(ncat:*)".to_string(),
+                "Bash(socat:*)".to_string(),
             ]
         );
     }
 
     #[test]
+    fn hardening_installs_the_pretooluse_scope_hook() {
+        let use_case = harden_project();
+        use_case.harden().unwrap();
+        assert_eq!(
+            *use_case.settings.hook.borrow(),
+            Some("/opt/searu scope-hook".to_string())
+        );
+    }
+
+    #[test]
     fn hardening_preserves_existing_denials_and_is_idempotent() {
-        let use_case = HardenProject {
-            settings: MemSettings::default(),
-        };
+        let use_case = harden_project();
         *use_case.settings.deny.borrow_mut() =
             vec!["Bash(rm *)".to_string(), "WebFetch".to_string()];
-        assert_eq!(use_case.harden().unwrap().added, 2);
+        assert_eq!(use_case.harden().unwrap().added, 8);
         assert_eq!(use_case.harden().unwrap().added, 0);
         assert_eq!(
             use_case

@@ -441,13 +441,16 @@ fn run_harden(matches: &ArgMatches) -> i32 {
         .get_one::<String>("dir")
         .map(String::as_str)
         .unwrap_or(".");
+    let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("searu"));
+    let hook_command = format!("\"{}\" scope-hook", exe.display());
     let use_case = HardenProject {
         settings: FileProjectSettings::new(dir),
+        hook_command,
     };
     match use_case.harden() {
         Ok(report) => {
             println!(
-                "egress guard: {} added, {} denied in {dir}/.claude/settings.json",
+                "egress guard: {} added, {} denied plus the scope-hook in {dir}/.claude/settings.json",
                 report.added, report.total
             );
             0

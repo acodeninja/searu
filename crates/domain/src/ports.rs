@@ -223,6 +223,10 @@ impl std::error::Error for SettingsError {}
 pub trait ProjectSettings {
     fn denied_egress(&self) -> Result<Vec<String>, SettingsError>;
     fn set_denied_egress(&self, deny: &[String]) -> Result<(), SettingsError>;
+    /// Install a `PreToolUse` hook (matcher `*`) that runs `command`. Unlike a skill-frontmatter hook,
+    /// a settings-level hook reaches a spawned specialist, so this is where the scope-hook allowlist
+    /// must live to constrain a subagent's Bash.
+    fn set_pretooluse_hook(&self, command: &str) -> Result<(), SettingsError>;
 }
 
 pub struct AuditEntry<'a> {

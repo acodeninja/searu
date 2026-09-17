@@ -187,10 +187,32 @@ impl ProjectSettings for FileProjectSettings {
             SettingsError::Parse("\"permissions\" is not a JSON object".to_string())
         })?;
         permissions.insert("deny".to_string(), json!(deny));
+        self.write_document(&document)
+    }
+
+    fn set_pretooluse_hook(&self, command: &str) -> Result<(), SettingsError> {
+        let mut document = self.read_document()?;
+        let object = document.as_object_mut().ok_or_else(|| {
+            SettingsError::Parse("settings.json is not a JSON object".to_string())
+        })?;
+        let hooks = object.entry("hooks").or_insert_with(|| json!({}));
+        let hooks = hooks
+            .as_object_mut()
+            .ok_or_else(|| SettingsError::Parse("\"hooks\" is not a JSON object".to_string()))?;
+        hooks.insert(
+            "PreToolUse".to_string(),
+            json!([{ "matcher": "*", "hooks": [{ "type": "command", "command": command }] }]),
+        );
+        self.write_document(&document)
+    }
+}
+
+impl FileProjectSettings {
+    fn write_document(&self, document: &serde_json::Value) -> Result<(), SettingsError> {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| SettingsError::Io(e.to_string()))?;
         }
-        let text = serde_json::to_string_pretty(&document)
+        let text = serde_json::to_string_pretty(document)
             .map_err(|e| SettingsError::Parse(e.to_string()))?;
         std::fs::write(&self.path, format!("{text}\n"))
             .map_err(|e| SettingsError::Io(e.to_string()))
@@ -1089,6 +1111,49 @@ mod tests {
         assert!(text.contains("opus"));
         assert!(text.contains("Bash(ls)"));
         assert!(text.contains("WebFetch"));
+    }
+
+    #[test]
+    fn pretooluse_hook_is_written_with_the_command_and_preserves_other_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let claude = dir.path().join(".claude");
+        std::fs::create_dir_all(&claude).unwrap();
+        std::fs::write(
+            claude.join("settings.json"),
+            r#"{"permissions":{"deny":["WebFetch"]}}"#,
+        )
+        .unwrap();
+
+        FileProjectSettings::new(dir.path())
+            .set_pretooluse_hook("/opt/searu scope-hook")
+            .unwrap();
+
+        let document: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(claude.join("settings.json")).unwrap())
+                .unwrap();
+        let entry = &document["hooks"]["PreToolUse"][0];
+        assert_eq!(entry["matcher"], "*");
+        assert_eq!(entry["hooks"][0]["type"], "command");
+        assert_eq!(entry["hooks"][0]["command"], "/opt/searu scope-hook");
+        assert_eq!(document["permissions"]["deny"][0], "WebFetch");
+    }
+
+    #[test]
+    fn setting_the_pretooluse_hook_twice_does_not_duplicate_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = FileProjectSettings::new(dir.path());
+        settings
+            .set_pretooluse_hook("/opt/searu scope-hook")
+            .unwrap();
+        settings
+            .set_pretooluse_hook("/opt/searu scope-hook")
+            .unwrap();
+
+        let document: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.path().join(".claude").join("settings.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(document["hooks"]["PreToolUse"].as_array().unwrap().len(), 1);
     }
 
     #[test]

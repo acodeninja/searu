@@ -66,10 +66,13 @@ Scope is a domain rule, not a command. There is no `check-scope` subcommand.
   `hookSpecificOutput.permissionDecision:"allow"` so the sanctioned action is auto-approved rather than
   re-prompted — one approval authority, no per-call prompt fatigue. It does not read the ROE; its sole
   job is to prevent bypass so scope always flows through `searu run`. Because Claude Code does **not** reliably enforce frontmatter
-  tool-restrictions (skill `allowed-tools` or subagent `tools:`), and the hook's own propagation into
-  Agent-spawned specialists is undocumented, `searu harden` writes a project-scoped
-  `.claude/settings.json` `permissions.deny` (`WebFetch`/`WebSearch`/`mcp__*`) — the one enforced
-  mechanism that also covers specialists. The `SKILL.md` `allowed-tools` line is advisory only. See
+  tool-restrictions (skill `allowed-tools` or subagent `tools:`), and a **skill-frontmatter hook does
+  not reach an Agent-spawned specialist** (field-verified: a specialist's raw `docker run` slipped the
+  `SKILL.md` hook), `searu harden` writes the enforcement into a project-scoped `.claude/settings.json`
+  instead — a settings-level `hooks.PreToolUse` running `searu scope-hook` (the propagating home for the
+  allowlist), plus `permissions.deny` covering the egress tools (`WebFetch`/`WebSearch`/`mcp__*`) **and**
+  the target-reaching Bash programs a specialist must never call directly (`Bash(docker:*)`/`curl`/`wget`/
+  `nc`/`ncat`/`socat`). The `SKILL.md` `allowed-tools` line is advisory only. See
   *product-plan.md → Resolved design decisions* (1).
 
 ```mermaid

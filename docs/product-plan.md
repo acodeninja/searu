@@ -93,10 +93,15 @@ yet built it names the milestone.
    enforced layers (**shipped**): (a) the hook matcher is broadened to `*` and `decide` is
    **default-deny** — `Bash` runs only `searu`, a small allow-set of local tools passes, and every
    network-capable tool (`WebFetch`/`WebSearch`/`Skill`/`mcp__*`) is blocked; (b) a new **`searu
-   harden`** writes a project-scoped `.claude/settings.json` denying `WebFetch`/`WebSearch`/`mcp__*`
-   for the engagement — the enforced net that also reaches Agent-spawned specialists, where the hook's
-   own propagation is undocumented. An `allowed-tools` line on `SKILL.md` is kept only as **advisory
-   intent, not a security boundary**. Scope is absolute only if there is no side door. *(Shipped.)*
+   harden`** writes the enforcement into a project-scoped `.claude/settings.json`. A field test then
+   showed the layer that reaches an **Agent-spawned specialist** is the settings file, not a
+   skill-frontmatter hook — a specialist's raw `docker run` slipped the `SKILL.md` hook. So `searu
+   harden` now writes a settings-level `hooks.PreToolUse` running `searu scope-hook` (the propagating
+   home for the allowlist) **plus** a `permissions.deny` covering the egress tools
+   (`WebFetch`/`WebSearch`/`mcp__*`) **and** the target-reaching Bash programs a specialist must never
+   call directly (`Bash(docker:*)`/`curl`/`wget`/`nc`/`ncat`/`socat`). An `allowed-tools` line on
+   `SKILL.md` is kept only as **advisory intent, not a security boundary**. Scope is absolute only if
+   there is no side door. *(Shipped.)*
 
 2. **The ROE gains enforceable operational limits.** A real rules-of-engagement carries more than
    scope + technique: time windows, rate/intensity caps, and stop-conditions. Decision: model these
@@ -748,8 +753,10 @@ destructive flag; redaction twice (record + report, undisableable); two stores j
 (findings keep `sha256_12`, loot keeps plaintext 0600/0700); coverage from tool-run records
 (`silent` vs `missing` distinct); attribution + third-party-hosting judgements stay behavioural in
 the skill prose; metasploit intentionally excluded (per-module scope ungateable). Two invariants added
-by this review: the PreToolUse hook default-denies every non-`searu` tool (matcher `*`) and a
-project-scoped `permissions.deny` written by `searu harden` blocks network egress including inside
-spawned specialists, so nothing bypasses `searu` — frontmatter `allowed-tools` is advisory only, not
+by this review: the PreToolUse hook default-denies every non-`searu` tool (matcher `*`), and to reach a
+spawned specialist `searu harden` writes that hook and a `permissions.deny` (egress tools plus the
+target-reaching Bash programs) into a project-scoped `.claude/settings.json` — a skill-frontmatter hook
+does not propagate to a subagent, the settings file does — so nothing bypasses `searu`; frontmatter
+`allowed-tools` is advisory only, not
 enforced (decision 1); and every gate decision — authorised *or* refused — is appended to an immutable
 `./pentest/audit.jsonl` before any container starts (decision 3).

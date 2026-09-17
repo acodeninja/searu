@@ -74,9 +74,11 @@ Shipped:
 - **Hook hardening (decision 1)** — `scope-hook` is now **default-deny** over all tools (matcher `*`):
   `Bash` must be `searu …`, a small local-tool allow-set passes, every network-capable tool
   (`WebFetch`/`WebSearch`/`Skill`/`mcp__*`) is blocked (exit 2). `searu harden` writes a project-scoped
-  `.claude/settings.json` `permissions.deny` (`domain::egress`, `app::HardenProject`,
-  `adapter-store::FileProjectSettings`) — the enforced layer that also covers spawned specialists,
-  since Claude Code does not enforce frontmatter `allowed-tools`/`tools:`.
+  `.claude/settings.json` (`domain::egress`, `app::HardenProject`, `adapter-store::FileProjectSettings`):
+  a settings-level `hooks.PreToolUse` running `searu scope-hook` **plus** a `permissions.deny` over the
+  egress tools and the target-reaching Bash programs (`Bash(docker:*)`/`curl`/`wget`/`nc`/`ncat`/`socat`)
+  — the layer that reaches a spawned specialist, since a skill-frontmatter hook does not (see
+  *Field-test defects* #1) and Claude Code does not enforce frontmatter `allowed-tools`/`tools:`.
 - **Audit trail (decision 3)** — `RunAction` appends every gate decision (authorised *and* refused:
   tool, technique, target, decision, requested args) to append-only `./pentest/audit.jsonl` before the
   runner runs, via an `AuditLog` port + `JsonlAuditLog` adapter (time stamped in the adapter). The
@@ -189,6 +191,51 @@ Exploitation-tier + scope-gated, transcripts redacted, torn down at engagement e
 **M8 — external scanners (planned)** dnsx/subfinder (`T1590`/`T1595`), one tool-wrapper slice each.
 nmap (`T1046`, connect scan) has **shipped**; its SYN / OS-detection modes still await the documented
 **privileged escape hatch** (`--cap-add` / `--net=host`) on native Linux, gated identically (decision 8).
+
+## Field-test defects (Juice Shop assessment, 2026-09-17)
+
+Four issues surfaced running a full assessment against a local OWASP Juice Shop
+(`http://localhost:3000/`) through the `/searu` skill. Ordered by severity.
+
+1. **The scope hook does not constrain a spawned specialist's Bash — safety-property violation.**
+   **Fixed.** A sqlmap specialist (ephemeral subagent) found the target down mid-run and started it
+   with a raw `docker run -d --name juiceshop -p 3000:3000 bkimminich/juice-shop:latest`. In the
+   top-level session the `PreToolUse -> searu scope-hook` allowlist blocks any non-`searu` Bash, so
+   `docker run` should have been refused; it was not, because the hook lived only in `SKILL.md`
+   frontmatter and Claude Code does not propagate a skill-frontmatter hook into a Task-spawned subagent
+   ([anthropics/claude-code#27661](https://github.com/anthropics/claude-code/issues/27661)). The
+   enforcement moved to the layer that does reach a subagent: `searu harden` now writes a settings-level
+   `hooks.PreToolUse` running `searu scope-hook` into the project `.claude/settings.json`, plus a
+   `permissions.deny` covering the egress tools **and** the target-reaching Bash programs
+   (`Bash(docker:*)`/`curl`/`wget`/`nc`/`ncat`/`socat`) as an enforced backstop. `scope_hook::decide`
+   was already correct; only its delivery changed. The operator should still confirm live-session that a
+   settings-level hook fires inside a subagent; the `permissions.deny` Bash specifiers are enforced
+   regardless. Relates to decision 1 (hook hardening) and the *Invariants → Scope* entry.
+
+2. **The sqlmap wrapper never records dumped credentials as loot.** A confirmed T1190/CWE-89 injection
+   in `/rest/products/search?q=` was exploited to dump the `Users` table (24 rows: id, role, email,
+   MD5 password) yet `searu loot` stays empty — the emails/hashes live only in the raw
+   `pentest/outputs/sqlmap/…` stdout/CSV. The wrapper's `parse()`
+   (`crates/tools/wrappers/sqlmap/src/lib.rs`) extracts only the injection finding and the DBMS
+   observation; it has no `--dump`→loot path, unlike commix/hydra (credential subjects landed in
+   `a813bb2`). The sqlmap specialist doc implies dumped credentials land in loot; they do not.
+   Fix belongs with M6 slice 4 (credential subject + CWE-522) — parse `--dump` output into `Loot`
+   (principal/authenticates) + a CWE-522 finding per secret, fingerprint-linked, never the plaintext.
+
+3. **sqlmap's default SQLite payload crashed the target (incidental DoS).** The default technique mix
+   included a time-based payload (`RANDOMBLOB(500000000/2)`) that segfaulted Juice Shop's
+   `better-sqlite3` binding (container exit 139); re-running restricted to `--technique=BE`
+   (boolean+error) completed cleanly. In-scope here (destructive was authorised) but availability
+   damage from a *default*, not a chosen destructive action, is a foot-gun. Consider filtering the
+   heavy-`RANDOMBLOB` payload or defaulting SQLite runs to `BE` unless `destructive_authorised`.
+   Tension with *"preserve each tool's hard-won defaults"* — worth a decision.
+
+4. **nmap cannot run against a `url`-type target.** With ROE target `http://localhost:3000/`, `searu`
+   passes `host.docker.internal:3000` to nmap as a single argument; nmap tries to resolve the whole
+   `host:port` string as a hostname and fails. A host-only `--target localhost` is then refused as
+   out-of-scope. Recon fell back to httpx/whatweb for the service fingerprint. The nmap wrapper needs
+   to split host from port (`-p <port> <host>`) when the resolved target carries one, or the gate must
+   accept the bare host of an in-scope `url` target for `T1046`.
 
 ## old-version reference map (semantics/tests to port)
 

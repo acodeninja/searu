@@ -304,6 +304,15 @@ fn harden_writes_an_idempotent_egress_deny_list() {
     assert!(text.contains("WebFetch"));
     assert!(text.contains("WebSearch"));
     assert!(text.contains("mcp__*"));
+    assert!(text.contains("Bash(docker:*)"));
+
+    let document: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let hook = &document["hooks"]["PreToolUse"][0];
+    assert_eq!(hook["matcher"], "*");
+    assert!(hook["hooks"][0]["command"]
+        .as_str()
+        .unwrap()
+        .contains("scope-hook"));
 
     Command::cargo_bin("searu")
         .unwrap()
@@ -315,6 +324,8 @@ fn harden_writes_an_idempotent_egress_deny_list() {
 
     let text = std::fs::read_to_string(&settings).unwrap();
     assert_eq!(text.matches("WebFetch").count(), 1);
+    let document: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(document["hooks"]["PreToolUse"].as_array().unwrap().len(), 1);
 }
 
 fn install_skill_into(home: &std::path::Path) {
