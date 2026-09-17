@@ -21,6 +21,7 @@ searu-tool-ffuf = { path = "../wrappers/ffuf" }
 searu-tool-fuxploider = { path = "../wrappers/fuxploider" }
 searu-tool-gau = { path = "../wrappers/gau" }
 searu-tool-ghauri = { path = "../wrappers/ghauri" }
+searu-tool-git-dumper = { path = "../wrappers/git-dumper" }
 searu-tool-gitleaks = { path = "../wrappers/gitleaks" }
 searu-tool-gobuster = { path = "../wrappers/gobuster" }
 searu-tool-gosec = { path = "../wrappers/gosec" }

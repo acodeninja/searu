@@ -21,6 +21,7 @@ members = [
     "crates/tools/wrappers/fuxploider",
     "crates/tools/wrappers/gau",
     "crates/tools/wrappers/ghauri",
+    "crates/tools/wrappers/git-dumper",
     "crates/tools/wrappers/gitleaks",
     "crates/tools/wrappers/gobuster",
     "crates/tools/wrappers/gosec",

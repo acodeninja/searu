@@ -563,6 +563,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-git-dumper"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+]
+
+[[package]]
 name = "searu-tool-gitleaks"
 version = "0.0.1"
 dependencies = [
@@ -706,6 +713,7 @@ dependencies = [
  "searu-tool-fuxploider",
  "searu-tool-gau",
  "searu-tool-ghauri",
+ "searu-tool-git-dumper",
  "searu-tool-gitleaks",
  "searu-tool-gobuster",
  "searu-tool-gosec",

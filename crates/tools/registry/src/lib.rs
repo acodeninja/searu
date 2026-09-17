@@ -17,6 +17,7 @@ use searu_tool_ffuf::FFUF;
 use searu_tool_fuxploider::FUXPLOIDER;
 use searu_tool_gau::GAU;
 use searu_tool_ghauri::GHAURI;
+use searu_tool_git_dumper::GIT_DUMPER;
 use searu_tool_gitleaks::GITLEAKS;
 use searu_tool_gobuster::GOBUSTER;
 use searu_tool_gosec::GOSEC;
@@ -57,6 +58,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &FUXPLOIDER,
     &GAU,
     &GHAURI,
+    &GIT_DUMPER,
     &GITLEAKS,
     &GOBUSTER,
     &GOSEC,
