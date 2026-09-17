@@ -37,6 +37,16 @@ fn is_allowed_local(tool_name: &str) -> bool {
             | "Task"
             | "TodoWrite"
             | "NotebookEdit"
+            | "AskUserQuestion"
+            | "ExitPlanMode"
+            | "EnterPlanMode"
+            | "ScheduleWakeup"
+            | "TaskCreate"
+            | "TaskUpdate"
+            | "TaskList"
+            | "TaskGet"
+            | "TaskOutput"
+            | "TaskStop"
     )
 }
 
@@ -138,6 +148,24 @@ mod tests {
         assert!(is_allowed(decide("Agent", None)));
         assert!(is_allowed(decide("Task", None)));
         assert!(is_allowed(decide("TodoWrite", None)));
+    }
+
+    #[test]
+    fn local_ui_and_task_tools_pass() {
+        for tool in [
+            "AskUserQuestion",
+            "ExitPlanMode",
+            "EnterPlanMode",
+            "ScheduleWakeup",
+            "TaskCreate",
+            "TaskUpdate",
+            "TaskList",
+            "TaskGet",
+            "TaskOutput",
+            "TaskStop",
+        ] {
+            assert!(is_allowed(decide(tool, None)), "{tool} should be allowed");
+        }
     }
 
     #[test]
