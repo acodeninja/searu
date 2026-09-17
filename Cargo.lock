@@ -506,6 +506,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-dotdotpwn"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+]
+
+[[package]]
 name = "searu-tool-feroxbuster"
 version = "0.0.1"
 dependencies = [
@@ -655,6 +662,7 @@ dependencies = [
  "searu-tool-commix",
  "searu-tool-dalfox",
  "searu-tool-dnsx",
+ "searu-tool-dotdotpwn",
  "searu-tool-feroxbuster",
  "searu-tool-ffuf",
  "searu-tool-gau",

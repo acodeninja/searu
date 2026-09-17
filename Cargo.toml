@@ -13,6 +13,7 @@ members = [
     "crates/tools/wrappers/commix",
     "crates/tools/wrappers/dalfox",
     "crates/tools/wrappers/dnsx",
+    "crates/tools/wrappers/dotdotpwn",
     "crates/tools/wrappers/feroxbuster",
     "crates/tools/wrappers/ffuf",
     "crates/tools/wrappers/gau",
