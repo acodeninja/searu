@@ -60,9 +60,12 @@ Scope is a domain rule, not a command. There is no `check-scope` subcommand.
   wired into the `/searu` `SKILL.md` `hooks.PreToolUse` with matcher `*`) forces a target-facing agent
   through `searu`: `domain::scope_hook::decide` is **default-deny** — a `Bash` call must be `searu …`,
   a small allow-set of local tools (`Read`/`Write`/`Edit`/`Grep`/`Glob`/`Agent`/`Task`/`TodoWrite`/
-  `NotebookEdit`) passes, and every network-capable tool (`WebFetch`/`WebSearch`/`Skill`/`mcp__*`) is
-  blocked with exit 2. It does not read the ROE; its sole job is to prevent bypass so scope always
-  flows through `searu run`. Because Claude Code does **not** reliably enforce frontmatter
+  `NotebookEdit`, plus the UI/planning cohort `AskUserQuestion`/`ExitPlanMode`/`EnterPlanMode`/
+  `ScheduleWakeup`/`Task*`) passes, and every network-capable tool (`WebFetch`/`WebSearch`/`Skill`/
+  `mcp__*`) is blocked with exit 2. On the allow path the hook now emits
+  `hookSpecificOutput.permissionDecision:"allow"` so the sanctioned action is auto-approved rather than
+  re-prompted — one approval authority, no per-call prompt fatigue. It does not read the ROE; its sole
+  job is to prevent bypass so scope always flows through `searu run`. Because Claude Code does **not** reliably enforce frontmatter
   tool-restrictions (skill `allowed-tools` or subagent `tools:`), and the hook's own propagation into
   Agent-spawned specialists is undocumented, `searu harden` writes a project-scoped
   `.claude/settings.json` `permissions.deny` (`WebFetch`/`WebSearch`/`mcp__*`) — the one enforced

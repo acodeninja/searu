@@ -147,24 +147,31 @@ Author the skill payload directly (no template generator). Planned slice sequenc
 
 **M5 is complete.**
 
-**M6 — the asset model (planned)**
-Prompted by a known gap: commix runs record 4 identical generic "OS command injection / T1190"
-findings and discard the real command output (OS = Alpine, the user, files, a credential), because
-`Tool::parse` isn't told the technique and `Loot`/`Observation` have no target. The full design —
+**M6 — the asset model (slices 1–4 shipped)**
+Prompted by a known gap: commix runs recorded identical generic "OS command injection / T1190"
+findings and discarded the real command output (OS = Alpine, the user, files, a credential), because
+`Tool::parse` wasn't told the technique and `Loot`/`Observation` had no target. The full design —
 hosts / addresses / networks / services / footholds, deterministic fingerprint-based host identity,
 the `(host, service, network, tool, technique)` attribution tuple, credential subjects, candidate
 hosts, and the network-aware scope gate — is in `product-plan.md` (*Targets: hosts, services &
 networks*, incl. the storage decision: JSONL source of truth + in-memory `petgraph` projection, no
 DB) and `architecture.md`. Sub-slice order:
-1. **Store upsert.** Turn the three `adapter-store` emits into an upsert keyed on record identity
-   (content minus timestamps) with `first_seen`/`last_seen` — deduping every JSONL store. Collapses
-   the 4 duplicate commix findings on its own; later slices depend on it.
-2. Add `host` + `service` (+ `network`) to `Observation`/`Loot`, resolve `--target` → (host, service),
-   stamp records, add a `--host` query filter. Required for correct dedup (identity includes the host;
-   loot keys on `(fingerprint, host)`).
-3. Thread `technique` into `Tool::parse` (all five wrappers); rework commix to label by technique and
-   parse `'<cmd>' execution output: <result>` into observations (`os`/`user`/`software`/`file`).
-4. Credential subject (`principal` + `authenticates`) + the weak-credential-storage finding (CWE-522).
+1. ~~**Store upsert.**~~ **shipped.** The three `adapter-store` emits upsert on record identity
+   (content minus timestamps) with `first_seen`/`last_seen`, deduping every JSONL store; `AuditLog`
+   stays append-only. Attribution travels via a `RecordContext` so wrappers stay untouched.
+2. ~~Add `host`/`service`/`network` attribution + `--host`.~~ **shipped.** New `domain::assets`
+   (opaque fingerprint `HostId`, `Address`/`Service`/`ClaimKind`, `derive_id`/`project`/`possible_clone`);
+   `run` resolves `--target` → `(host, service, network)` and stamps every record; `--host` filter on
+   findings/loot/observations; `searu hosts` derives the graph from the records (no `assets.jsonl`, no
+   `petgraph` yet — that's for traversals in slices 5+).
+3. ~~Thread `technique` into `Tool::parse` (all ~40 wrappers); rework commix.~~ **shipped.** commix
+   labels the injection finding by technique (T1190/T1059 only, so collection runs don't duplicate it)
+   and decomposes `'<cmd>' execution output:` into `user`/`os`/`file` observations (`/etc/passwd` → one
+   `user` per account) plus `identity-claim` observations (machine-id/hostname/ssh-host-key) the host
+   projection reads back to sharpen/merge identity.
+4. ~~Credential subject + CWE-522.~~ **shipped.** `Loot` gains `principal`/`authenticates` (parsed from
+   credential URLs); commix emits a CWE-522 exposed-credential finding per secret, linked by
+   fingerprint (never the plaintext); `searu loot` shows the subject.
 5. Candidate hosts/services + pivot discipline (`searu run` refuses a candidate until the ROE names it).
 6. Foothold discovery — Discovery techniques (`T1016`/`T1018`/`T1046`/`T1049`) on commix + network
    observation parsers + candidate hosts + a `discovery` foothold-recon section.
