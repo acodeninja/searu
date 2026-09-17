@@ -497,6 +497,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-crlfuzz"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+]
+
+[[package]]
 name = "searu-tool-dalfox"
 version = "0.0.1"
 dependencies = [
@@ -668,6 +675,7 @@ dependencies = [
  "searu-tool-checkov",
  "searu-tool-commix",
  "searu-tool-corsy",
+ "searu-tool-crlfuzz",
  "searu-tool-dalfox",
  "searu-tool-dnsx",
  "searu-tool-dotdotpwn",
