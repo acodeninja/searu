@@ -35,6 +35,7 @@ searu-tool-nuclei = { path = "../wrappers/nuclei" }
 searu-tool-osv-scanner = { path = "../wrappers/osv-scanner" }
 searu-tool-semgrep = { path = "../wrappers/semgrep" }
 searu-tool-sqlmap = { path = "../wrappers/sqlmap" }
+searu-tool-sstimap = { path = "../wrappers/sstimap" }
 searu-tool-subfinder = { path = "../wrappers/subfinder" }
 searu-tool-tlsx = { path = "../wrappers/tlsx" }
 searu-tool-trivy = { path = "../wrappers/trivy" }

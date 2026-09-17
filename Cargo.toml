@@ -35,6 +35,7 @@ members = [
     "crates/tools/wrappers/osv-scanner",
     "crates/tools/wrappers/semgrep",
     "crates/tools/wrappers/sqlmap",
+    "crates/tools/wrappers/sstimap",
     "crates/tools/wrappers/subfinder",
     "crates/tools/wrappers/tlsx",
     "crates/tools/wrappers/trivy",

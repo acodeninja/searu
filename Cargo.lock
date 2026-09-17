@@ -698,6 +698,7 @@ dependencies = [
  "searu-tool-osv-scanner",
  "searu-tool-semgrep",
  "searu-tool-sqlmap",
+ "searu-tool-sstimap",
  "searu-tool-subfinder",
  "searu-tool-tlsx",
  "searu-tool-trivy",
@@ -716,6 +717,13 @@ dependencies = [
 
 [[package]]
 name = "searu-tool-sqlmap"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+]
+
+[[package]]
+name = "searu-tool-sstimap"
 version = "0.0.1"
 dependencies = [
  "searu-domain",
