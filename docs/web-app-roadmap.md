@@ -125,6 +125,19 @@ round also stood up a **shared multi-vuln lab — OWASP Juice Shop** (`examples/
 juice-shop.json`) — a hermetic, content-rich crawl target now and the exploitation lab for later
 rounds. **gowitness (19)** is deferred: screenshots need a writable output mount (a new capability).
 
+## Web-exploitation batch
+
+Shipped after the recon batch: six URL-target exploit tools on the sqlmap/commix pattern (`-u <target>`
++ flags after `--`, emitting `Finding`s under `Phase::InitialAccess`), all on the existing tiers —
+**no domain change**. Detection → `T1595`/Active: **corsy (38)** CORS, **crlfuzz (37)** CRLF.
+Exploitation → `T1190` (authoriser required): **dotdotpwn (36)** path traversal, **sstimap (33)** SSTI,
+**fuxploider (40)** file upload; and **hydra (14)** auth brute (`T1110`, cracked credential stored as
+loot). Real end-to-end lab tests where one fits — dotdotpwn→cwe-22, corsy→Juice Shop CORS,
+hydra→Juice Shop login — and smoke tests (dalfox precedent) for the classes without a lab. **Deferred:**
+SSRF (**ssrfmap**) and XXE (**xxeinjector**) take a captured-request *file* and need an OOB listener — a
+new **request-file input mount** plus OOB infrastructure; **gittools/git-dumper (41)** needs a
+**writable output mount** (the gowitness gap). Those form a later capability + OOB round.
+
 ## Coverage
 
 recon 10 · discovery 11 · web vuln/exploit 20 · auth/crack 3 · analysis 4 · supporting 2 = **50**.

@@ -194,6 +194,18 @@ yet built it names the milestone.
     per-class lab per tool. *(Shipped: subfinder, dnsx, gospider, tlsx, gau. Deferred: gowitness, which
     needs a writable output mount for screenshots.)*
 
+14. **Web exploitation lands on the existing model; two input capabilities are the next enabling work.**
+    The URL-target exploit tools fit the sqlmap/commix pattern with **no domain change** — detection at
+    `T1595`/Active, exploitation at `T1190`/`T1110` (authoriser-gated), all `Finding`-emitting under
+    `Phase::InitialAccess`; hydra stores the cracked credential as **loot**, not in the finding.
+    Decision: two named gaps gate the rest of the exploit catalogue and are the next enabling work —
+    (a) a **request-file input mount** (a `reqfile:<path>` token; the `src:` mount is target-keyed and
+    drops arg sub-paths, so it cannot be reused) for tools that take a captured HTTP request
+    (ssrfmap/xxeinjector), which also need **out-of-band interaction** infrastructure (cf. interactsh,
+    M7); and (b) a **writable output mount** for tools that emit files (gittools/git-dumper, gowitness).
+    *(Shipped: dotdotpwn, corsy, crlfuzz, sstimap, fuxploider, hydra. Deferred behind the two gaps:
+    ssrfmap, xxeinjector, gittools.)*
+
 ## The core idea: two catalogues, ATT&CK as the spine
 
 Everything hangs off two layers that both live in `domain` (zero external deps):

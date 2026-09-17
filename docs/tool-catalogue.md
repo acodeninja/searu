@@ -292,7 +292,7 @@ into one row (each still named) to keep the list navigable.
 |-------------------------------------------|--------------------------------|-----------------------|-----------|---------|
 | commix                                    | automated OS command injection | kali,parrot,blackarch | container | searu   |
 | mando.me / smplshllctrlr / hcraft         | web command-injection helpers  | blackarch             | container |         |
-| tplmap / sstimap / tinja                  | SSTI detection & exploitation  | blackarch,parrot      | container |         |
+| tplmap / sstimap / tinja                  | SSTI detection & exploitation  | blackarch,parrot      | container | searu (sstimap) |
 | xxeinjector / xxexploiter / otori / docem | XXE exploitation & payloads    | blackarch             | container |         |
 | xcat / xxxpwn / xxxpwn-smart              | XPath injection exploitation   | blackarch             | container |         |
 
@@ -302,7 +302,7 @@ into one row (each still named) to keep the list navigable.
 |---------------------------------------------------------------|-----------------------------|-----------------------|-----------|---------|
 | fimap / kadimus / lfimap / liffy                              | LFI/RFI scan & exploitation | kali,parrot,blackarch | container |         |
 | lfisuite / lfi-fuzzploit / lfifreak / lfi-autopwn / crabstick | LFI-to-shell variants       | blackarch             | container |         |
-| dotdotpwn / fdsploit / dsfs / morxtraversal                   | directory-traversal fuzzers | kali,blackarch        | container |         |
+| dotdotpwn / fdsploit / dsfs / morxtraversal                   | directory-traversal fuzzers | kali,blackarch        | container | searu (dotdotpwn) |
 
 ### 4.6 SSRF / deserialization / CORS / CRLF / smuggling / cache
 
@@ -312,8 +312,8 @@ into one row (each still named) to keep the list navigable.
 | gopherus                                                | gopher payloads for SSRF→RCE                 | blackarch,parrot    | container |         |
 | ssrf-sheriff / interactsh-client                        | OOB/SSRF callback servers                    | blackarch,ecosystem | session   |         |
 | ysoserial / phpggc / jdeserialize / serializationdumper | (de)serialization gadget payloads            | blackarch           | container |         |
-| corsy / corscanner                                      | CORS misconfiguration scanners               | blackarch           | container |         |
-| crlfuzz / injectus / recollapse                         | CRLF, open-redirect & validation-bypass fuzz | blackarch           | container |         |
+| corsy / corscanner                                      | CORS misconfiguration scanners               | blackarch           | container | searu (corsy) |
+| crlfuzz / injectus / recollapse                         | CRLF, open-redirect & validation-bypass fuzz | blackarch           | container | searu (crlfuzz) |
 | smuggler / smuggler-py / http2smugl / h2csmuggler       | HTTP request smuggling / desync              | blackarch           | container |         |
 | fockcache                                               | web cache poisoning via headers              | blackarch           | container |         |
 
@@ -351,7 +351,7 @@ into one row (each still named) to keep the list navigable.
 
 | tool                                                                       | function                                 | source         | fit           | wrapped |
 |----------------------------------------------------------------------------|------------------------------------------|----------------|---------------|---------|
-| fuxploider / uppwn / filegps                                               | file-upload flaw detection & shell guess | blackarch      | container     |         |
+| fuxploider / uppwn / filegps                                               | file-upload flaw detection & shell guess | blackarch      | container     | searu (fuxploider) |
 | log4j-scan / log4j-bypass                                                  | Log4Shell scanners                       | blackarch      | container     |         |
 | xsrfprobe / csrftester                                                     | CSRF audit & exploitation                | blackarch      | container/gui |         |
 | ppfuzz / ppmap                                                             | prototype-pollution scan/exploit         | blackarch      | container     |         |
@@ -454,7 +454,7 @@ into one row (each still named) to keep the list navigable.
 
 | tool                                                                                    | function                                 | source                | fit       | wrapped |
 |-----------------------------------------------------------------------------------------|------------------------------------------|-----------------------|-----------|---------|
-| hydra (thc-hydra)                                                                       | online brute forcer, 50+ protocols       | kali,parrot,blackarch | container | old     |
+| hydra (thc-hydra)                                                                       | online brute forcer, 50+ protocols       | kali,parrot,blackarch | container | searu   |
 | medusa / ncrack / patator / crowbar                                                     | parallel modular login brute forcers     | kali,parrot,blackarch | container |         |
 | brutespray                                                                              | brute from nmap output via medusa/ncrack | kali,blackarch        | container |         |
 | SSH brute: against, beleth, brutessh, sshatter, sshtrix, shreder, hostbox-ssh, sshprank | SSH login crackers                       | blackarch             | container |         |
