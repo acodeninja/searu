@@ -11,6 +11,7 @@ searu-tool-bandit = { path = "../wrappers/bandit" }
 searu-tool-brakeman = { path = "../wrappers/brakeman" }
 searu-tool-checkov = { path = "../wrappers/checkov" }
 searu-tool-commix = { path = "../wrappers/commix" }
+searu-tool-corsy = { path = "../wrappers/corsy" }
 searu-tool-dalfox = { path = "../wrappers/dalfox" }
 searu-tool-dnsx = { path = "../wrappers/dnsx" }
 searu-tool-dotdotpwn = { path = "../wrappers/dotdotpwn" }

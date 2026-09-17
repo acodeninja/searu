@@ -11,6 +11,7 @@ members = [
     "crates/tools/wrappers/brakeman",
     "crates/tools/wrappers/checkov",
     "crates/tools/wrappers/commix",
+    "crates/tools/wrappers/corsy",
     "crates/tools/wrappers/dalfox",
     "crates/tools/wrappers/dnsx",
     "crates/tools/wrappers/dotdotpwn",

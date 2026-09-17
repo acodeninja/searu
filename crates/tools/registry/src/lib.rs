@@ -7,6 +7,7 @@ use searu_tool_bandit::BANDIT;
 use searu_tool_brakeman::BRAKEMAN;
 use searu_tool_checkov::CHECKOV;
 use searu_tool_commix::COMMIX;
+use searu_tool_corsy::CORSY;
 use searu_tool_dalfox::DALFOX;
 use searu_tool_dnsx::DNSX;
 use searu_tool_dotdotpwn::DOTDOTPWN;
@@ -42,6 +43,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &BRAKEMAN,
     &CHECKOV,
     &COMMIX,
+    &CORSY,
     &DALFOX,
     &DNSX,
     &DOTDOTPWN,
