@@ -1,6 +1,10 @@
 //! Application use-cases, generic over the domain ports. searu gates and runs a tool, lets the tool
 //! normalise its own output into findings/loot, stores them, and answers queries over that state.
 
+use searu_domain::assets::{
+    parse_service, project, resolve_target, Address, Attribution, Host, HostStatus, ResolvedTarget,
+    Service,
+};
 use searu_domain::egress::merge_deny;
 use searu_domain::findings::{
     Observation, RecordContext, StoredFinding, StoredLoot, StoredObservation,
@@ -12,7 +16,7 @@ use searu_domain::ports::{
     SettingsError, SourceError, SourceProvider, StoreError, ToolInvocation, ToolOutcome,
     ToolRunner, WordlistError, WordlistProvider,
 };
-use searu_domain::scope::{output_target, source_target, OUTPUT_MOUNT, SOURCE_MOUNT};
+use searu_domain::scope::{output_target, source_target, target_host, OUTPUT_MOUNT, SOURCE_MOUNT};
 use searu_domain::tools::ToolRegistry;
 
 const SECLISTS_TOKEN: &str = "seclists:";
@@ -137,12 +141,19 @@ where
         self.outputs
             .save_raw(&output, &outcome.stdout, &outcome.stderr)
             .map_err(RunError::Output)?;
+        let resolved = resolve_target(target);
         let context = RecordContext {
             tool: tool_name.to_string(),
             technique: technique.to_string(),
-            host: None,
-            network: "internet".to_string(),
-            service: None,
+            host: resolved.as_ref().map(ResolvedTarget::host_id),
+            network: resolved
+                .as_ref()
+                .map(|resolved| resolved.address.network.clone())
+                .unwrap_or_else(|| "internet".to_string()),
+            service: resolved
+                .as_ref()
+                .and_then(|resolved| resolved.service.as_ref())
+                .map(Service::label),
         };
         let parsed = tool.parse(target, &outcome);
         for loot in &parsed.loot {
@@ -253,6 +264,7 @@ impl<FS: FindingsStore> QueryFindings<FS> {
         technique: Option<&str>,
         severity: Option<&str>,
         tool: Option<&str>,
+        host: Option<&str>,
     ) -> Result<Vec<StoredFinding>, StoreError> {
         let mut items = self.findings.list()?;
         if let Some(technique) = technique {
@@ -264,6 +276,9 @@ impl<FS: FindingsStore> QueryFindings<FS> {
         if let Some(tool) = tool {
             items.retain(|f| f.finding.tool == tool);
         }
+        if let Some(host) = host {
+            items.retain(|f| f.host.as_deref() == Some(host));
+        }
         Ok(items)
     }
 }
@@ -273,10 +288,17 @@ pub struct QueryLoot<LS> {
 }
 
 impl<LS: LootStore> QueryLoot<LS> {
-    pub fn filtered(&self, category: Option<&str>) -> Result<Vec<StoredLoot>, StoreError> {
+    pub fn filtered(
+        &self,
+        category: Option<&str>,
+        host: Option<&str>,
+    ) -> Result<Vec<StoredLoot>, StoreError> {
         let mut items = self.loot.list()?;
         if let Some(category) = category {
             items.retain(|l| l.loot.category == category);
+        }
+        if let Some(host) = host {
+            items.retain(|l| l.host.as_deref() == Some(host));
         }
         Ok(items)
     }
@@ -287,12 +309,78 @@ pub struct QueryObservations<OS> {
 }
 
 impl<OS: ObservationStore> QueryObservations<OS> {
-    pub fn filtered(&self, kind: Option<&str>) -> Result<Vec<StoredObservation>, StoreError> {
+    pub fn filtered(
+        &self,
+        kind: Option<&str>,
+        host: Option<&str>,
+    ) -> Result<Vec<StoredObservation>, StoreError> {
         let mut items = self.observations.list()?;
         if let Some(kind) = kind {
             items.retain(|o| o.observation.kind == kind);
         }
+        if let Some(host) = host {
+            items.retain(|o| o.host.as_deref() == Some(host));
+        }
         Ok(items)
+    }
+}
+
+/// The derived host graph: fold every stored record's attribution into hosts. Findings carry a target
+/// (an address); observations and loot carry the host id and service they concern. No separate store —
+/// the JSONL records are the source of truth and the graph is projected per query.
+pub struct QueryHosts<FS, LS, OS> {
+    pub findings: FS,
+    pub loot: LS,
+    pub observations: OS,
+}
+
+impl<FS: FindingsStore, LS: LootStore, OS: ObservationStore> QueryHosts<FS, LS, OS> {
+    pub fn list(&self) -> Result<Vec<Host>, StoreError> {
+        let mut attributions = Vec::new();
+        for finding in self.findings.list()? {
+            let Some(host) = finding.host.clone() else {
+                continue;
+            };
+            let value = target_host(&finding.finding.target);
+            let address = (!value.is_empty()).then(|| Address {
+                network: finding.network.clone(),
+                value: value.clone(),
+            });
+            let claims = address
+                .as_ref()
+                .map(|address| searu_domain::assets::value_claims(&address.value))
+                .unwrap_or_default();
+            attributions.push(Attribution {
+                host,
+                address,
+                service: finding.service.as_deref().and_then(parse_service),
+                claims,
+                status: HostStatus::InScope,
+            });
+        }
+        for observation in self.observations.list()? {
+            if let Some(host) = observation.host.clone() {
+                attributions.push(Attribution {
+                    host,
+                    address: None,
+                    service: observation.service.as_deref().and_then(parse_service),
+                    claims: Vec::new(),
+                    status: HostStatus::InScope,
+                });
+            }
+        }
+        for loot in self.loot.list()? {
+            if let Some(host) = loot.host.clone() {
+                attributions.push(Attribution {
+                    host,
+                    address: None,
+                    service: loot.service.as_deref().and_then(parse_service),
+                    claims: Vec::new(),
+                    status: HostStatus::InScope,
+                });
+            }
+        }
+        Ok(project(attributions))
     }
 }
 
@@ -548,89 +636,71 @@ mod tests {
 
     #[derive(Default)]
     struct MemFindings {
-        items: RefCell<Vec<Finding>>,
+        items: RefCell<Vec<StoredFinding>>,
     }
     impl FindingsStore for MemFindings {
-        fn emit(&self, finding: &Finding, _context: &RecordContext) -> Result<(), StoreError> {
-            self.items.borrow_mut().push(finding.clone());
+        fn emit(&self, finding: &Finding, context: &RecordContext) -> Result<(), StoreError> {
+            self.items.borrow_mut().push(StoredFinding {
+                finding: finding.clone(),
+                host: context.host.clone(),
+                network: context.network.clone(),
+                service: context.service.clone(),
+                first_seen: 0,
+                last_seen: 0,
+            });
             Ok(())
         }
         fn list(&self) -> Result<Vec<StoredFinding>, StoreError> {
-            Ok(self
-                .items
-                .borrow()
-                .iter()
-                .cloned()
-                .map(|finding| StoredFinding {
-                    finding,
-                    host: None,
-                    network: "internet".to_string(),
-                    service: None,
-                    first_seen: 0,
-                    last_seen: 0,
-                })
-                .collect())
+            Ok(self.items.borrow().clone())
         }
     }
 
     #[derive(Default)]
     struct MemLoot {
-        items: RefCell<Vec<Loot>>,
+        items: RefCell<Vec<StoredLoot>>,
     }
     impl LootStore for MemLoot {
-        fn emit(&self, loot: &Loot, _context: &RecordContext) -> Result<(), StoreError> {
-            self.items.borrow_mut().push(loot.clone());
+        fn emit(&self, loot: &Loot, context: &RecordContext) -> Result<(), StoreError> {
+            self.items.borrow_mut().push(StoredLoot {
+                loot: loot.clone(),
+                tool: context.tool.clone(),
+                host: context.host.clone(),
+                network: context.network.clone(),
+                service: context.service.clone(),
+                first_seen: 0,
+                last_seen: 0,
+            });
             Ok(())
         }
         fn list(&self) -> Result<Vec<StoredLoot>, StoreError> {
-            Ok(self
-                .items
-                .borrow()
-                .iter()
-                .cloned()
-                .map(|loot| StoredLoot {
-                    loot,
-                    tool: String::new(),
-                    host: None,
-                    network: "internet".to_string(),
-                    service: None,
-                    first_seen: 0,
-                    last_seen: 0,
-                })
-                .collect())
+            Ok(self.items.borrow().clone())
         }
     }
 
     #[derive(Default)]
     struct MemObservations {
-        items: RefCell<Vec<Observation>>,
+        items: RefCell<Vec<StoredObservation>>,
     }
     impl ObservationStore for MemObservations {
         fn emit(
             &self,
             observation: &Observation,
-            _context: &RecordContext,
+            context: &RecordContext,
         ) -> Result<(), StoreError> {
-            self.items.borrow_mut().push(observation.clone());
+            self.items.borrow_mut().push(StoredObservation {
+                observation: observation.clone(),
+                tool: context.tool.clone(),
+                technique: context.technique.clone(),
+                host: context.host.clone(),
+                network: context.network.clone(),
+                service: context.service.clone(),
+                first_seen: 0,
+                last_seen: 0,
+            });
             Ok(())
         }
         fn list(&self) -> Result<Vec<StoredObservation>, StoreError> {
-            Ok(self
-                .items
-                .borrow()
-                .iter()
-                .cloned()
-                .map(|observation| StoredObservation {
-                    observation,
-                    tool: String::new(),
-                    technique: String::new(),
-                    host: None,
-                    network: "internet".to_string(),
-                    service: None,
-                    first_seen: 0,
-                    last_seen: 0,
-                })
-                .collect())
+            Ok(self.items.borrow().clone())
         }
     }
 
@@ -912,9 +982,9 @@ mod tests {
         use_case.run("outputtool", "T1190", LOCAL, &[]).unwrap();
 
         let observations = use_case.observations.items.borrow();
-        assert!(observations.iter().any(|o| o.kind == "output"
-            && o.value == "pentest/outputs/outputtool/0001"
-            && o.detail.as_deref() == Some("outputtool: 1 file(s)")));
+        assert!(observations.iter().any(|o| o.observation.kind == "output"
+            && o.observation.value == "pentest/outputs/outputtool/0001"
+            && o.observation.detail.as_deref() == Some("outputtool: 1 file(s)")));
     }
 
     #[test]
@@ -1102,9 +1172,84 @@ mod tests {
             .unwrap();
 
         let query = QueryFindings { findings: store };
-        assert_eq!(query.filtered(Some("T1190"), None, None).unwrap().len(), 1);
-        assert_eq!(query.filtered(None, Some("info"), None).unwrap().len(), 1);
-        assert_eq!(query.filtered(None, None, None).unwrap().len(), 2);
+        assert_eq!(
+            query
+                .filtered(Some("T1190"), None, None, None)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            query
+                .filtered(None, Some("info"), None, None)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(query.filtered(None, None, None, None).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn an_authorised_run_binds_records_to_the_resolved_host() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising),
+            registry: FakeRegistry,
+            runner: SpyRunner,
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
+            observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
+            source: MemSource,
+            outputs: MemOutputs::default(),
+        };
+        use_case.run("faketool", "T1190", LOCAL, &[]).unwrap();
+
+        let stored = use_case.findings.items.borrow();
+        assert_eq!(
+            stored[0].host.as_deref(),
+            Some(searu_domain::assets::host_id_for("localhost").as_str())
+        );
+        assert_eq!(stored[0].network, "internet");
+        assert_eq!(stored[0].service.as_deref(), Some("tcp/5000"));
+    }
+
+    #[test]
+    fn query_hosts_projects_a_host_from_the_stored_records() {
+        let findings = MemFindings::default();
+        let context = RecordContext {
+            tool: "commix".to_string(),
+            technique: "T1190".to_string(),
+            host: Some(searu_domain::assets::host_id_for("192.168.56.1")),
+            network: "internet".to_string(),
+            service: Some("tcp/5000".to_string()),
+        };
+        findings
+            .emit(
+                &Finding {
+                    tool: "commix".to_string(),
+                    target: "http://192.168.56.1:5000/cmd".to_string(),
+                    title: "OS command injection".to_string(),
+                    severity: Severity::Critical,
+                    status: Status::Confirmed,
+                    attack_technique: vec!["T1190".to_string()],
+                    cwe: vec![78],
+                    evidence: String::new(),
+                    loot_fingerprint: None,
+                },
+                &context,
+            )
+            .unwrap();
+
+        let query = QueryHosts {
+            findings,
+            loot: MemLoot::default(),
+            observations: MemObservations::default(),
+        };
+        let hosts = query.list().unwrap();
+        assert_eq!(hosts.len(), 1);
+        assert_eq!(hosts[0].addresses[0].value, "192.168.56.1");
+        assert!(hosts[0].services.iter().any(|service| service.port == 5000));
     }
 
     fn bogus_technique() -> Roe {

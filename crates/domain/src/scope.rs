@@ -135,7 +135,10 @@ fn port_allowed(target_port: Option<u16>, entry_port: Option<u16>) -> bool {
     }
 }
 
-fn target_host(target: &str) -> String {
+/// The host portion of a target — the authority of a URL, the host of a `host:port`, or a bare host —
+/// lower-cased. Shared with the asset model so scope matching and host identity agree on what "the host"
+/// of a target is.
+pub fn target_host(target: &str) -> String {
     let Some(index) = target.find("://") else {
         if let Ok(ip) = target.parse::<IpAddr>() {
             return ip.to_string();
@@ -154,7 +157,8 @@ fn target_host(target: &str) -> String {
     host.to_ascii_lowercase()
 }
 
-fn target_port(target: &str) -> Option<u16> {
+/// The port of a target: explicit if given, else the scheme default for a URL, else none.
+pub fn target_port(target: &str) -> Option<u16> {
     if let Some(index) = target.find("://") {
         let scheme = &target[..index];
         let authority = target[index + 3..]

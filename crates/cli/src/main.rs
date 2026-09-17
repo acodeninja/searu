@@ -94,12 +94,14 @@ fn cli() -> Command {
                 .about("Query recorded findings")
                 .arg(Arg::new("technique").long("technique").value_name("Txxxx"))
                 .arg(Arg::new("severity").long("severity").value_name("SEVERITY"))
-                .arg(Arg::new("tool").long("tool").value_name("TOOL")),
+                .arg(Arg::new("tool").long("tool").value_name("TOOL"))
+                .arg(host_filter_arg()),
         )
         .subcommand(
             Command::new("loot")
                 .about("Query recorded loot")
                 .arg(Arg::new("category").long("category").value_name("CATEGORY"))
+                .arg(host_filter_arg())
                 .arg(
                     Arg::new("reveal")
                         .long("reveal")
@@ -110,8 +112,10 @@ fn cli() -> Command {
         .subcommand(
             Command::new("observations")
                 .about("Query recorded recon observations")
-                .arg(Arg::new("kind").long("kind").value_name("KIND")),
+                .arg(Arg::new("kind").long("kind").value_name("KIND"))
+                .arg(host_filter_arg()),
         )
+        .subcommand(Command::new("hosts").about("List the hosts discovered across the engagement"))
         .subcommand(
             Command::new("tool")
                 .about("Inspect the available tools")
@@ -143,6 +147,7 @@ fn main() {
         Some(("findings", matches)) => std::process::exit(run_findings(matches)),
         Some(("loot", matches)) => std::process::exit(run_loot(matches)),
         Some(("observations", matches)) => std::process::exit(run_observations(matches)),
+        Some(("hosts", _)) => std::process::exit(run_hosts()),
         Some(("tool", matches)) => std::process::exit(run_tool(matches)),
         Some((name, _)) => {
             eprintln!("searu: '{name}' is not implemented yet");
@@ -454,6 +459,19 @@ fn run_harden(matches: &ArgMatches) -> i32 {
     }
 }
 
+fn host_filter_arg() -> Arg {
+    Arg::new("host")
+        .long("host")
+        .value_name("ADDRESS")
+        .help("Only records bound to this host (by address or hostname)")
+}
+
+fn host_id_filter(matches: &ArgMatches) -> Option<String> {
+    matches
+        .get_one::<String>("host")
+        .map(|value| searu_domain::assets::host_id_for(value))
+}
+
 fn run_findings(matches: &ArgMatches) -> i32 {
     use searu_adapter_store::JsonlFindingsStore;
     use searu_app::QueryFindings;
@@ -461,10 +479,12 @@ fn run_findings(matches: &ArgMatches) -> i32 {
     let query = QueryFindings {
         findings: JsonlFindingsStore::new(ENGAGEMENT_DIR),
     };
+    let host = host_id_filter(matches);
     let result = query.filtered(
         matches.get_one::<String>("technique").map(String::as_str),
         matches.get_one::<String>("severity").map(String::as_str),
         matches.get_one::<String>("tool").map(String::as_str),
+        host.as_deref(),
     );
     match result {
         Ok(findings) => {
@@ -496,7 +516,11 @@ fn run_loot(matches: &ArgMatches) -> i32 {
         loot: JsonlLootStore::new(ENGAGEMENT_DIR),
     };
     let reveal = matches.get_flag("reveal");
-    match query.filtered(matches.get_one::<String>("category").map(String::as_str)) {
+    let host = host_id_filter(matches);
+    match query.filtered(
+        matches.get_one::<String>("category").map(String::as_str),
+        host.as_deref(),
+    ) {
         Ok(loot) => {
             for stored in loot {
                 let item = &stored.loot;
@@ -522,7 +546,11 @@ fn run_observations(matches: &ArgMatches) -> i32 {
     let query = QueryObservations {
         observations: JsonlObservationStore::new(ENGAGEMENT_DIR),
     };
-    match query.filtered(matches.get_one::<String>("kind").map(String::as_str)) {
+    let host = host_id_filter(matches);
+    match query.filtered(
+        matches.get_one::<String>("kind").map(String::as_str),
+        host.as_deref(),
+    ) {
         Ok(observations) => {
             for stored in observations {
                 let observation = &stored.observation;
@@ -532,6 +560,51 @@ fn run_observations(matches: &ArgMatches) -> i32 {
                     }
                     None => println!("{}\t{}", observation.kind, observation.value),
                 }
+            }
+            0
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            1
+        }
+    }
+}
+
+fn run_hosts() -> i32 {
+    use searu_adapter_store::{JsonlFindingsStore, JsonlLootStore, JsonlObservationStore};
+    use searu_app::QueryHosts;
+
+    let query = QueryHosts {
+        findings: JsonlFindingsStore::new(ENGAGEMENT_DIR),
+        loot: JsonlLootStore::new(ENGAGEMENT_DIR),
+        observations: JsonlObservationStore::new(ENGAGEMENT_DIR),
+    };
+    match query.list() {
+        Ok(hosts) => {
+            for host in hosts {
+                let status = match host.status {
+                    searu_domain::assets::HostStatus::InScope => "in-scope",
+                    searu_domain::assets::HostStatus::Candidate => "candidate",
+                };
+                let addresses = host
+                    .addresses
+                    .iter()
+                    .map(|address| format!("{}@{}", address.value, address.network))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let services = host
+                    .services
+                    .iter()
+                    .map(|service| service.label())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let claims = host
+                    .claims
+                    .iter()
+                    .map(|claim| format!("{}:{}", claim.kind.as_str(), claim.value))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                println!("{}\t{status}\t{addresses}\t{services}\t{claims}", host.id);
             }
             0
         }
