@@ -53,7 +53,7 @@ impl Tool for Ffuf {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let hits: Vec<&str> = outcome
             .stdout
             .lines()
@@ -143,7 +143,11 @@ mod tests {
             stdout: "../../../../../../etc/passwd\n%2e%2e/%2e%2e/etc/passwd\n".to_string(),
             stderr: String::new(),
         };
-        let parsed = FFUF.parse("http://localhost:5000/download?file=FUZZ", &outcome);
+        let parsed = FFUF.parse(
+            "http://localhost:5000/download?file=FUZZ",
+            "T1046",
+            &outcome,
+        );
         assert_eq!(parsed.findings.len(), 1);
         assert_eq!(parsed.findings[0].cwe, vec![22]);
         assert_eq!(parsed.findings[0].attack_technique, vec!["T1190"]);
@@ -157,7 +161,7 @@ mod tests {
             stdout: "admin\nlogin\n".to_string(),
             stderr: String::new(),
         };
-        let parsed = FFUF.parse("http://localhost:5000/FUZZ", &outcome);
+        let parsed = FFUF.parse("http://localhost:5000/FUZZ", "T1046", &outcome);
         assert!(parsed.findings.is_empty());
         assert!(parsed
             .observations
@@ -172,7 +176,7 @@ mod tests {
             stdout: String::new(),
             stderr: String::new(),
         };
-        let parsed = FFUF.parse("http://localhost:5000/FUZZ", &outcome);
+        let parsed = FFUF.parse("http://localhost:5000/FUZZ", "T1046", &outcome);
         assert!(parsed.findings.is_empty());
         assert!(parsed.observations.is_empty());
     }

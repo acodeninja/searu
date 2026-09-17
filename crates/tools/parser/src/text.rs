@@ -45,6 +45,39 @@ fn decode_entity(entity: &str) -> Option<char> {
     }
 }
 
+/// Strip ANSI escape sequences (the colour codes commix and other CLIs emit) so the plaintext can be
+/// parsed. Drops each `ESC … <letter>` control sequence, keeping everything else.
+pub fn strip_ansi(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            for control in chars.by_ref() {
+                if control.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Extract each executed-command result from commix output, as `(command, output)` pairs. commix prints
+/// `'<cmd>' execution output: <result>` per executed command (its result flattened onto one line).
+pub fn commix_command_outputs(text: &str) -> Vec<(String, String)> {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let re =
+        RE.get_or_init(|| Regex::new(r"'([^']*)' execution output:\s?(.*)").expect("valid regex"));
+    text.lines()
+        .filter_map(|line| {
+            re.captures(line)
+                .map(|caps| (caps[1].to_string(), caps[2].trim().to_string()))
+        })
+        .collect()
+}
+
 /// Scan text for secrets, returning `(category, value)` pairs. Matches env-style assignments whose
 /// name looks sensitive (e.g. `DATABASE_URL`, `*_PASSWORD`, `*_TOKEN`, `*_SECRET`, `*_KEY`) and
 /// database/broker connection-string URLs. Deliberately conservative; extend as tools surface more.
@@ -130,6 +163,26 @@ mod tests {
         let secrets = secrets(text);
         assert!(secrets.contains(&("database-url".to_string(), "testing".to_string())));
         assert!(!secrets.iter().any(|(c, _)| c == "npm-package-name"));
+    }
+
+    #[test]
+    fn strips_ansi_colour_codes() {
+        assert_eq!(
+            strip_ansi("\u{1b}[1m\u{1b}[31mred\u{1b}[0m text"),
+            "red text"
+        );
+        assert_eq!(strip_ansi("plain"), "plain");
+    }
+
+    #[test]
+    fn extracts_commix_command_outputs() {
+        let text = "[11:10:31] [info] Executing user-supplied command 'cat /etc/passwd'.\n\
+             [11:10:46] [info] 'cat /etc/passwd' execution output: root:x:0:0:root:/root:/bin/sh application:x:100:101::/app:/sbin/nologin";
+        let outputs = commix_command_outputs(text);
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].0, "cat /etc/passwd");
+        assert!(outputs[0].1.contains("root:x:0:0"));
+        assert!(outputs[0].1.contains("application:x:100:101"));
     }
 
     #[test]

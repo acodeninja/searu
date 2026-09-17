@@ -49,7 +49,7 @@ impl Tool for Dotdotpwn {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut findings = Vec::new();
         let mut seen = HashSet::new();
         for line in outcome.stdout.lines() {
@@ -112,7 +112,7 @@ mod tests {
                 .to_string(),
             stderr: String::new(),
         };
-        let parsed = DOTDOTPWN.parse("http://h/download?file=TRAVERSAL", &outcome);
+        let parsed = DOTDOTPWN.parse("http://h/download?file=TRAVERSAL", "T1046", &outcome);
         assert_eq!(parsed.findings.len(), 1);
         assert_eq!(parsed.findings[0].title, "Path traversal");
         assert_eq!(parsed.findings[0].cwe, vec![22]);
@@ -130,7 +130,7 @@ mod tests {
             stdout: "[+] Total Traversals found: 0\n".to_string(),
             stderr: String::new(),
         };
-        let parsed = DOTDOTPWN.parse("http://h/download?file=TRAVERSAL", &outcome);
+        let parsed = DOTDOTPWN.parse("http://h/download?file=TRAVERSAL", "T1046", &outcome);
         assert!(parsed.findings.is_empty());
     }
 }

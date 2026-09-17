@@ -2,8 +2,8 @@
 //! normalise its own output into findings/loot, stores them, and answers queries over that state.
 
 use searu_domain::assets::{
-    parse_service, project, resolve_target, Address, Attribution, Host, HostStatus, ResolvedTarget,
-    Service,
+    parse_claim, parse_service, project, resolve_target, Address, Attribution, Host, HostStatus,
+    ResolvedTarget, Service, IDENTITY_CLAIM_KIND,
 };
 use searu_domain::egress::merge_deny;
 use searu_domain::findings::{
@@ -155,7 +155,7 @@ where
                 .and_then(|resolved| resolved.service.as_ref())
                 .map(Service::label),
         };
-        let parsed = tool.parse(target, &outcome);
+        let parsed = tool.parse(target, technique, &outcome);
         for loot in &parsed.loot {
             self.loot.emit(loot, &context).map_err(RunError::Store)?;
         }
@@ -360,11 +360,18 @@ impl<FS: FindingsStore, LS: LootStore, OS: ObservationStore> QueryHosts<FS, LS, 
         }
         for observation in self.observations.list()? {
             if let Some(host) = observation.host.clone() {
+                let claims = if observation.observation.kind == IDENTITY_CLAIM_KIND {
+                    parse_claim(&observation.observation.value)
+                        .into_iter()
+                        .collect()
+                } else {
+                    Vec::new()
+                };
                 attributions.push(Attribution {
                     host,
                     address: None,
                     service: observation.service.as_deref().and_then(parse_service),
-                    claims: Vec::new(),
+                    claims,
                     status: HostStatus::InScope,
                 });
             }
@@ -468,7 +475,7 @@ mod tests {
             argv.extend(args.iter().cloned());
             argv
         }
-        fn parse(&self, target: &str, _outcome: &ToolOutcome) -> ParsedOutput {
+        fn parse(&self, target: &str, _technique: &str, _outcome: &ToolOutcome) -> ParsedOutput {
             ParsedOutput {
                 findings: vec![Finding {
                     tool: "faketool".to_string(),
@@ -515,7 +522,7 @@ mod tests {
             argv.extend(args.iter().cloned());
             argv
         }
-        fn parse(&self, _target: &str, _outcome: &ToolOutcome) -> ParsedOutput {
+        fn parse(&self, _target: &str, _technique: &str, _outcome: &ToolOutcome) -> ParsedOutput {
             ParsedOutput::default()
         }
     }
@@ -540,7 +547,7 @@ mod tests {
             argv.extend(args.iter().cloned());
             argv
         }
-        fn parse(&self, _target: &str, _outcome: &ToolOutcome) -> ParsedOutput {
+        fn parse(&self, _target: &str, _technique: &str, _outcome: &ToolOutcome) -> ParsedOutput {
             ParsedOutput::default()
         }
     }

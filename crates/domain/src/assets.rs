@@ -58,6 +58,26 @@ pub struct IdentityClaim {
     pub value: String,
 }
 
+/// The observation kind a tool records an identity claim under, so the host projection can read claims
+/// back out of the record store — `value` is `<claim-kind>:<claim-value>`.
+pub const IDENTITY_CLAIM_KIND: &str = "identity-claim";
+
+impl IdentityClaim {
+    /// The `<claim-kind>:<claim-value>` form recorded as an observation value.
+    pub fn label(&self) -> String {
+        format!("{}:{}", self.kind.as_str(), self.value)
+    }
+}
+
+/// Parse a `<claim-kind>:<claim-value>` label back into a claim (the inverse of [`IdentityClaim::label`]).
+pub fn parse_claim(label: &str) -> Option<IdentityClaim> {
+    let (kind, value) = label.split_once(':')?;
+    Some(IdentityClaim {
+        kind: ClaimKind::parse(kind)?,
+        value: value.to_string(),
+    })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Address {
     pub network: String,
@@ -293,6 +313,14 @@ mod tests {
             kind,
             value: value.to_string(),
         }
+    }
+
+    #[test]
+    fn a_claim_round_trips_through_its_label() {
+        let claim = claim(ClaimKind::MachineId, "abc123");
+        assert_eq!(claim.label(), "machine-id:abc123");
+        assert_eq!(parse_claim(&claim.label()), Some(claim));
+        assert_eq!(parse_claim("not-a-kind:x"), None);
     }
 
     #[test]

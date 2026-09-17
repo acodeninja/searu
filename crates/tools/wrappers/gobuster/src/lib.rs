@@ -48,7 +48,7 @@ impl Tool for Gobuster {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let base = target.trim_end_matches('/');
         let mut observations = Vec::new();
         for line in outcome.stdout.lines() {
@@ -124,7 +124,7 @@ mod tests {
     #[test]
     fn parses_result_lines_stripping_ansi_and_prefixing_the_target() {
         let stdout = "\u{1b}[2K/download             (Status: 500) [Size: 938]\n/login            (Status: 200) [Size: 1]\n";
-        let parsed = Gobuster.parse("http://h", &outcome(stdout));
+        let parsed = Gobuster.parse("http://h", "T1046", &outcome(stdout));
         assert_eq!(parsed.observations.len(), 2);
         assert!(parsed.observations.iter().any(|o| o.kind == "endpoint"
             && o.value == "http://h/download"
@@ -138,7 +138,11 @@ mod tests {
     #[test]
     fn non_result_lines_are_ignored() {
         assert!(Gobuster
-            .parse("http://h", &outcome("Starting gobuster\n===============\n"))
+            .parse(
+                "http://h",
+                "T1046",
+                &outcome("Starting gobuster\n===============\n")
+            )
             .observations
             .is_empty());
     }

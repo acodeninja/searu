@@ -71,8 +71,9 @@ pub trait Tool: Sync {
     fn uses(&self) -> &'static [PhaseAdvice];
     /// The tool arguments (not `docker`) for a run against `target` with the caller's extra `args`.
     fn invocation(&self, target: &str, args: &[String]) -> Vec<String>;
-    /// Normalise the tool's output into findings/loot for a run against `target`.
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput;
+    /// Normalise the tool's output into findings/loot for a run against `target` under `technique` — the
+    /// ATT&CK technique the run performed, so a tool can label or branch on what the run was for.
+    fn parse(&self, target: &str, technique: &str, outcome: &ToolOutcome) -> ParsedOutput;
 }
 
 pub trait ToolRegistry {

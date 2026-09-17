@@ -50,7 +50,7 @@ impl Tool for Tlsx {
         argv
     }
 
-    fn parse(&self, _target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, _target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut observations = Vec::new();
         let mut seen = HashSet::new();
         for line in outcome.stdout.lines() {
@@ -106,7 +106,7 @@ mod tests {
                 .to_string(),
             stderr: String::new(),
         };
-        let parsed = TLSX.parse("one.one.one.one:443", &outcome);
+        let parsed = TLSX.parse("one.one.one.one:443", "T1046", &outcome);
         assert_eq!(parsed.observations.len(), 1);
         assert_eq!(parsed.observations[0].kind, "tls");
         assert_eq!(parsed.observations[0].value, "cloudflare-dns.com");
@@ -123,7 +123,7 @@ mod tests {
             stdout: "{\"host\":\"h\",\"port\":\"443\",\"probe_status\":false}\n".to_string(),
             stderr: String::new(),
         };
-        let parsed = TLSX.parse("h:443", &outcome);
+        let parsed = TLSX.parse("h:443", "T1046", &outcome);
         assert!(parsed.observations.is_empty());
     }
 }

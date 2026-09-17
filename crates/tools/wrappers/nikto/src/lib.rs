@@ -47,7 +47,7 @@ impl Tool for Nikto {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut findings = Vec::new();
         let mut seen = HashSet::new();
         for line in outcome.stdout.lines() {
@@ -108,7 +108,7 @@ mod tests {
 + [000287] /: Retrieved x-powered-by header: Express.\n\
 + [013587] /: Suggested security header missing: content-security-policy. See: https://x\n\
 + 1624 requests: 0 errors and 2 items reported\n";
-        let parsed = Nikto.parse("http://h", &outcome(stdout));
+        let parsed = Nikto.parse("http://h", "T1046", &outcome(stdout));
         assert_eq!(parsed.findings.len(), 2);
         assert!(parsed
             .findings
@@ -133,7 +133,11 @@ mod tests {
     #[test]
     fn no_reported_items_records_nothing() {
         assert!(Nikto
-            .parse("http://h", &outcome("- Nikto v2.6.1\n+ Target IP: x\n"))
+            .parse(
+                "http://h",
+                "T1046",
+                &outcome("- Nikto v2.6.1\n+ Target IP: x\n")
+            )
             .findings
             .is_empty());
     }

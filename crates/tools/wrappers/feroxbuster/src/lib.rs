@@ -46,7 +46,7 @@ impl Tool for Feroxbuster {
         argv
     }
 
-    fn parse(&self, _target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, _target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut observations = Vec::new();
         for line in outcome.stdout.lines() {
             let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
@@ -113,7 +113,7 @@ mod tests {
 {\"type\":\"response\",\"url\":\"http://h/download\",\"path\":\"/download\",\"status\":500,\"method\":\"GET\",\"content_length\":938}\n\
 {\"type\":\"response\",\"url\":\"http://h/\",\"path\":\"/\",\"status\":200}\n\
 {\"type\":\"statistics\",\"timeouts\":0,\"requests\":3}\n";
-        let parsed = Feroxbuster.parse("http://h", &outcome(stdout));
+        let parsed = Feroxbuster.parse("http://h", "T1046", &outcome(stdout));
         assert_eq!(parsed.observations.len(), 2);
         assert!(parsed.observations.iter().all(|o| o.kind == "endpoint"));
         assert!(parsed
@@ -129,7 +129,7 @@ mod tests {
     #[test]
     fn no_matches_records_nothing() {
         assert!(Feroxbuster
-            .parse("http://h", &outcome(""))
+            .parse("http://h", "T1046", &outcome(""))
             .observations
             .is_empty());
     }

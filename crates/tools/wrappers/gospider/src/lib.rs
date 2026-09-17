@@ -50,7 +50,7 @@ impl Tool for Gospider {
         argv
     }
 
-    fn parse(&self, _target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, _target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut observations = Vec::new();
         let mut seen = HashSet::new();
         for line in outcome.stdout.lines() {
@@ -100,7 +100,7 @@ mod tests {
                 .to_string(),
             stderr: String::new(),
         };
-        let parsed = GOSPIDER.parse("http://h:3000", &outcome);
+        let parsed = GOSPIDER.parse("http://h:3000", "T1046", &outcome);
         assert_eq!(parsed.observations.len(), 2);
         assert_eq!(parsed.observations[0].kind, "endpoint");
         assert_eq!(parsed.observations[0].value, "http://h:3000/ftp");
@@ -115,7 +115,7 @@ mod tests {
             stdout: String::new(),
             stderr: String::new(),
         };
-        let parsed = GOSPIDER.parse("http://h:3000", &outcome);
+        let parsed = GOSPIDER.parse("http://h:3000", "T1046", &outcome);
         assert!(parsed.observations.is_empty());
     }
 }

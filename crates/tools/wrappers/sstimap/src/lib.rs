@@ -42,7 +42,7 @@ impl Tool for Sstimap {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let lines: Vec<String> = outcome.stdout.lines().map(strip_ansi).collect();
         let confirmed = lines
             .iter()
@@ -121,7 +121,7 @@ mod tests {
                 .to_string(),
             stderr: String::new(),
         };
-        let parsed = SSTIMAP.parse("http://h/p?name=x", &outcome);
+        let parsed = SSTIMAP.parse("http://h/p?name=x", "T1046", &outcome);
         assert_eq!(parsed.findings.len(), 1);
         assert_eq!(parsed.findings[0].title, "Server-side template injection");
         assert_eq!(parsed.findings[0].cwe, vec![1336, 94]);
@@ -136,7 +136,7 @@ mod tests {
             stdout: "[-] Tested parameters appear to be not injectable.\n".to_string(),
             stderr: String::new(),
         };
-        let parsed = SSTIMAP.parse("http://h/p?name=x", &outcome);
+        let parsed = SSTIMAP.parse("http://h/p?name=x", "T1046", &outcome);
         assert!(parsed.findings.is_empty());
     }
 }

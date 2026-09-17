@@ -42,7 +42,7 @@ impl Tool for Arjun {
         argv
     }
 
-    fn parse(&self, _target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, _target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         const MARKER: &str = "parameter detected: ";
         let clean = strip_ansi(&outcome.stdout);
         let mut observations = Vec::new();
@@ -108,7 +108,7 @@ mod tests {
     #[test]
     fn detected_parameters_become_observations_deduplicated() {
         let stdout = "Processing chunks: 2/2  \u{1b}[1;92m[\u{2713}]\u{1b}[0m parameter detected: file, based on: http code\n\u{1b}[1;92m[\u{2713}]\u{1b}[0m parameter detected: id, based on: body length\nparameter detected: file, based on: http code\n";
-        let parsed = Arjun.parse("http://h/x", &outcome(stdout));
+        let parsed = Arjun.parse("http://h/x", "T1046", &outcome(stdout));
         assert_eq!(
             parsed.observations.len(),
             2,
@@ -124,7 +124,7 @@ mod tests {
     #[test]
     fn no_parameters_records_nothing() {
         assert!(Arjun
-            .parse("http://h", &outcome("Processing chunks: 2/2\n"))
+            .parse("http://h", "T1046", &outcome("Processing chunks: 2/2\n"))
             .observations
             .is_empty());
     }

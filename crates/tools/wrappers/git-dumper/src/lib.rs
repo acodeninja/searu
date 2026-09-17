@@ -44,7 +44,7 @@ impl Tool for GitDumper {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         // git-dumper runs `git checkout` once it has fetched enough of the .git to reconstruct the tree.
         let reconstructed = outcome
             .stdout
@@ -89,7 +89,7 @@ mod tests {
                 .to_string(),
             stderr: String::new(),
         };
-        let parsed = GIT_DUMPER.parse("http://h/.git", &outcome);
+        let parsed = GIT_DUMPER.parse("http://h/.git", "T1046", &outcome);
         assert_eq!(parsed.findings.len(), 1);
         assert_eq!(parsed.findings[0].title, "Source code disclosure");
         assert_eq!(parsed.findings[0].cwe, vec![527]);
@@ -107,7 +107,7 @@ mod tests {
             stdout: "[-] Testing http://h/.git/HEAD [404]\n".to_string(),
             stderr: String::new(),
         };
-        let parsed = GIT_DUMPER.parse("http://h/.git", &outcome);
+        let parsed = GIT_DUMPER.parse("http://h/.git", "T1046", &outcome);
         assert!(parsed.findings.is_empty());
     }
 }

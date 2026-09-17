@@ -44,7 +44,7 @@ impl Tool for Whatweb {
         argv
     }
 
-    fn parse(&self, _target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, _target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut observations = Vec::new();
         for line in outcome.stdout.lines() {
             let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
@@ -115,7 +115,7 @@ mod tests {
 {\"target\":\"http://host\",\"http_status\":200,\"plugins\":{\"X-Powered-By\":{\"string\":[\"Express\"]},\"HTTPServer\":{\"string\":[\"nginx\"]},\"Title\":{\"string\":[\"Jolly Jabs\"]},\"HTML5\":{}}}\n\
 http://host [200 OK] X-Powered-By[Express], HTTPServer[nginx]\n\
 ]\n";
-        let parsed = Whatweb.parse("http://host", &outcome(stdout));
+        let parsed = Whatweb.parse("http://host", "T1046", &outcome(stdout));
         assert!(parsed.observations.iter().any(|o| o.kind == "tech"
             && o.value == "X-Powered-By"
             && o.detail.as_deref() == Some("Express")));
@@ -135,7 +135,7 @@ http://host [200 OK] X-Powered-By[Express], HTTPServer[nginx]\n\
     #[test]
     fn nothing_recorded_without_json() {
         assert!(Whatweb
-            .parse("http://host", &outcome("http://host [200 OK]\n"))
+            .parse("http://host", "T1046", &outcome("http://host [200 OK]\n"))
             .observations
             .is_empty());
     }

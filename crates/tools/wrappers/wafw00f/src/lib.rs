@@ -48,7 +48,7 @@ impl Tool for Wafw00f {
         argv
     }
 
-    fn parse(&self, _target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, _target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut observations = Vec::new();
         let array = serde_json::Deserializer::from_str(&outcome.stdout)
             .into_iter::<serde_json::Value>()
@@ -113,7 +113,7 @@ mod tests {
     #[test]
     fn a_detected_waf_becomes_an_observation_ignoring_the_trailing_banner() {
         let stdout = "[\n  {\n    \"detected\": true,\n    \"firewall\": \"Cloudflare\",\n    \"manufacturer\": \"Cloudflare Inc.\",\n    \"url\": \"http://h\"\n  }\n]\n            ______\n[*] Checking http://h\n";
-        let parsed = Wafw00f.parse("http://h", &outcome(stdout));
+        let parsed = Wafw00f.parse("http://h", "T1046", &outcome(stdout));
         assert_eq!(parsed.observations.len(), 1);
         assert_eq!(parsed.observations[0].kind, "waf");
         assert_eq!(parsed.observations[0].value, "Cloudflare");
@@ -127,7 +127,7 @@ mod tests {
     fn no_waf_records_nothing() {
         let stdout = "[\n  {\"detected\": false, \"firewall\": \"None\", \"manufacturer\": \"None\", \"url\": \"http://h\"}\n]\n[*] banner\n";
         assert!(Wafw00f
-            .parse("http://h", &outcome(stdout))
+            .parse("http://h", "T1046", &outcome(stdout))
             .observations
             .is_empty());
     }

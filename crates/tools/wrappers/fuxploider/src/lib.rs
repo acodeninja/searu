@@ -43,7 +43,7 @@ impl Tool for Fuxploider {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let lines: Vec<String> = outcome.stdout.lines().map(strip_ansi).collect();
         let code_execution = lines
             .iter()
@@ -111,7 +111,7 @@ mod tests {
             stdout: "[*] starting\n### Tried 20 extensions,  3 are valid.\n".to_string(),
             stderr: String::new(),
         };
-        let parsed = FUXPLOIDER.parse("http://h/upload", &outcome);
+        let parsed = FUXPLOIDER.parse("http://h/upload", "T1046", &outcome);
         assert_eq!(parsed.findings.len(), 1);
         assert_eq!(parsed.findings[0].title, "Unrestricted file upload");
         assert_eq!(parsed.findings[0].cwe, vec![434]);
@@ -129,7 +129,7 @@ mod tests {
             stdout: "Code execution obtained ('a','b','c','d')\n".to_string(),
             stderr: String::new(),
         };
-        let parsed = FUXPLOIDER.parse("http://h/upload", &outcome);
+        let parsed = FUXPLOIDER.parse("http://h/upload", "T1046", &outcome);
         assert_eq!(parsed.findings.len(), 1);
         assert_eq!(
             parsed.findings[0].evidence,
@@ -144,7 +144,7 @@ mod tests {
             stdout: "### Tried 20 extensions,  0 are valid.\n".to_string(),
             stderr: String::new(),
         };
-        let parsed = FUXPLOIDER.parse("http://h/upload", &outcome);
+        let parsed = FUXPLOIDER.parse("http://h/upload", "T1046", &outcome);
         assert!(parsed.findings.is_empty());
     }
 }

@@ -43,7 +43,7 @@ impl Tool for Corsy {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut findings = Vec::new();
         let mut seen = HashSet::new();
         let mut class: Option<String> = None;
@@ -149,7 +149,7 @@ mod tests {
                 .to_string(),
             stderr: String::new(),
         };
-        let parsed = CORSY.parse("http://h:3000", &outcome);
+        let parsed = CORSY.parse("http://h:3000", "T1046", &outcome);
         assert_eq!(parsed.findings.len(), 1);
         assert_eq!(parsed.findings[0].title, "CORS misconfiguration");
         assert_eq!(parsed.findings[0].cwe, vec![942]);
@@ -164,7 +164,7 @@ mod tests {
             stdout: "    CORSY  {v1.0-beta}\n\n".to_string(),
             stderr: String::new(),
         };
-        let parsed = CORSY.parse("http://h:3000", &outcome);
+        let parsed = CORSY.parse("http://h:3000", "T1046", &outcome);
         assert!(parsed.findings.is_empty());
     }
 }

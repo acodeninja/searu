@@ -51,7 +51,7 @@ impl Tool for Gowitness {
         argv
     }
 
-    fn parse(&self, _target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, _target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut observations = Vec::new();
         // gowitness logs each capture to stderr; scan both streams for the result line.
         for line in outcome.stdout.lines().chain(outcome.stderr.lines()) {
@@ -115,7 +115,7 @@ mod tests {
             stderr: "INFO result 🤖 target=http://h:3000 status-code=200 title=\"OWASP Juice Shop\" have-screenshot=true\n"
                 .to_string(),
         };
-        let parsed = GOWITNESS.parse("http://h:3000", &outcome);
+        let parsed = GOWITNESS.parse("http://h:3000", "T1046", &outcome);
         assert_eq!(parsed.observations.len(), 1);
         assert_eq!(parsed.observations[0].kind, "screenshot");
         assert_eq!(parsed.observations[0].value, "http://h:3000");
@@ -132,7 +132,7 @@ mod tests {
             stdout: String::new(),
             stderr: "INFO result target=http://h:3000 have-screenshot=false\n".to_string(),
         };
-        let parsed = GOWITNESS.parse("http://h:3000", &outcome);
+        let parsed = GOWITNESS.parse("http://h:3000", "T1046", &outcome);
         assert!(parsed.observations.is_empty());
     }
 }

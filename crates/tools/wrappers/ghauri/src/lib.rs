@@ -52,7 +52,7 @@ impl Tool for Ghauri {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let lower = outcome.stdout.to_ascii_lowercase();
         let confirmed = lower.contains("is vulnerable")
             || lower.contains("identified the following injection point");
@@ -127,7 +127,7 @@ mod tests {
                 .to_string(),
             stderr: String::new(),
         };
-        let parsed = GHAURI.parse("http://localhost:5091/item?id=1", &outcome);
+        let parsed = GHAURI.parse("http://localhost:5091/item?id=1", "T1046", &outcome);
 
         assert_eq!(parsed.findings.len(), 1);
         assert_eq!(parsed.findings[0].cwe, vec![89]);
@@ -145,7 +145,7 @@ mod tests {
             stdout: "all tested parameters do not appear to be injectable.".to_string(),
             stderr: String::new(),
         };
-        let parsed = GHAURI.parse("http://localhost:5091/item?id=1", &outcome);
+        let parsed = GHAURI.parse("http://localhost:5091/item?id=1", "T1046", &outcome);
         assert!(parsed.findings.is_empty());
         assert!(parsed.observations.is_empty());
     }

@@ -55,7 +55,7 @@ impl Tool for Katana {
         argv
     }
 
-    fn parse(&self, _target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, _target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut observations = Vec::new();
         for line in outcome.stdout.lines() {
             let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
@@ -156,7 +156,7 @@ mod tests {
                 .to_string(),
             stderr: String::new(),
         };
-        let parsed = Katana.parse("http://localhost:5000", &outcome);
+        let parsed = Katana.parse("http://localhost:5000", "T1046", &outcome);
         assert!(parsed
             .observations
             .iter()

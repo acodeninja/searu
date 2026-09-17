@@ -51,7 +51,7 @@ impl Tool for Dnsx {
         argv
     }
 
-    fn parse(&self, _target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, _target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut observations = Vec::new();
         let mut seen = HashSet::new();
         for line in outcome.stdout.lines() {
@@ -106,7 +106,7 @@ mod tests {
                 .to_string(),
             stderr: String::new(),
         };
-        let parsed = DNSX.parse("one.one.one.one", &outcome);
+        let parsed = DNSX.parse("one.one.one.one", "T1046", &outcome);
         assert_eq!(parsed.observations.len(), 3);
         assert_eq!(parsed.observations[0].kind, "dns");
         assert_eq!(parsed.observations[0].value, "1.0.0.1");
@@ -124,7 +124,7 @@ mod tests {
             stdout: String::new(),
             stderr: String::new(),
         };
-        let parsed = DNSX.parse("nope.invalid", &outcome);
+        let parsed = DNSX.parse("nope.invalid", "T1046", &outcome);
         assert!(parsed.observations.is_empty());
     }
 }

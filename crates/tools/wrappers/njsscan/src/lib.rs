@@ -44,7 +44,7 @@ impl Tool for Njsscan {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut findings = Vec::new();
         let mut seen = HashSet::new();
         let Ok(doc) = serde_json::from_str::<Value>(&outcome.stdout) else {
@@ -143,7 +143,7 @@ mod tests {
                 .to_string(),
             stderr: String::new(),
         };
-        let parsed = NJSSCAN.parse("src:app", &outcome);
+        let parsed = NJSSCAN.parse("src:app", "T1046", &outcome);
         assert_eq!(parsed.findings.len(), 1);
         assert_eq!(parsed.findings[0].title, "generic_os_command_exec");
         assert_eq!(parsed.findings[0].cwe, vec![78]);
@@ -158,7 +158,7 @@ mod tests {
             stdout: r#"{"nodejs":{},"templates":{},"errors":[]}"#.to_string(),
             stderr: String::new(),
         };
-        let parsed = NJSSCAN.parse("src:app", &outcome);
+        let parsed = NJSSCAN.parse("src:app", "T1046", &outcome);
         assert!(parsed.findings.is_empty());
     }
 }

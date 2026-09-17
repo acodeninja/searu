@@ -48,7 +48,7 @@ impl Tool for Dalfox {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let root = serde_json::Deserializer::from_str(&outcome.stdout)
             .into_iter::<serde_json::Value>()
             .flatten()
@@ -138,7 +138,7 @@ mod tests {
     #[test]
     fn a_verified_finding_becomes_a_confirmed_xss() {
         let stdout = "{\"findings\":[{\"cwe\":\"CWE-79\",\"param\":\"q\",\"payload\":\"<svg onload=alert(1)>\",\"data\":\"http://h/?q=%3Csvg%3E\",\"severity\":\"High\",\"type\":\"V\",\"inject_type\":\"inHTML\"}],\"meta\":{\"findings_count\":1}}";
-        let parsed = Dalfox.parse("http://h/?q=test", &outcome(stdout));
+        let parsed = Dalfox.parse("http://h/?q=test", "T1046", &outcome(stdout));
         assert_eq!(parsed.findings.len(), 1);
         let xss = &parsed.findings[0];
         assert_eq!(xss.title, "Cross-site scripting in q");
@@ -153,7 +153,7 @@ mod tests {
     fn no_findings_records_nothing() {
         let stdout = "{\"findings\":[],\"meta\":{\"findings_count\":0}}";
         assert!(Dalfox
-            .parse("http://h", &outcome(stdout))
+            .parse("http://h", "T1046", &outcome(stdout))
             .findings
             .is_empty());
     }

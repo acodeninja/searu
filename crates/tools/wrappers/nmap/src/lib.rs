@@ -46,7 +46,7 @@ impl Tool for Nmap {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut observations = Vec::new();
         for line in outcome.stdout.lines() {
             let Some(ports) = line
@@ -109,7 +109,7 @@ mod tests {
 Host: 10.0.0.5 ()\tStatus: Up\n\
 Host: 10.0.0.5 ()\tPorts: 22/open/tcp//ssh//OpenSSH 9.6//, 80/open/tcp//http//nginx//\tIgnored State: closed (998)\n\
 # Nmap done\n";
-        let parsed = Nmap.parse("10.0.0.5", &outcome(grepable));
+        let parsed = Nmap.parse("10.0.0.5", "T1046", &outcome(grepable));
         assert!(parsed.observations.iter().any(|o| o.kind == "service"
             && o.value == "10.0.0.5:22"
             && o.detail.as_deref() == Some("ssh OpenSSH 9.6")));
@@ -124,7 +124,7 @@ Host: 10.0.0.5 ()\tPorts: 22/open/tcp//ssh//OpenSSH 9.6//, 80/open/tcp//http//ng
         let grepable = "Host: 10.0.0.5 ()\tStatus: Up\n\
 Host: 10.0.0.5 ()\tPorts: 81/closed/tcp//hosts2-ns//\tIgnored State: closed (999)\n";
         assert!(Nmap
-            .parse("10.0.0.5", &outcome(grepable))
+            .parse("10.0.0.5", "T1046", &outcome(grepable))
             .observations
             .is_empty());
     }

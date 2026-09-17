@@ -1,7 +1,8 @@
 //! The commix tool wrapper: how searu invokes commix and normalises its output into findings/loot.
 //! commix does the exploiting; this crate only shapes the invocation and reads the result.
 
-use searu_domain::findings::{Finding, Loot, Severity, Status};
+use searu_domain::assets::{ClaimKind, IdentityClaim, IDENTITY_CLAIM_KIND};
+use searu_domain::findings::{Finding, Loot, Observation, Severity, Status};
 use searu_domain::ports::ToolOutcome;
 use searu_domain::tools::{ParsedOutput, Phase, PhaseAdvice, Tool};
 
@@ -51,8 +52,10 @@ impl Tool for Commix {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
-        let decoded = searu_tool_parser::text::html_unescape(&outcome.stdout);
+    fn parse(&self, target: &str, technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
+        let decoded = searu_tool_parser::text::strip_ansi(&searu_tool_parser::text::html_unescape(
+            &outcome.stdout,
+        ));
 
         let loot: Vec<Loot> = searu_tool_parser::text::secrets(&decoded)
             .into_iter()
@@ -63,12 +66,18 @@ impl Tool for Commix {
             })
             .collect();
 
-        let lower = decoded.to_ascii_lowercase();
-        let confirmed =
-            !loot.is_empty() || lower.contains("vulnerable") || lower.contains("injectable");
+        let command_outputs = searu_tool_parser::text::commix_command_outputs(&decoded);
 
+        let lower = decoded.to_ascii_lowercase();
+        let confirmed = !loot.is_empty()
+            || !command_outputs.is_empty()
+            || lower.contains("vulnerable")
+            || lower.contains("injectable");
+
+        // The injection itself is one finding (T1190 → T1059), recorded when the run that confirms the
+        // foothold executes; collection runs through the foothold record observations, not findings.
         let mut findings = Vec::new();
-        if confirmed {
+        if confirmed && (technique == "T1190" || technique == "T1059") {
             findings.push(Finding {
                 tool: "commix".to_string(),
                 target: target.to_string(),
@@ -83,12 +92,102 @@ impl Tool for Commix {
             });
         }
 
+        let observations = command_outputs
+            .iter()
+            .flat_map(|(command, output)| observations_for(command, output))
+            .collect();
+
         ParsedOutput {
             findings,
             loot,
-            observations: Vec::new(),
+            observations,
         }
     }
+}
+
+/// Turn one executed command's output into structured observations: the accounts in `/etc/passwd`, the
+/// current user, the OS, a file listing — and the identity claims (machine-id, hostname, ssh host key)
+/// that sharpen which host this is. Anything unrecognised is kept verbatim so no intel is lost.
+fn observations_for(command: &str, output: &str) -> Vec<Observation> {
+    let command = command.trim();
+    let output = output.trim();
+    if output.is_empty() {
+        return Vec::new();
+    }
+
+    if command.contains("/etc/machine-id") {
+        return vec![claim_observation(ClaimKind::MachineId, output)];
+    }
+    if command == "hostname" || command.contains("/etc/hostname") {
+        return vec![claim_observation(ClaimKind::Hostname, output)];
+    }
+    if command.contains("ssh_host_") && command.contains("key.pub") {
+        return vec![claim_observation(ClaimKind::SshHostKey, output)];
+    }
+
+    if command.contains("/etc/passwd") {
+        let users: Vec<Observation> = output
+            .split_whitespace()
+            .filter(|entry| entry.matches(':').count() >= 6)
+            .map(|entry| Observation {
+                kind: "user".to_string(),
+                value: entry.split(':').next().unwrap_or(entry).to_string(),
+                detail: Some(entry.to_string()),
+            })
+            .collect();
+        if !users.is_empty() {
+            return users;
+        }
+    }
+
+    if command == "id" || command == "whoami" || command.starts_with("id ") {
+        return vec![Observation {
+            kind: "user".to_string(),
+            value: principal_of(output).unwrap_or_else(|| output.to_string()),
+            detail: Some(output.to_string()),
+        }];
+    }
+
+    if command.starts_with("uname") || command.contains("/etc/os-release") {
+        return vec![Observation {
+            kind: "os".to_string(),
+            value: output.to_string(),
+            detail: Some(command.to_string()),
+        }];
+    }
+
+    if command.starts_with("ls") {
+        return vec![Observation {
+            kind: "file".to_string(),
+            value: command.split_whitespace().last().unwrap_or("/").to_string(),
+            detail: Some(output.to_string()),
+        }];
+    }
+
+    vec![Observation {
+        kind: "command-output".to_string(),
+        value: command.to_string(),
+        detail: Some(output.to_string()),
+    }]
+}
+
+fn claim_observation(kind: ClaimKind, value: &str) -> Observation {
+    Observation {
+        kind: IDENTITY_CLAIM_KIND.to_string(),
+        value: IdentityClaim {
+            kind,
+            value: value.to_string(),
+        }
+        .label(),
+        detail: None,
+    }
+}
+
+fn principal_of(output: &str) -> Option<String> {
+    let start = output.find("uid=")?;
+    let open = output[start..].find('(')? + start + 1;
+    let close = output[open..].find(')')? + open;
+    Some(output[open..close].to_string())
 }
 
 #[cfg(test)]
@@ -112,7 +211,7 @@ mod tests {
                 .to_string(),
             stderr: String::new(),
         };
-        let parsed = COMMIX.parse("http://localhost:5000/cmd/dig?ip_addr=1", &outcome);
+        let parsed = COMMIX.parse("http://localhost:5000/cmd/dig?ip_addr=1", "T1190", &outcome);
 
         assert_eq!(parsed.loot.len(), 1);
         assert_eq!(parsed.loot[0].category, "database-url");
@@ -135,8 +234,46 @@ mod tests {
             stdout: "no command injection identified".to_string(),
             stderr: String::new(),
         };
-        let parsed = COMMIX.parse("http://localhost:5000/", &outcome);
+        let parsed = COMMIX.parse("http://localhost:5000/", "T1046", &outcome);
         assert!(parsed.findings.is_empty());
         assert!(parsed.loot.is_empty());
+    }
+
+    #[test]
+    fn a_passwd_read_decomposes_into_one_observation_per_account() {
+        let outcome = ToolOutcome {
+            code: 0,
+            stdout: "[info] 'cat /etc/passwd' execution output: root:x:0:0:root:/root:/bin/sh application:x:100:101::/app:/sbin/nologin"
+                .to_string(),
+            stderr: String::new(),
+        };
+        let parsed = COMMIX.parse("http://localhost:5000/cmd/dig?ip_addr=1", "T1083", &outcome);
+
+        let users: Vec<&str> = parsed
+            .observations
+            .iter()
+            .filter(|observation| observation.kind == "user")
+            .map(|observation| observation.value.as_str())
+            .collect();
+        assert!(users.contains(&"root"));
+        assert!(users.contains(&"application"));
+        // A collection run records observations, not a duplicate injection finding.
+        assert!(parsed.findings.is_empty());
+    }
+
+    #[test]
+    fn a_machine_id_read_records_an_identity_claim() {
+        let outcome = ToolOutcome {
+            code: 0,
+            stdout: "[info] 'cat /etc/machine-id' execution output: 3f2b1c9d4e5a6f70".to_string(),
+            stderr: String::new(),
+        };
+        let parsed = COMMIX.parse("http://localhost:5000/cmd/dig?ip_addr=1", "T1082", &outcome);
+
+        assert!(parsed
+            .observations
+            .iter()
+            .any(|observation| observation.kind == IDENTITY_CLAIM_KIND
+                && observation.value == "machine-id:3f2b1c9d4e5a6f70"));
     }
 }

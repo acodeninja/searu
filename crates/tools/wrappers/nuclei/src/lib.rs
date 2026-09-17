@@ -48,7 +48,7 @@ impl Tool for Nuclei {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut findings = Vec::new();
         let mut seen = HashSet::new();
         for line in outcome.stdout.lines() {
@@ -155,7 +155,7 @@ mod tests {
 {\"template-id\":\"http-missing-security-headers\",\"info\":{\"name\":\"HTTP Missing Security Headers\",\"severity\":\"info\",\"classification\":{\"cwe-id\":[\"cwe-693\"]}},\"matched-at\":\"http://host:5078\",\"matcher-name\":\"csp\"}\n\
 {\"template-id\":\"http-missing-security-headers\",\"info\":{\"name\":\"HTTP Missing Security Headers\",\"severity\":\"info\",\"classification\":{\"cwe-id\":[\"cwe-693\"]}},\"matched-at\":\"http://host:5078\",\"matcher-name\":\"hsts\"}\n\
 {\"template-id\":\"CVE-2021-1234\",\"info\":{\"name\":\"Some RCE\",\"severity\":\"critical\",\"classification\":{\"cwe-id\":[\"CWE-78\"]}},\"matched-at\":\"http://host/x\"}\n";
-        let parsed = Nuclei.parse("http://host:5078", &outcome(stdout));
+        let parsed = Nuclei.parse("http://host:5078", "T1046", &outcome(stdout));
         assert_eq!(
             parsed.findings.len(),
             2,
@@ -184,7 +184,7 @@ mod tests {
     #[test]
     fn a_clean_scan_records_nothing() {
         assert!(Nuclei
-            .parse("http://host", &outcome(""))
+            .parse("http://host", "T1046", &outcome(""))
             .findings
             .is_empty());
     }

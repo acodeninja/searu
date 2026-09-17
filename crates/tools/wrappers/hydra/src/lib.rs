@@ -45,7 +45,7 @@ impl Tool for Hydra {
         argv
     }
 
-    fn parse(&self, target: &str, outcome: &ToolOutcome) -> ParsedOutput {
+    fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut findings = Vec::new();
         let mut loot = Vec::new();
         let mut seen = HashSet::new();
@@ -126,7 +126,7 @@ mod tests {
                 .to_string(),
             stderr: String::new(),
         };
-        let parsed = HYDRA.parse("localhost", &outcome);
+        let parsed = HYDRA.parse("localhost", "T1046", &outcome);
         assert_eq!(parsed.findings.len(), 1);
         assert_eq!(parsed.findings[0].title, "Weak credentials");
         assert_eq!(parsed.findings[0].cwe, vec![307]);
@@ -151,7 +151,7 @@ mod tests {
             stdout: "1 of 1 target completed, 0 valid passwords found\n".to_string(),
             stderr: String::new(),
         };
-        let parsed = HYDRA.parse("localhost", &outcome);
+        let parsed = HYDRA.parse("localhost", "T1046", &outcome);
         assert!(parsed.findings.is_empty());
         assert!(parsed.loot.is_empty());
     }
