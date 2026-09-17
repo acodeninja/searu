@@ -27,6 +27,7 @@ searu-tool-gosec = { path = "../wrappers/gosec" }
 searu-tool-gospider = { path = "../wrappers/gospider" }
 searu-tool-grype = { path = "../wrappers/grype" }
 searu-tool-hadolint = { path = "../wrappers/hadolint" }
+searu-tool-hydra = { path = "../wrappers/hydra" }
 searu-tool-httpx = { path = "../wrappers/httpx" }
 searu-tool-katana = { path = "../wrappers/katana" }
 searu-tool-nikto = { path = "../wrappers/nikto" }

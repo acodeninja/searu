@@ -1,0 +1,3 @@
+FROM vanhauser/hydra@sha256:1cdc548bea123efc5d2ac55947f555848d106004c9e94100ecdc9566b81a5d28
+
+ENTRYPOINT ["hydra"]

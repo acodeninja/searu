@@ -27,6 +27,7 @@ members = [
     "crates/tools/wrappers/gospider",
     "crates/tools/wrappers/grype",
     "crates/tools/wrappers/hadolint",
+    "crates/tools/wrappers/hydra",
     "crates/tools/wrappers/httpx",
     "crates/tools/wrappers/katana",
     "crates/tools/wrappers/nikto",

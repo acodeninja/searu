@@ -618,6 +618,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-hydra"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "searu-tool-parser",
+]
+
+[[package]]
 name = "searu-tool-katana"
 version = "0.0.1"
 dependencies = [
@@ -698,6 +706,7 @@ dependencies = [
  "searu-tool-grype",
  "searu-tool-hadolint",
  "searu-tool-httpx",
+ "searu-tool-hydra",
  "searu-tool-katana",
  "searu-tool-nikto",
  "searu-tool-njsscan",
