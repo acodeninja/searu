@@ -1,0 +1,1 @@
+FROM ghcr.io/sensepost/gowitness@sha256:4535f14e6f4d0f815f4615fd9c5ca7e4036c3956b254f93b1c6eb6bd10f0eb67

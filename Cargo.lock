@@ -594,6 +594,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-gowitness"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+]
+
+[[package]]
 name = "searu-tool-grype"
 version = "0.0.1"
 dependencies = [
@@ -703,6 +710,7 @@ dependencies = [
  "searu-tool-gobuster",
  "searu-tool-gosec",
  "searu-tool-gospider",
+ "searu-tool-gowitness",
  "searu-tool-grype",
  "searu-tool-hadolint",
  "searu-tool-httpx",
