@@ -248,7 +248,8 @@ fn scope_hook_allows_a_searu_command() {
             r#"{"tool_name":"Bash","tool_input":{"command":"searu run commix --technique T1190 --target http://localhost:5000"}}"#,
         )
         .assert()
-        .success();
+        .success()
+        .stdout(contains(r#""permissionDecision":"allow""#));
 }
 
 #[test]
@@ -270,7 +271,8 @@ fn scope_hook_allows_a_file_read_tool() {
         .arg("scope-hook")
         .write_stdin(r#"{"tool_name":"Read","tool_input":{"file_path":"/etc/hosts"}}"#)
         .assert()
-        .success();
+        .success()
+        .stdout(contains(r#""permissionDecision":"allow""#));
 }
 
 #[test]

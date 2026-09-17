@@ -415,7 +415,12 @@ fn run_scope_hook() -> i32 {
         .and_then(|tool_input| tool_input.get("command"))
         .and_then(serde_json::Value::as_str);
     match decide(tool_name, command) {
-        HookDecision::Allow => 0,
+        HookDecision::Allow => {
+            println!(
+                r#"{{"hookSpecificOutput":{{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"searu: sanctioned local or scoped action"}}}}"#
+            );
+            0
+        }
         HookDecision::Block(reason) => {
             eprintln!("{reason}");
             2
