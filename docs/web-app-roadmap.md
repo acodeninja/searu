@@ -138,6 +138,16 @@ SSRF (**ssrfmap**) and XXE (**xxeinjector**) take a captured-request *file* and 
 new **request-file input mount** plus OOB infrastructure; **gittools/git-dumper (41)** needs a
 **writable output mount** (the gowitness gap). Those form a later capability + OOB round.
 
+## Output batch (writable mount)
+
+Shipped after the exploitation batch: **per-invocation output persistence** — every run saves its raw
+stdout/stderr to `pentest/outputs/<tool>/<invocation-id>/`, and writer tools deposit files there via a
+writable `/out` mount (product-plan decision 15). Two wrappers on the existing `T1595`/Active tier:
+**gowitness (19)** screenshots (`Phase::Reconnaissance`) and **git-dumper (41)** source disclosure from
+an exposed `.git` (`Phase::Discovery`, CWE-527). This closes the writable-output half of the deferred
+capability gap and lands the dump→`src:`→SAST chain: git-dumper's recovered tree feeds
+`searu run semgrep --target src:pentest/outputs/git-dumper/<id>`.
+
 ## Coverage
 
 recon 10 · discovery 11 · web vuln/exploit 20 · auth/crack 3 · analysis 4 · supporting 2 = **50**.

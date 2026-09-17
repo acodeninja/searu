@@ -206,6 +206,18 @@ yet built it names the milestone.
     *(Shipped: dotdotpwn, corsy, crlfuzz, sstimap, fuxploider, hydra. Deferred behind the two gaps:
     ssrfmap, xxeinjector, gittools.)*
 
+15. **Every run persists its raw output; writer tools get a writable mount — the (b) gap closed.** Each
+    authorised run now prepares `pentest/outputs/<tool>/<invocation-id>/` (a fresh sequenced id per
+    call, so repeated runs never overwrite) and saves the raw stdout/stderr there — searu no longer
+    discards tool output. A tool that emits an `out:` token in its `invocation` gets that directory
+    mounted **writable** at `/out` (the first use of the `Mount { readonly: false }` branch), and the
+    files it writes are recorded as an `Observation { kind: "output" }`. This needed **no change to the
+    `Tool` trait, `ToolOutcome`, or `parse`**: a new `OutputStore` port (prepare/save_raw/collect)
+    threads through `RunAction` like the `source:` provider. This closes decision 14's writable-output
+    gap; the request-file/OOB gap for ssrfmap/xxeinjector remains. A nice chain falls out — git-dumper's
+    recovered tree at `pentest/outputs/git-dumper/<id>/` feeds straight into `searu run semgrep --target
+    src:…`. *(Shipped: gowitness, git-dumper.)*
+
 ## The core idea: two catalogues, ATT&CK as the spine
 
 Everything hangs off two layers that both live in `domain` (zero external deps):

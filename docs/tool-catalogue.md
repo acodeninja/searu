@@ -236,7 +236,7 @@ into one row (each still named) to keep the list navigable.
 
 | tool                                        | function                              | source         | fit       | wrapped |
 |---------------------------------------------|---------------------------------------|----------------|-----------|---------|
-| gowitness                                   | headless-Chrome website screenshotter | kali,blackarch | container |         |
+| gowitness                                   | headless-Chrome website screenshotter | kali,blackarch | container | searu    |
 | eyewitness / aquatone / witnessme / scrying | bulk screenshots + reporting          | kali,blackarch | container |         |
 | peepingtom / jast / cutycapt / rawr         | screenshot & resource enumeration     | blackarch      | container |         |
 
@@ -244,7 +244,7 @@ into one row (each still named) to keep the list navigable.
 
 | tool                                         | function                       | source    | fit       | wrapped |
 |----------------------------------------------|--------------------------------|-----------|-----------|---------|
-| gittools / gitdump / goop-dump / dvcs-ripper | dump exposed .git/SVN/HG repos | blackarch | container |         |
+| gittools / gitdump / goop-dump / dvcs-ripper | dump exposed .git/SVN/HG repos | blackarch | container | searu (git-dumper) |
 
 ---
 
