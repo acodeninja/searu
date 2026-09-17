@@ -234,6 +234,10 @@ struct LootRecord {
     fingerprint: String,
     category: String,
     value: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    principal: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    authenticates: Option<String>,
     #[serde(default)]
     tool: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -476,6 +480,8 @@ impl LootStore for JsonlLootStore {
             fingerprint: loot.fingerprint.clone(),
             category: loot.category.clone(),
             value: loot.value.clone(),
+            principal: loot.principal.clone(),
+            authenticates: loot.authenticates.clone(),
             tool: context.tool.clone(),
             host: context.host.clone(),
             network: context.network.clone(),
@@ -498,6 +504,8 @@ impl LootStore for JsonlLootStore {
                         fingerprint: row.fingerprint,
                         category: row.category,
                         value: row.value,
+                        principal: row.principal,
+                        authenticates: row.authenticates,
                     },
                     tool: row.tool,
                     host: row.host,
@@ -953,11 +961,11 @@ mod tests {
     fn loot_keeps_the_plaintext_value() {
         let dir = tempfile::tempdir().unwrap();
         let store = JsonlLootStore::new(dir.path());
-        let loot = Loot {
-            fingerprint: "ba7816bf8f01".to_string(),
-            category: "database-url".to_string(),
-            value: "postgres://admin:s3cr3t@db/app".to_string(),
-        };
+        let loot = Loot::secret(
+            "ba7816bf8f01".to_string(),
+            "database-url".to_string(),
+            "postgres://admin:s3cr3t@db/app".to_string(),
+        );
         store.emit(&loot, &RecordContext::default()).unwrap();
 
         let text = std::fs::read_to_string(dir.path().join("loot.jsonl")).unwrap();
@@ -1000,11 +1008,11 @@ mod tests {
         let store = JsonlLootStore::new(dir.path());
         store
             .emit(
-                &Loot {
-                    fingerprint: "ba7816bf8f01".to_string(),
-                    category: "database-url".to_string(),
-                    value: "testing".to_string(),
-                },
+                &Loot::secret(
+                    "ba7816bf8f01".to_string(),
+                    "database-url".to_string(),
+                    "testing".to_string(),
+                ),
                 &RecordContext::default(),
             )
             .unwrap();

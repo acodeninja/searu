@@ -524,10 +524,20 @@ fn run_loot(matches: &ArgMatches) -> i32 {
         Ok(loot) => {
             for stored in loot {
                 let item = &stored.loot;
+                let subject = match (&item.principal, &item.authenticates) {
+                    (Some(principal), Some(authenticates)) => {
+                        format!("\t{principal}@{authenticates}")
+                    }
+                    (Some(principal), None) => format!("\t{principal}"),
+                    _ => String::new(),
+                };
                 if reveal {
-                    println!("{}\t{}\t{}", item.category, item.fingerprint, item.value);
+                    println!(
+                        "{}\t{}\t{}{subject}",
+                        item.category, item.fingerprint, item.value
+                    );
                 } else {
-                    println!("{}\t{}", item.category, item.fingerprint);
+                    println!("{}\t{}{subject}", item.category, item.fingerprint);
                 }
             }
             0

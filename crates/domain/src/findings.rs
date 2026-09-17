@@ -55,6 +55,23 @@ pub struct Loot {
     pub fingerprint: String,
     pub category: String,
     pub value: String,
+    /// The account a credential authenticates as (its subject), when the loot is a credential.
+    pub principal: Option<String>,
+    /// The service/host a credential unlocks, when the loot is a credential.
+    pub authenticates: Option<String>,
+}
+
+impl Loot {
+    /// A secret with no known credential subject (a token, a key, an opaque value).
+    pub fn secret(fingerprint: String, category: String, value: String) -> Self {
+        Self {
+            fingerprint,
+            category,
+            value,
+            principal: None,
+            authenticates: None,
+        }
+    }
 }
 
 /// An observation is recon intel — a discovered fact about the target (an endpoint, a form field, the
@@ -103,7 +120,8 @@ pub struct StoredFinding {
     pub last_seen: u64,
 }
 
-/// Loot as stored, with the tool/host that surfaced it and first/last-seen timestamps.
+/// Loot as stored, with the tool/host that surfaced it and first/last-seen timestamps. The credential
+/// subject travels inside `loot` (`principal`/`authenticates`).
 #[derive(Debug, Clone)]
 pub struct StoredLoot {
     pub loot: Loot,

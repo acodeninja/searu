@@ -105,6 +105,23 @@ pub fn secrets(text: &str) -> Vec<(String, String)> {
     found
 }
 
+/// The subject of a credential URL: the account it authenticates as and the host[:port] it unlocks —
+/// e.g. `postgres://app:pw@db:5432/main` → (`app`, `db:5432`). `None` when the value carries no user
+/// info (a token or opaque secret, not a credential against a service).
+pub fn credential_subject(value: &str) -> Option<(String, String)> {
+    let after_scheme = value.split_once("://")?.1;
+    let authority = after_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or(after_scheme);
+    let (userinfo, hostport) = authority.rsplit_once('@')?;
+    let principal = userinfo.split(':').next().unwrap_or(userinfo);
+    if principal.is_empty() || hostport.is_empty() {
+        return None;
+    }
+    Some((principal.to_string(), hostport.to_string()))
+}
+
 fn is_secret_name(name: &str) -> bool {
     let upper = name.to_ascii_uppercase();
     upper.contains("DATABASE_URL")
@@ -183,6 +200,16 @@ mod tests {
         assert_eq!(outputs[0].0, "cat /etc/passwd");
         assert!(outputs[0].1.contains("root:x:0:0"));
         assert!(outputs[0].1.contains("application:x:100:101"));
+    }
+
+    #[test]
+    fn reads_the_subject_of_a_credential_url() {
+        assert_eq!(
+            credential_subject("postgres://application:s3cr3t@db:5432/main"),
+            Some(("application".to_string(), "db:5432".to_string()))
+        );
+        assert_eq!(credential_subject("testing"), None);
+        assert_eq!(credential_subject("redis://cache:6379/0"), None);
     }
 
     #[test]

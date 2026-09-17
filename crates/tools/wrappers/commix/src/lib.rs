@@ -59,10 +59,15 @@ impl Tool for Commix {
 
         let loot: Vec<Loot> = searu_tool_parser::text::secrets(&decoded)
             .into_iter()
-            .map(|(category, value)| Loot {
-                fingerprint: searu_tool_parser::fingerprint(&value),
-                category,
-                value,
+            .map(|(category, value)| {
+                let subject = searu_tool_parser::text::credential_subject(&value);
+                Loot {
+                    fingerprint: searu_tool_parser::fingerprint(&value),
+                    category,
+                    value,
+                    principal: subject.as_ref().map(|(principal, _)| principal.clone()),
+                    authenticates: subject.map(|(_, authenticates)| authenticates),
+                }
             })
             .collect();
 
@@ -89,6 +94,31 @@ impl Tool for Commix {
                 evidence: "commix executed an injected OS command via the request parameter"
                     .to_string(),
                 loot_fingerprint: loot.first().map(|l| l.fingerprint.clone()),
+            });
+        }
+
+        // Each recovered secret is an exposed credential (CWE-522), linked to its loot by fingerprint —
+        // the finding never carries the plaintext.
+        for item in &loot {
+            let evidence = match &item.authenticates {
+                Some(authenticates) => {
+                    format!(
+                        "{} recovered from the foothold, unlocks {authenticates}",
+                        item.category
+                    )
+                }
+                None => format!("{} recovered from the foothold", item.category),
+            };
+            findings.push(Finding {
+                tool: "commix".to_string(),
+                target: target.to_string(),
+                title: "Exposed credential".to_string(),
+                severity: Severity::High,
+                status: Status::Confirmed,
+                attack_technique: vec!["T1552".to_string()],
+                cwe: vec![522],
+                evidence,
+                loot_fingerprint: Some(item.fingerprint.clone()),
             });
         }
 
@@ -217,14 +247,51 @@ mod tests {
         assert_eq!(parsed.loot[0].category, "database-url");
         assert_eq!(parsed.loot[0].value, "testing");
 
-        assert_eq!(parsed.findings.len(), 1);
-        assert_eq!(parsed.findings[0].cwe, vec![78]);
-        assert_eq!(parsed.findings[0].attack_technique, vec!["T1190", "T1059"]);
+        let injection = parsed
+            .findings
+            .iter()
+            .find(|finding| finding.cwe == vec![78])
+            .expect("an injection finding");
+        assert_eq!(injection.attack_technique, vec!["T1190", "T1059"]);
+
+        let exposure = parsed
+            .findings
+            .iter()
+            .find(|finding| finding.cwe == vec![522])
+            .expect("a CWE-522 credential-exposure finding");
         assert_eq!(
-            parsed.findings[0].loot_fingerprint.as_deref(),
+            exposure.loot_fingerprint.as_deref(),
             Some(parsed.loot[0].fingerprint.as_str())
         );
-        assert!(!format!("{:?}", parsed.findings[0]).contains("testing"));
+        assert!(!format!("{:?}", parsed.findings).contains("testing"));
+    }
+
+    #[test]
+    fn a_credential_url_records_its_subject_and_a_cwe_522_finding() {
+        let outcome = ToolOutcome {
+            code: 0,
+            stdout: "[info] 'env' execution output: DATABASE_URL=postgres://application:s3cr3t@db:5432/main"
+                .to_string(),
+            stderr: String::new(),
+        };
+        let parsed = COMMIX.parse("http://localhost:5000/cmd/dig?ip_addr=1", "T1552", &outcome);
+
+        assert_eq!(parsed.loot.len(), 1);
+        assert_eq!(parsed.loot[0].principal.as_deref(), Some("application"));
+        assert_eq!(parsed.loot[0].authenticates.as_deref(), Some("db:5432"));
+
+        // A collection technique records the exposure, not a duplicate injection finding.
+        assert!(parsed
+            .findings
+            .iter()
+            .all(|finding| finding.cwe == vec![522]));
+        let exposure = &parsed.findings[0];
+        assert_eq!(
+            exposure.loot_fingerprint.as_deref(),
+            Some(parsed.loot[0].fingerprint.as_str())
+        );
+        assert!(exposure.evidence.contains("db:5432"));
+        assert!(!format!("{:?}", parsed.findings).contains("s3cr3t"));
     }
 
     #[test]

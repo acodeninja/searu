@@ -488,11 +488,11 @@ mod tests {
                     evidence: "e".to_string(),
                     loot_fingerprint: Some("ff00ff00ff00".to_string()),
                 }],
-                loot: vec![Loot {
-                    fingerprint: "ff00ff00ff00".to_string(),
-                    category: "database-url".to_string(),
-                    value: "testing".to_string(),
-                }],
+                loot: vec![Loot::secret(
+                    "ff00ff00ff00".to_string(),
+                    "database-url".to_string(),
+                    "testing".to_string(),
+                )],
                 observations: vec![Observation {
                     kind: "endpoint".to_string(),
                     value: "/login".to_string(),

@@ -77,6 +77,8 @@ impl Tool for Hydra {
                 fingerprint,
                 category: "credential".to_string(),
                 value,
+                principal: Some(login),
+                authenticates: Some(target.to_string()),
             });
         }
         ParsedOutput {
