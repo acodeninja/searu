@@ -3,8 +3,8 @@
 use searu_domain::findings::{Finding, Loot, Observation, Severity, Status};
 use searu_domain::ports::{
     AuditEntry, AuditLog, Authorisation, Authoriser, FindingsStore, LootStore, ObservationStore,
-    ProjectSettings, RepoError, Roe, RoeRepository, SettingsError, SourceError, SourceProvider,
-    StoreError,
+    OutputDir, OutputError, OutputStore, ProjectSettings, RepoError, Roe, RoeRepository,
+    SettingsError, SourceError, SourceProvider, StoreError,
 };
 use searu_domain::scope::{HostForm, Scope, ScopeEntry};
 use serde::{Deserialize, Serialize};
@@ -527,6 +527,104 @@ impl SourceProvider for FsSourceProvider {
     }
 }
 
+/// Per-invocation output directories under the engagement, at `outputs/<tool>/<invocation-id>/`. Each
+/// call takes a fresh zero-padded id (the next free number in the tool's directory), so repeated runs of
+/// the same tool never overwrite one another. The raw stdout/stderr are saved into the directory and
+/// writer tools mount it to deposit their files.
+pub struct FsOutputStore {
+    root: PathBuf,
+}
+
+impl FsOutputStore {
+    pub fn new(dir: impl Into<PathBuf>) -> Self {
+        Self { root: dir.into() }
+    }
+}
+
+impl OutputStore for FsOutputStore {
+    fn prepare(&self, tool: &str) -> Result<OutputDir, OutputError> {
+        let tool_dir = self.root.join("outputs").join(tool);
+        std::fs::create_dir_all(&tool_dir).map_err(|e| OutputError::Io(e.to_string()))?;
+        let id = next_invocation_id(&tool_dir)?;
+        let dir = tool_dir.join(&id);
+        std::fs::create_dir_all(&dir).map_err(|e| OutputError::Io(e.to_string()))?;
+        harden_dir(&dir);
+        let workspace = format!(
+            "{}/outputs/{}/{}",
+            self.root.to_string_lossy().replace('\\', "/"),
+            tool,
+            id
+        );
+        let absolute = std::env::current_dir()
+            .map(|cwd| cwd.join(&dir))
+            .unwrap_or(dir);
+        Ok(OutputDir {
+            host: absolute.to_string_lossy().into_owned(),
+            workspace,
+        })
+    }
+
+    fn save_raw(&self, dir: &OutputDir, stdout: &str, stderr: &str) -> Result<(), OutputError> {
+        let host = Path::new(&dir.host);
+        std::fs::write(host.join("stdout.txt"), stdout)
+            .map_err(|e| OutputError::Io(e.to_string()))?;
+        std::fs::write(host.join("stderr.txt"), stderr)
+            .map_err(|e| OutputError::Io(e.to_string()))?;
+        Ok(())
+    }
+
+    fn collect(&self, dir: &OutputDir) -> Result<Vec<String>, OutputError> {
+        let host = PathBuf::from(&dir.host);
+        let mut files = Vec::new();
+        collect_files(&host, &host, &mut files)?;
+        Ok(files)
+    }
+}
+
+fn next_invocation_id(tool_dir: &Path) -> Result<String, OutputError> {
+    let mut highest = 0u32;
+    if let Ok(entries) = std::fs::read_dir(tool_dir) {
+        for entry in entries.flatten() {
+            if let Some(number) = entry
+                .file_name()
+                .to_str()
+                .and_then(|name| name.parse::<u32>().ok())
+            {
+                highest = highest.max(number);
+            }
+        }
+    }
+    Ok(format!("{:04}", highest + 1))
+}
+
+fn collect_files(base: &Path, current: &Path, out: &mut Vec<String>) -> Result<(), OutputError> {
+    for entry in std::fs::read_dir(current).map_err(|e| OutputError::Io(e.to_string()))? {
+        let path = entry.map_err(|e| OutputError::Io(e.to_string()))?.path();
+        if path.is_dir() {
+            collect_files(base, &path, out)?;
+        } else {
+            let relative = path
+                .strip_prefix(base)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            if relative != "stdout.txt" && relative != "stderr.txt" {
+                out.push(relative);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn harden_dir(dir: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+}
+
+#[cfg(not(unix))]
+fn harden_dir(_dir: &Path) {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -581,6 +679,34 @@ mod tests {
         assert!(provider.resolve("/etc").is_err());
         assert!(provider.resolve("nope").is_err());
         assert!(provider.resolve("").is_err());
+    }
+
+    #[test]
+    fn output_store_prepares_saves_collects_and_increments() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FsOutputStore::new(dir.path().join("pentest"));
+
+        let out = store.prepare("gowitness").unwrap();
+        assert!(out
+            .workspace
+            .replace('\\', "/")
+            .ends_with("outputs/gowitness/0001"));
+
+        std::fs::write(std::path::Path::new(&out.host).join("shot.png"), b"png").unwrap();
+        store.save_raw(&out, "the stdout", "the stderr").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(std::path::Path::new(&out.host).join("stdout.txt")).unwrap(),
+            "the stdout"
+        );
+
+        let files = store.collect(&out).unwrap();
+        assert_eq!(files, vec!["shot.png".to_string()]);
+
+        let second = store.prepare("gowitness").unwrap();
+        assert!(second
+            .workspace
+            .replace('\\', "/")
+            .ends_with("outputs/gowitness/0002"));
     }
 
     #[test]

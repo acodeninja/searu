@@ -263,6 +263,24 @@ mod tests {
     }
 
     #[test]
+    fn run_argv_renders_a_writable_output_mount_without_ro() {
+        let argv = docker_run_argv(
+            "searu-gowitness:0.0.1",
+            &["scan".to_string(), "single".to_string()],
+            &[Mount {
+                host: "/work/pentest/outputs/gowitness/0001".to_string(),
+                container: "/out".to_string(),
+                readonly: false,
+            }],
+        );
+        let dash_v = argv.iter().position(|a| a == "-v").unwrap();
+        assert_eq!(
+            argv[dash_v + 1],
+            "/work/pentest/outputs/gowitness/0001:/out"
+        );
+    }
+
+    #[test]
     fn a_wordlist_path_with_dot_dot_is_rejected() {
         let provider = DockerWordlistProvider::default();
         assert!(provider.ensure("../../etc/passwd").is_err());

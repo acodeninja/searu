@@ -5,17 +5,18 @@ use searu_domain::egress::merge_deny;
 use searu_domain::findings::{Finding, Loot, Observation};
 use searu_domain::gate::{decide, Decision};
 use searu_domain::ports::{
-    AuditEntry, AuditLog, FindingsStore, LootStore, Mount, ObservationStore, ProjectSettings,
-    RepoError, RoeRepository, RunnerError, SettingsError, SourceError, SourceProvider, StoreError,
-    ToolInvocation, ToolOutcome, ToolRunner, WordlistError, WordlistProvider,
+    AuditEntry, AuditLog, FindingsStore, LootStore, Mount, ObservationStore, OutputDir,
+    OutputError, OutputStore, ProjectSettings, RepoError, RoeRepository, RunnerError,
+    SettingsError, SourceError, SourceProvider, StoreError, ToolInvocation, ToolOutcome,
+    ToolRunner, WordlistError, WordlistProvider,
 };
-use searu_domain::scope::{source_target, SOURCE_MOUNT};
+use searu_domain::scope::{output_target, source_target, OUTPUT_MOUNT, SOURCE_MOUNT};
 use searu_domain::tools::ToolRegistry;
 
 const SECLISTS_TOKEN: &str = "seclists:";
 const SECLISTS_MOUNT: &str = "/seclists";
 
-pub struct RunAction<R, Reg, T, FS, LS, OS, W, A, S> {
+pub struct RunAction<R, Reg, T, FS, LS, OS, W, A, S, Out> {
     pub roe: R,
     pub registry: Reg,
     pub runner: T,
@@ -25,6 +26,7 @@ pub struct RunAction<R, Reg, T, FS, LS, OS, W, A, S> {
     pub wordlists: W,
     pub audit: A,
     pub source: S,
+    pub outputs: Out,
 }
 
 pub enum RunReport {
@@ -33,6 +35,7 @@ pub enum RunReport {
         findings: usize,
         loot: usize,
         observations: usize,
+        outputs: String,
     },
     Refused(Decision),
 }
@@ -46,6 +49,7 @@ pub enum RunError {
     Store(StoreError),
     Wordlist(WordlistError),
     Source(SourceError),
+    Output(OutputError),
 }
 
 impl std::fmt::Display for RunError {
@@ -60,13 +64,14 @@ impl std::fmt::Display for RunError {
             RunError::Store(error) => write!(f, "{error}"),
             RunError::Wordlist(error) => write!(f, "{error}"),
             RunError::Source(error) => write!(f, "{error}"),
+            RunError::Output(error) => write!(f, "{error}"),
         }
     }
 }
 
 impl std::error::Error for RunError {}
 
-impl<R, Reg, T, FS, LS, OS, W, A, S> RunAction<R, Reg, T, FS, LS, OS, W, A, S>
+impl<R, Reg, T, FS, LS, OS, W, A, S, Out> RunAction<R, Reg, T, FS, LS, OS, W, A, S, Out>
 where
     R: RoeRepository,
     Reg: ToolRegistry,
@@ -77,6 +82,7 @@ where
     W: WordlistProvider,
     A: AuditLog,
     S: SourceProvider,
+    Out: OutputStore,
 {
     pub fn run(
         &self,
@@ -116,7 +122,8 @@ where
             refused => return Ok(RunReport::Refused(refused)),
         }
 
-        let (argv, mounts) = self.resolve_mounts(target, tool.invocation(target, args))?;
+        let output = self.outputs.prepare(tool_name).map_err(RunError::Output)?;
+        let (argv, mounts) = self.resolve_mounts(target, &output, tool.invocation(target, args))?;
         let invocation = ToolInvocation {
             tool: tool.name(),
             target,
@@ -125,6 +132,9 @@ where
             mounts: &mounts,
         };
         let outcome = self.runner.run(&invocation).map_err(RunError::Runner)?;
+        self.outputs
+            .save_raw(&output, &outcome.stdout, &outcome.stderr)
+            .map_err(RunError::Output)?;
         let parsed = tool.parse(target, &outcome);
         for loot in &parsed.loot {
             self.loot.emit(loot).map_err(RunError::Store)?;
@@ -137,10 +147,21 @@ where
                 .emit(observation)
                 .map_err(RunError::Store)?;
         }
+        let produced = self.outputs.collect(&output).map_err(RunError::Output)?;
+        if !produced.is_empty() {
+            self.observations
+                .emit(&Observation {
+                    kind: "output".to_string(),
+                    value: output.workspace.clone(),
+                    detail: Some(format!("{tool_name}: {} file(s)", produced.len())),
+                })
+                .map_err(RunError::Store)?;
+        }
         Ok(RunReport::Ran {
             findings: parsed.findings.len(),
             loot: parsed.loot.len(),
             observations: parsed.observations.len(),
+            outputs: output.workspace,
             outcome,
         })
     }
@@ -149,10 +170,12 @@ where
     /// resolves to a confined workspace tree mounted read-only at [`SOURCE_MOUNT`]; any `src:` token in
     /// the argv is rewritten to that mount point (a tool needing a sub-path builds it from the
     /// constant). A `seclists:<path>` token fetches the referenced list once and mounts the shared cache
-    /// read-only. Only the referenced mounts are added.
+    /// read-only. An `out:` token mounts the run's output directory **writable** at [`OUTPUT_MOUNT`].
+    /// Only the referenced mounts are added.
     fn resolve_mounts(
         &self,
         target: &str,
+        output: &OutputDir,
         argv: Vec<String>,
     ) -> Result<(Vec<String>, Vec<Mount>), RunError> {
         let mut mounts = Vec::new();
@@ -167,9 +190,17 @@ where
 
         let mut resolved = Vec::with_capacity(argv.len());
         let mut uses_seclists = false;
+        let mut uses_output = false;
         for arg in argv {
             if source_target(&arg).is_some() {
                 resolved.push(SOURCE_MOUNT.to_string());
+            } else if let Some(sub) = output_target(&arg) {
+                resolved.push(if sub.is_empty() {
+                    OUTPUT_MOUNT.to_string()
+                } else {
+                    format!("{OUTPUT_MOUNT}/{sub}")
+                });
+                uses_output = true;
             } else if let Some(relative) = arg.strip_prefix(SECLISTS_TOKEN) {
                 self.wordlists
                     .ensure(relative)
@@ -185,6 +216,13 @@ where
                 host: self.wordlists.root(),
                 container: SECLISTS_MOUNT.to_string(),
                 readonly: true,
+            });
+        }
+        if uses_output {
+            mounts.push(Mount {
+                host: output.host.clone(),
+                container: OUTPUT_MOUNT.to_string(),
+                readonly: false,
             });
         }
         Ok((resolved, mounts))
@@ -380,12 +418,38 @@ mod tests {
         }
     }
 
+    struct FakeOutputTool;
+    static FAKE_OUTPUT_TOOL: FakeOutputTool = FakeOutputTool;
+    impl Tool for FakeOutputTool {
+        fn name(&self) -> &'static str {
+            "outputtool"
+        }
+        fn techniques(&self) -> &'static [&'static str] {
+            &["T1190"]
+        }
+        fn dockerfile(&self) -> &'static str {
+            ""
+        }
+        fn uses(&self) -> &'static [PhaseAdvice] {
+            &[]
+        }
+        fn invocation(&self, _target: &str, args: &[String]) -> Vec<String> {
+            let mut argv = vec!["--built".to_string(), "out:".to_string()];
+            argv.extend(args.iter().cloned());
+            argv
+        }
+        fn parse(&self, _target: &str, _outcome: &ToolOutcome) -> ParsedOutput {
+            ParsedOutput::default()
+        }
+    }
+
     struct FakeRegistry;
     impl ToolRegistry for FakeRegistry {
         fn tool(&self, name: &str) -> Option<&'static dyn Tool> {
             match name {
                 "faketool" => Some(&FAKE_TOOL as &dyn Tool),
                 "sourcetool" => Some(&FAKE_SOURCE_TOOL as &dyn Tool),
+                "outputtool" => Some(&FAKE_OUTPUT_TOOL as &dyn Tool),
                 _ => None,
             }
         }
@@ -538,6 +602,34 @@ mod tests {
     }
 
     #[derive(Default)]
+    struct MemOutputs {
+        produced: Vec<String>,
+        saved: RefCell<Vec<(String, String)>>,
+    }
+    impl OutputStore for MemOutputs {
+        fn prepare(&self, tool: &str) -> Result<OutputDir, OutputError> {
+            Ok(OutputDir {
+                host: format!("/work/pentest/outputs/{tool}/0001"),
+                workspace: format!("pentest/outputs/{tool}/0001"),
+            })
+        }
+        fn save_raw(
+            &self,
+            _dir: &OutputDir,
+            stdout: &str,
+            stderr: &str,
+        ) -> Result<(), OutputError> {
+            self.saved
+                .borrow_mut()
+                .push((stdout.to_string(), stderr.to_string()));
+            Ok(())
+        }
+        fn collect(&self, _dir: &OutputDir) -> Result<Vec<String>, OutputError> {
+            Ok(self.produced.clone())
+        }
+    }
+
+    #[derive(Default)]
     struct MemAudit {
         entries: RefCell<Vec<(String, String)>>,
     }
@@ -564,6 +656,7 @@ mod tests {
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
             source: MemSource,
+            outputs: MemOutputs::default(),
         };
         let report = use_case
             .run(
@@ -598,6 +691,7 @@ mod tests {
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
             source: MemSource,
+            outputs: MemOutputs::default(),
         };
         use_case
             .run("faketool", "T1190", LOCAL, &["--os-cmd".to_string()])
@@ -620,6 +714,7 @@ mod tests {
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
             source: MemSource,
+            outputs: MemOutputs::default(),
         };
         use_case
             .run(
@@ -667,6 +762,7 @@ mod tests {
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
             source: MemSource,
+            outputs: MemOutputs::default(),
         };
         use_case
             .run("sourcetool", "T1593.003", "src:app/web", &[])
@@ -698,11 +794,87 @@ mod tests {
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
             source: MemSource,
+            outputs: MemOutputs::default(),
         };
         assert!(matches!(
             use_case.run("sourcetool", "T1593.003", "src:../etc", &[]),
             Err(RunError::Source(_))
         ));
+    }
+
+    #[test]
+    fn an_out_token_mounts_the_output_dir_writable_and_rewrites() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising),
+            registry: FakeRegistry,
+            runner: CapturingRunner::default(),
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
+            observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
+            source: MemSource,
+            outputs: MemOutputs::default(),
+        };
+        use_case.run("outputtool", "T1190", LOCAL, &[]).unwrap();
+
+        assert_eq!(
+            *use_case.runner.args.borrow(),
+            vec!["--built".to_string(), "/out".to_string()]
+        );
+        assert_eq!(
+            *use_case.runner.mounts.borrow(),
+            vec![Mount {
+                host: "/work/pentest/outputs/outputtool/0001".to_string(),
+                container: "/out".to_string(),
+                readonly: false,
+            }]
+        );
+    }
+
+    #[test]
+    fn produced_files_are_recorded_as_an_output_observation() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising),
+            registry: FakeRegistry,
+            runner: SpyRunner,
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
+            observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
+            source: MemSource,
+            outputs: MemOutputs {
+                produced: vec!["screenshot.png".to_string()],
+                ..Default::default()
+            },
+        };
+        use_case.run("outputtool", "T1190", LOCAL, &[]).unwrap();
+
+        let observations = use_case.observations.items.borrow();
+        assert!(observations.iter().any(|o| o.kind == "output"
+            && o.value == "pentest/outputs/outputtool/0001"
+            && o.detail.as_deref() == Some("outputtool: 1 file(s)")));
+    }
+
+    #[test]
+    fn the_raw_output_is_saved_on_every_run() {
+        let use_case = RunAction {
+            roe: StubRoe(authorising),
+            registry: FakeRegistry,
+            runner: SpyRunner,
+            findings: MemFindings::default(),
+            loot: MemLoot::default(),
+            observations: MemObservations::default(),
+            wordlists: MemWordlists::default(),
+            audit: MemAudit::default(),
+            source: MemSource,
+            outputs: MemOutputs::default(),
+        };
+        use_case.run("faketool", "T1190", LOCAL, &[]).unwrap();
+
+        assert_eq!(use_case.outputs.saved.borrow().len(), 1);
+        assert_eq!(use_case.outputs.saved.borrow()[0].0, "out");
     }
 
     #[test]
@@ -717,6 +889,7 @@ mod tests {
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
             source: MemSource,
+            outputs: MemOutputs::default(),
         };
         use_case
             .run("faketool", "T1190", LOCAL, &["--os-cmd".to_string()])
@@ -737,6 +910,7 @@ mod tests {
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
             source: MemSource,
+            outputs: MemOutputs::default(),
         };
         let report = use_case
             .run("faketool", "T1190", "http://evil.example.org/x", &[])
@@ -758,6 +932,7 @@ mod tests {
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
             source: MemSource,
+            outputs: MemOutputs::default(),
         };
         use_case.run("faketool", "T1190", LOCAL, &[]).unwrap();
         assert_eq!(
@@ -778,6 +953,7 @@ mod tests {
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
             source: MemSource,
+            outputs: MemOutputs::default(),
         };
         let report = use_case
             .run("faketool", "T1190", "http://evil.example.org/x", &[])
@@ -801,6 +977,7 @@ mod tests {
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
             source: MemSource,
+            outputs: MemOutputs::default(),
         };
         assert!(matches!(
             use_case.run("nope", "T1190", LOCAL, &[]),
@@ -820,6 +997,7 @@ mod tests {
             wordlists: MemWordlists::default(),
             audit: MemAudit::default(),
             source: MemSource,
+            outputs: MemOutputs::default(),
         };
         assert!(matches!(
             use_case.run("faketool", "T9999", LOCAL, &[]),

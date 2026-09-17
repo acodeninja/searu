@@ -165,6 +165,40 @@ pub trait SourceProvider {
     fn resolve(&self, relative: &str) -> Result<String, SourceError>;
 }
 
+/// A per-invocation output directory: `host` is the absolute path to mount writable; `workspace` is the
+/// workspace-relative path to show the operator.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutputDir {
+    pub host: String,
+    pub workspace: String,
+}
+
+#[derive(Debug)]
+pub enum OutputError {
+    Io(String),
+}
+
+impl std::fmt::Display for OutputError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OutputError::Io(message) => {
+                write!(f, "could not access the output directory: {message}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for OutputError {}
+
+pub trait OutputStore {
+    /// Create a fresh per-invocation output directory for `tool` (a new id each call).
+    fn prepare(&self, tool: &str) -> Result<OutputDir, OutputError>;
+    /// Persist the run's raw stdout/stderr into the directory.
+    fn save_raw(&self, dir: &OutputDir, stdout: &str, stderr: &str) -> Result<(), OutputError>;
+    /// List the tool-produced files in the directory (excluding the saved raw output).
+    fn collect(&self, dir: &OutputDir) -> Result<Vec<String>, OutputError>;
+}
+
 #[derive(Debug)]
 pub enum SettingsError {
     Io(String),

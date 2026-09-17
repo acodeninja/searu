@@ -53,6 +53,16 @@ pub fn source_target(target: &str) -> Option<&str> {
     target.strip_prefix("src:")
 }
 
+/// The writable in-container mount point for a run's output directory. A tool that produces files points
+/// its output flag at an `out:` token, which the app rewrites to this path.
+pub const OUTPUT_MOUNT: &str = "/out";
+
+/// A tool-output mount token, written `out:[<sub>]`. The app mounts the run's output directory writable
+/// at [`OUTPUT_MOUNT`] and rewrites the token there (appending `<sub>` when present).
+pub fn output_target(arg: &str) -> Option<&str> {
+    arg.strip_prefix("out:")
+}
+
 pub fn is_host_in_scope(target: &str, scope: &Scope) -> bool {
     let host = target_host(target);
     let port = target_port(target);
