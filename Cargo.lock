@@ -542,6 +542,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-fuxploider"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+]
+
+[[package]]
 name = "searu-tool-gau"
 version = "0.0.1"
 dependencies = [
@@ -681,6 +688,7 @@ dependencies = [
  "searu-tool-dotdotpwn",
  "searu-tool-feroxbuster",
  "searu-tool-ffuf",
+ "searu-tool-fuxploider",
  "searu-tool-gau",
  "searu-tool-ghauri",
  "searu-tool-gitleaks",

@@ -18,6 +18,7 @@ members = [
     "crates/tools/wrappers/dotdotpwn",
     "crates/tools/wrappers/feroxbuster",
     "crates/tools/wrappers/ffuf",
+    "crates/tools/wrappers/fuxploider",
     "crates/tools/wrappers/gau",
     "crates/tools/wrappers/ghauri",
     "crates/tools/wrappers/gitleaks",

@@ -18,6 +18,7 @@ searu-tool-dnsx = { path = "../wrappers/dnsx" }
 searu-tool-dotdotpwn = { path = "../wrappers/dotdotpwn" }
 searu-tool-feroxbuster = { path = "../wrappers/feroxbuster" }
 searu-tool-ffuf = { path = "../wrappers/ffuf" }
+searu-tool-fuxploider = { path = "../wrappers/fuxploider" }
 searu-tool-gau = { path = "../wrappers/gau" }
 searu-tool-ghauri = { path = "../wrappers/ghauri" }
 searu-tool-gitleaks = { path = "../wrappers/gitleaks" }

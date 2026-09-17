@@ -14,6 +14,7 @@ use searu_tool_dnsx::DNSX;
 use searu_tool_dotdotpwn::DOTDOTPWN;
 use searu_tool_feroxbuster::FEROXBUSTER;
 use searu_tool_ffuf::FFUF;
+use searu_tool_fuxploider::FUXPLOIDER;
 use searu_tool_gau::GAU;
 use searu_tool_ghauri::GHAURI;
 use searu_tool_gitleaks::GITLEAKS;
@@ -51,6 +52,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &DNSX,
     &DOTDOTPWN,
     &FEROXBUSTER,
+    &FUXPLOIDER,
     &GAU,
     &GHAURI,
     &GITLEAKS,
