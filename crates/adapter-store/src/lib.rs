@@ -1,6 +1,9 @@
 //! Engagement-file repositories: reads rules of engagement from JSON on disk.
 
-use searu_domain::findings::{Finding, Loot, Observation, Severity, Status};
+use searu_domain::findings::{
+    Finding, Loot, Observation, RecordContext, Severity, Status, StoredFinding, StoredLoot,
+    StoredObservation,
+};
 use searu_domain::ports::{
     AuditEntry, AuditLog, Authorisation, Authoriser, FindingsStore, LootStore, ObservationStore,
     OutputDir, OutputError, OutputStore, ProjectSettings, RepoError, Roe, RoeRepository,
@@ -194,31 +197,12 @@ impl ProjectSettings for FileProjectSettings {
     }
 }
 
-#[derive(Serialize)]
-struct FindingRecord<'a> {
-    kind: &'a str,
-    tool: &'a str,
-    target: &'a str,
-    title: &'a str,
-    severity: &'a str,
-    status: &'a str,
-    attack_technique: &'a [String],
-    cwe: &'a [u32],
-    evidence: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    loot_fingerprint: Option<&'a str>,
+fn internet() -> String {
+    "internet".to_string()
 }
 
-#[derive(Serialize)]
-struct LootRecord<'a> {
-    fingerprint: &'a str,
-    category: &'a str,
-    value: &'a str,
-}
-
-#[derive(Deserialize)]
-struct FindingRow {
-    #[serde(default)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+struct FindingRecord {
     kind: String,
     tool: String,
     target: String,
@@ -231,31 +215,158 @@ struct FindingRow {
     cwe: Vec<u32>,
     #[serde(default)]
     evidence: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     loot_fingerprint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    host: Option<String>,
+    #[serde(default = "internet")]
+    network: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    service: Option<String>,
+    #[serde(default)]
+    first_seen: u64,
+    #[serde(default)]
+    last_seen: u64,
 }
 
-#[derive(Deserialize)]
-struct LootRow {
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+struct LootRecord {
     fingerprint: String,
     category: String,
     value: String,
+    #[serde(default)]
+    tool: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    host: Option<String>,
+    #[serde(default = "internet")]
+    network: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    service: Option<String>,
+    #[serde(default)]
+    first_seen: u64,
+    #[serde(default)]
+    last_seen: u64,
 }
 
-#[derive(Serialize)]
-struct ObservationRecord<'a> {
-    kind: &'a str,
-    value: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    detail: Option<&'a str>,
-}
-
-#[derive(Deserialize)]
-struct ObservationRow {
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+struct ObservationRecord {
     kind: String,
     value: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     detail: Option<String>,
+    #[serde(default)]
+    tool: String,
+    #[serde(default)]
+    technique: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    host: Option<String>,
+    #[serde(default = "internet")]
+    network: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    service: Option<String>,
+    #[serde(default)]
+    first_seen: u64,
+    #[serde(default)]
+    last_seen: u64,
+}
+
+/// A stored record whose first/last-seen timestamps are metadata, not identity — so an upsert can
+/// recognise the same fact across runs and advance `last_seen` in place rather than re-appending.
+trait Upsertable: Serialize + serde::de::DeserializeOwned + Clone + PartialEq {
+    fn clear_seen(&mut self);
+    fn stamp_new(&mut self, now: u64);
+    fn touch(&mut self, now: u64);
+}
+
+impl Upsertable for FindingRecord {
+    fn clear_seen(&mut self) {
+        self.first_seen = 0;
+        self.last_seen = 0;
+    }
+    fn stamp_new(&mut self, now: u64) {
+        self.first_seen = now;
+        self.last_seen = now;
+    }
+    fn touch(&mut self, now: u64) {
+        self.last_seen = now;
+    }
+}
+
+impl Upsertable for LootRecord {
+    fn clear_seen(&mut self) {
+        self.first_seen = 0;
+        self.last_seen = 0;
+    }
+    fn stamp_new(&mut self, now: u64) {
+        self.first_seen = now;
+        self.last_seen = now;
+    }
+    fn touch(&mut self, now: u64) {
+        self.last_seen = now;
+    }
+}
+
+impl Upsertable for ObservationRecord {
+    fn clear_seen(&mut self) {
+        self.first_seen = 0;
+        self.last_seen = 0;
+    }
+    fn stamp_new(&mut self, now: u64) {
+        self.first_seen = now;
+        self.last_seen = now;
+    }
+    fn touch(&mut self, now: u64) {
+        self.last_seen = now;
+    }
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or(0)
+}
+
+/// Upsert a record into an append-only JSONL file: if a record with the same identity (all content bar
+/// the timestamps) is already present, advance its `last_seen`; otherwise append it with
+/// `first_seen`/`last_seen` set to now. The whole file is rewritten so an in-place update is durable.
+fn upsert<R: Upsertable>(path: &Path, incoming: &R) -> Result<Vec<R>, StoreError> {
+    let now = now_secs();
+    let mut records: Vec<R> = read_lines(path)?
+        .iter()
+        .filter_map(|line| serde_json::from_str::<R>(line).ok())
+        .collect();
+    let mut key = incoming.clone();
+    key.clear_seen();
+    let existing = records.iter_mut().find(|record| {
+        let mut probe = (*record).clone();
+        probe.clear_seen();
+        probe == key
+    });
+    match existing {
+        Some(record) => record.touch(now),
+        None => {
+            let mut fresh = incoming.clone();
+            fresh.stamp_new(now);
+            records.push(fresh);
+        }
+    }
+    write_records(path, &records)?;
+    Ok(records)
+}
+
+fn write_records<R: Serialize>(path: &Path, records: &[R]) -> Result<(), StoreError> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| StoreError::Io(e.to_string()))?;
+    }
+    let mut body = String::new();
+    for record in records {
+        body.push_str(
+            &serde_json::to_string(record).map_err(|e| StoreError::Serialise(e.to_string()))?,
+        );
+        body.push('\n');
+    }
+    std::fs::write(path, body).map_err(|e| StoreError::Io(e.to_string()))
 }
 
 fn read_lines(path: &Path) -> Result<Vec<String>, StoreError> {
@@ -296,43 +407,53 @@ impl JsonlFindingsStore {
 }
 
 impl FindingsStore for JsonlFindingsStore {
-    fn emit(&self, finding: &Finding) -> Result<(), StoreError> {
+    fn emit(&self, finding: &Finding, context: &RecordContext) -> Result<(), StoreError> {
         let record = FindingRecord {
-            kind: "finding",
-            tool: &finding.tool,
-            target: &finding.target,
-            title: &finding.title,
-            severity: finding.severity.as_str(),
-            status: finding.status.as_str(),
-            attack_technique: &finding.attack_technique,
-            cwe: &finding.cwe,
-            evidence: &finding.evidence,
-            loot_fingerprint: finding.loot_fingerprint.as_deref(),
+            kind: "finding".to_string(),
+            tool: finding.tool.clone(),
+            target: finding.target.clone(),
+            title: finding.title.clone(),
+            severity: finding.severity.as_str().to_string(),
+            status: finding.status.as_str().to_string(),
+            attack_technique: finding.attack_technique.clone(),
+            cwe: finding.cwe.clone(),
+            evidence: finding.evidence.clone(),
+            loot_fingerprint: finding.loot_fingerprint.clone(),
+            host: context.host.clone(),
+            network: context.network.clone(),
+            service: context.service.clone(),
+            first_seen: 0,
+            last_seen: 0,
         };
-        let line =
-            serde_json::to_string(&record).map_err(|e| StoreError::Serialise(e.to_string()))?;
-        append_line(&self.path, &line)
+        upsert(&self.path, &record).map(|_| ())
     }
 
-    fn list(&self) -> Result<Vec<Finding>, StoreError> {
+    fn list(&self) -> Result<Vec<StoredFinding>, StoreError> {
         let mut findings = Vec::new();
         for line in read_lines(&self.path)? {
-            let Ok(row) = serde_json::from_str::<FindingRow>(&line) else {
+            let Ok(row) = serde_json::from_str::<FindingRecord>(&line) else {
                 continue;
             };
             if row.kind != "finding" {
                 continue;
             }
-            findings.push(Finding {
-                tool: row.tool,
-                target: row.target,
-                title: row.title,
-                severity: severity_from(&row.severity),
-                status: status_from(&row.status),
-                attack_technique: row.attack_technique,
-                cwe: row.cwe,
-                evidence: row.evidence,
-                loot_fingerprint: row.loot_fingerprint,
+            findings.push(StoredFinding {
+                finding: Finding {
+                    tool: row.tool,
+                    target: row.target,
+                    title: row.title,
+                    severity: severity_from(&row.severity),
+                    status: status_from(&row.status),
+                    attack_technique: row.attack_technique,
+                    cwe: row.cwe,
+                    evidence: row.evidence,
+                    loot_fingerprint: row.loot_fingerprint,
+                },
+                host: row.host,
+                network: row.network,
+                service: row.service,
+                first_seen: row.first_seen,
+                last_seen: row.last_seen,
             });
         }
         Ok(findings)
@@ -350,28 +471,40 @@ impl JsonlLootStore {
 }
 
 impl LootStore for JsonlLootStore {
-    fn emit(&self, loot: &Loot) -> Result<(), StoreError> {
+    fn emit(&self, loot: &Loot, context: &RecordContext) -> Result<(), StoreError> {
         let record = LootRecord {
-            fingerprint: &loot.fingerprint,
-            category: &loot.category,
-            value: &loot.value,
+            fingerprint: loot.fingerprint.clone(),
+            category: loot.category.clone(),
+            value: loot.value.clone(),
+            tool: context.tool.clone(),
+            host: context.host.clone(),
+            network: context.network.clone(),
+            service: context.service.clone(),
+            first_seen: 0,
+            last_seen: 0,
         };
-        let line =
-            serde_json::to_string(&record).map_err(|e| StoreError::Serialise(e.to_string()))?;
         let path = self.dir.join("loot.jsonl");
-        append_line(&path, &line)?;
+        upsert(&path, &record)?;
         harden_loot(&self.dir, &path);
         Ok(())
     }
 
-    fn list(&self) -> Result<Vec<Loot>, StoreError> {
+    fn list(&self) -> Result<Vec<StoredLoot>, StoreError> {
         let mut loot = Vec::new();
         for line in read_lines(&self.dir.join("loot.jsonl"))? {
-            if let Ok(row) = serde_json::from_str::<LootRow>(&line) {
-                loot.push(Loot {
-                    fingerprint: row.fingerprint,
-                    category: row.category,
-                    value: row.value,
+            if let Ok(row) = serde_json::from_str::<LootRecord>(&line) {
+                loot.push(StoredLoot {
+                    loot: Loot {
+                        fingerprint: row.fingerprint,
+                        category: row.category,
+                        value: row.value,
+                    },
+                    tool: row.tool,
+                    host: row.host,
+                    network: row.network,
+                    service: row.service,
+                    first_seen: row.first_seen,
+                    last_seen: row.last_seen,
                 });
             }
         }
@@ -392,25 +525,39 @@ impl JsonlObservationStore {
 }
 
 impl ObservationStore for JsonlObservationStore {
-    fn emit(&self, observation: &Observation) -> Result<(), StoreError> {
+    fn emit(&self, observation: &Observation, context: &RecordContext) -> Result<(), StoreError> {
         let record = ObservationRecord {
-            kind: &observation.kind,
-            value: &observation.value,
-            detail: observation.detail.as_deref(),
+            kind: observation.kind.clone(),
+            value: observation.value.clone(),
+            detail: observation.detail.clone(),
+            tool: context.tool.clone(),
+            technique: context.technique.clone(),
+            host: context.host.clone(),
+            network: context.network.clone(),
+            service: context.service.clone(),
+            first_seen: 0,
+            last_seen: 0,
         };
-        let line =
-            serde_json::to_string(&record).map_err(|e| StoreError::Serialise(e.to_string()))?;
-        append_line(&self.path, &line)
+        upsert(&self.path, &record).map(|_| ())
     }
 
-    fn list(&self) -> Result<Vec<Observation>, StoreError> {
+    fn list(&self) -> Result<Vec<StoredObservation>, StoreError> {
         let mut observations = Vec::new();
         for line in read_lines(&self.path)? {
-            if let Ok(row) = serde_json::from_str::<ObservationRow>(&line) {
-                observations.push(Observation {
-                    kind: row.kind,
-                    value: row.value,
-                    detail: row.detail,
+            if let Ok(row) = serde_json::from_str::<ObservationRecord>(&line) {
+                observations.push(StoredObservation {
+                    observation: Observation {
+                        kind: row.kind,
+                        value: row.value,
+                        detail: row.detail,
+                    },
+                    tool: row.tool,
+                    technique: row.technique,
+                    host: row.host,
+                    network: row.network,
+                    service: row.service,
+                    first_seen: row.first_seen,
+                    last_seen: row.last_seen,
                 });
             }
         }
@@ -792,7 +939,7 @@ mod tests {
             evidence: "ip_addr parameter".to_string(),
             loot_fingerprint: Some("ba7816bf8f01".to_string()),
         };
-        store.emit(&finding).unwrap();
+        store.emit(&finding, &RecordContext::default()).unwrap();
 
         let text = std::fs::read_to_string(dir.path().join("findings.jsonl")).unwrap();
         assert!(text.contains("\"kind\":\"finding\""));
@@ -811,7 +958,7 @@ mod tests {
             category: "database-url".to_string(),
             value: "postgres://admin:s3cr3t@db/app".to_string(),
         };
-        store.emit(&loot).unwrap();
+        store.emit(&loot, &RecordContext::default()).unwrap();
 
         let text = std::fs::read_to_string(dir.path().join("loot.jsonl")).unwrap();
         assert!(text.contains("postgres://admin:s3cr3t@db/app"));
@@ -823,25 +970,28 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = JsonlFindingsStore::new(dir.path());
         store
-            .emit(&Finding {
-                tool: "commix".to_string(),
-                target: "http://localhost:5000".to_string(),
-                title: "OS command injection".to_string(),
-                severity: Severity::Critical,
-                status: Status::Confirmed,
-                attack_technique: vec!["T1190".to_string()],
-                cwe: vec![78],
-                evidence: "x".to_string(),
-                loot_fingerprint: Some("ba7816bf8f01".to_string()),
-            })
+            .emit(
+                &Finding {
+                    tool: "commix".to_string(),
+                    target: "http://localhost:5000".to_string(),
+                    title: "OS command injection".to_string(),
+                    severity: Severity::Critical,
+                    status: Status::Confirmed,
+                    attack_technique: vec!["T1190".to_string()],
+                    cwe: vec![78],
+                    evidence: "x".to_string(),
+                    loot_fingerprint: Some("ba7816bf8f01".to_string()),
+                },
+                &RecordContext::default(),
+            )
             .unwrap();
 
         let listed = store.list().unwrap();
         assert_eq!(listed.len(), 1);
-        assert_eq!(listed[0].severity, Severity::Critical);
-        assert_eq!(listed[0].status, Status::Confirmed);
-        assert_eq!(listed[0].attack_technique, vec!["T1190"]);
-        assert_eq!(listed[0].cwe, vec![78]);
+        assert_eq!(listed[0].finding.severity, Severity::Critical);
+        assert_eq!(listed[0].finding.status, Status::Confirmed);
+        assert_eq!(listed[0].finding.attack_technique, vec!["T1190"]);
+        assert_eq!(listed[0].finding.cwe, vec![78]);
     }
 
     #[test]
@@ -849,17 +999,20 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = JsonlLootStore::new(dir.path());
         store
-            .emit(&Loot {
-                fingerprint: "ba7816bf8f01".to_string(),
-                category: "database-url".to_string(),
-                value: "testing".to_string(),
-            })
+            .emit(
+                &Loot {
+                    fingerprint: "ba7816bf8f01".to_string(),
+                    category: "database-url".to_string(),
+                    value: "testing".to_string(),
+                },
+                &RecordContext::default(),
+            )
             .unwrap();
 
         let listed = store.list().unwrap();
         assert_eq!(listed.len(), 1);
-        assert_eq!(listed[0].category, "database-url");
-        assert_eq!(listed[0].value, "testing");
+        assert_eq!(listed[0].loot.category, "database-url");
+        assert_eq!(listed[0].loot.value, "testing");
     }
 
     #[test]
@@ -935,20 +1088,71 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = JsonlObservationStore::new(dir.path());
         store
-            .emit(&Observation {
-                kind: "endpoint".to_string(),
-                value: "/login".to_string(),
-                detail: Some("fields: username,password".to_string()),
-            })
+            .emit(
+                &Observation {
+                    kind: "endpoint".to_string(),
+                    value: "/login".to_string(),
+                    detail: Some("fields: username,password".to_string()),
+                },
+                &RecordContext::default(),
+            )
             .unwrap();
 
         let listed = store.list().unwrap();
         assert_eq!(listed.len(), 1);
-        assert_eq!(listed[0].kind, "endpoint");
-        assert_eq!(listed[0].value, "/login");
+        assert_eq!(listed[0].observation.kind, "endpoint");
+        assert_eq!(listed[0].observation.value, "/login");
         assert_eq!(
-            listed[0].detail.as_deref(),
+            listed[0].observation.detail.as_deref(),
             Some("fields: username,password")
         );
+    }
+
+    #[test]
+    fn re_emitting_an_identical_finding_dedups_and_advances_last_seen() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = JsonlFindingsStore::new(dir.path());
+        let finding = Finding {
+            tool: "commix".to_string(),
+            target: "http://localhost:5000".to_string(),
+            title: "OS command injection".to_string(),
+            severity: Severity::Critical,
+            status: Status::Confirmed,
+            attack_technique: vec!["T1190".to_string()],
+            cwe: vec![78],
+            evidence: "x".to_string(),
+            loot_fingerprint: None,
+        };
+        store.emit(&finding, &RecordContext::default()).unwrap();
+        store.emit(&finding, &RecordContext::default()).unwrap();
+
+        let listed = store.list().unwrap();
+        assert_eq!(listed.len(), 1, "identical findings must not re-append");
+        assert!(listed[0].first_seen <= listed[0].last_seen);
+        let lines = std::fs::read_to_string(dir.path().join("findings.jsonl")).unwrap();
+        assert_eq!(lines.lines().count(), 1);
+    }
+
+    #[test]
+    fn findings_differing_in_one_field_stay_distinct() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = JsonlFindingsStore::new(dir.path());
+        let base = Finding {
+            tool: "commix".to_string(),
+            target: "http://localhost:5000".to_string(),
+            title: "OS command injection".to_string(),
+            severity: Severity::Critical,
+            status: Status::Confirmed,
+            attack_technique: vec!["T1190".to_string()],
+            cwe: vec![78],
+            evidence: "a".to_string(),
+            loot_fingerprint: None,
+        };
+        let mut other = base.clone();
+        other.evidence = "b".to_string();
+        store.emit(&base, &RecordContext::default()).unwrap();
+        store.emit(&other, &RecordContext::default()).unwrap();
+
+        assert_eq!(store.list().unwrap().len(), 2);
     }
 }

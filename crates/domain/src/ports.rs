@@ -1,6 +1,8 @@
 //! Ports: the traits the application depends on, implemented by adapters.
 
-use crate::findings::{Finding, Loot, Observation};
+use crate::findings::{
+    Finding, Loot, Observation, RecordContext, StoredFinding, StoredLoot, StoredObservation,
+};
 use crate::scope::Scope;
 
 #[derive(Default)]
@@ -111,18 +113,18 @@ impl std::fmt::Display for StoreError {
 impl std::error::Error for StoreError {}
 
 pub trait FindingsStore {
-    fn emit(&self, finding: &Finding) -> Result<(), StoreError>;
-    fn list(&self) -> Result<Vec<Finding>, StoreError>;
+    fn emit(&self, finding: &Finding, context: &RecordContext) -> Result<(), StoreError>;
+    fn list(&self) -> Result<Vec<StoredFinding>, StoreError>;
 }
 
 pub trait LootStore {
-    fn emit(&self, loot: &Loot) -> Result<(), StoreError>;
-    fn list(&self) -> Result<Vec<Loot>, StoreError>;
+    fn emit(&self, loot: &Loot, context: &RecordContext) -> Result<(), StoreError>;
+    fn list(&self) -> Result<Vec<StoredLoot>, StoreError>;
 }
 
 pub trait ObservationStore {
-    fn emit(&self, observation: &Observation) -> Result<(), StoreError>;
-    fn list(&self) -> Result<Vec<Observation>, StoreError>;
+    fn emit(&self, observation: &Observation, context: &RecordContext) -> Result<(), StoreError>;
+    fn list(&self) -> Result<Vec<StoredObservation>, StoreError>;
 }
 
 #[derive(Debug)]

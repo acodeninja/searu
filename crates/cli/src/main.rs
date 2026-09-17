@@ -468,7 +468,8 @@ fn run_findings(matches: &ArgMatches) -> i32 {
     );
     match result {
         Ok(findings) => {
-            for finding in findings {
+            for stored in findings {
+                let finding = &stored.finding;
                 println!(
                     "{}\t{}\t{}\t{}\t{}",
                     finding.severity.as_str(),
@@ -497,7 +498,8 @@ fn run_loot(matches: &ArgMatches) -> i32 {
     let reveal = matches.get_flag("reveal");
     match query.filtered(matches.get_one::<String>("category").map(String::as_str)) {
         Ok(loot) => {
-            for item in loot {
+            for stored in loot {
+                let item = &stored.loot;
                 if reveal {
                     println!("{}\t{}\t{}", item.category, item.fingerprint, item.value);
                 } else {
@@ -522,7 +524,8 @@ fn run_observations(matches: &ArgMatches) -> i32 {
     };
     match query.filtered(matches.get_one::<String>("kind").map(String::as_str)) {
         Ok(observations) => {
-            for observation in observations {
+            for stored in observations {
+                let observation = &stored.observation;
                 match &observation.detail {
                     Some(detail) => {
                         println!("{}\t{}\t{}", observation.kind, observation.value, detail)

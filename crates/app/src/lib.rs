@@ -2,7 +2,9 @@
 //! normalise its own output into findings/loot, stores them, and answers queries over that state.
 
 use searu_domain::egress::merge_deny;
-use searu_domain::findings::{Finding, Loot, Observation};
+use searu_domain::findings::{
+    Observation, RecordContext, StoredFinding, StoredLoot, StoredObservation,
+};
 use searu_domain::gate::{decide, Decision};
 use searu_domain::ports::{
     AuditEntry, AuditLog, FindingsStore, LootStore, Mount, ObservationStore, OutputDir,
@@ -135,26 +137,38 @@ where
         self.outputs
             .save_raw(&output, &outcome.stdout, &outcome.stderr)
             .map_err(RunError::Output)?;
+        let context = RecordContext {
+            tool: tool_name.to_string(),
+            technique: technique.to_string(),
+            host: None,
+            network: "internet".to_string(),
+            service: None,
+        };
         let parsed = tool.parse(target, &outcome);
         for loot in &parsed.loot {
-            self.loot.emit(loot).map_err(RunError::Store)?;
+            self.loot.emit(loot, &context).map_err(RunError::Store)?;
         }
         for finding in &parsed.findings {
-            self.findings.emit(finding).map_err(RunError::Store)?;
+            self.findings
+                .emit(finding, &context)
+                .map_err(RunError::Store)?;
         }
         for observation in &parsed.observations {
             self.observations
-                .emit(observation)
+                .emit(observation, &context)
                 .map_err(RunError::Store)?;
         }
         let produced = self.outputs.collect(&output).map_err(RunError::Output)?;
         if !produced.is_empty() {
             self.observations
-                .emit(&Observation {
-                    kind: "output".to_string(),
-                    value: output.workspace.clone(),
-                    detail: Some(format!("{tool_name}: {} file(s)", produced.len())),
-                })
+                .emit(
+                    &Observation {
+                        kind: "output".to_string(),
+                        value: output.workspace.clone(),
+                        detail: Some(format!("{tool_name}: {} file(s)", produced.len())),
+                    },
+                    &context,
+                )
                 .map_err(RunError::Store)?;
         }
         Ok(RunReport::Ran {
@@ -239,16 +253,16 @@ impl<FS: FindingsStore> QueryFindings<FS> {
         technique: Option<&str>,
         severity: Option<&str>,
         tool: Option<&str>,
-    ) -> Result<Vec<Finding>, StoreError> {
+    ) -> Result<Vec<StoredFinding>, StoreError> {
         let mut items = self.findings.list()?;
         if let Some(technique) = technique {
-            items.retain(|f| f.attack_technique.iter().any(|id| id == technique));
+            items.retain(|f| f.finding.attack_technique.iter().any(|id| id == technique));
         }
         if let Some(severity) = severity {
-            items.retain(|f| f.severity.as_str() == severity);
+            items.retain(|f| f.finding.severity.as_str() == severity);
         }
         if let Some(tool) = tool {
-            items.retain(|f| f.tool == tool);
+            items.retain(|f| f.finding.tool == tool);
         }
         Ok(items)
     }
@@ -259,10 +273,10 @@ pub struct QueryLoot<LS> {
 }
 
 impl<LS: LootStore> QueryLoot<LS> {
-    pub fn filtered(&self, category: Option<&str>) -> Result<Vec<Loot>, StoreError> {
+    pub fn filtered(&self, category: Option<&str>) -> Result<Vec<StoredLoot>, StoreError> {
         let mut items = self.loot.list()?;
         if let Some(category) = category {
-            items.retain(|l| l.category == category);
+            items.retain(|l| l.loot.category == category);
         }
         Ok(items)
     }
@@ -273,10 +287,10 @@ pub struct QueryObservations<OS> {
 }
 
 impl<OS: ObservationStore> QueryObservations<OS> {
-    pub fn filtered(&self, kind: Option<&str>) -> Result<Vec<Observation>, StoreError> {
+    pub fn filtered(&self, kind: Option<&str>) -> Result<Vec<StoredObservation>, StoreError> {
         let mut items = self.observations.list()?;
         if let Some(kind) = kind {
-            items.retain(|o| o.kind == kind);
+            items.retain(|o| o.observation.kind == kind);
         }
         Ok(items)
     }
@@ -340,7 +354,7 @@ impl<S: ProjectSettings> HardenProject<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use searu_domain::findings::{Severity, Status};
+    use searu_domain::findings::{Finding, Loot, Severity, Status};
     use searu_domain::ports::{Authorisation, Authoriser, Roe};
     use searu_domain::scope::{HostForm, Scope, ScopeEntry};
     use searu_domain::tools::{ParsedOutput, PhaseAdvice, Tool};
@@ -537,12 +551,25 @@ mod tests {
         items: RefCell<Vec<Finding>>,
     }
     impl FindingsStore for MemFindings {
-        fn emit(&self, finding: &Finding) -> Result<(), StoreError> {
+        fn emit(&self, finding: &Finding, _context: &RecordContext) -> Result<(), StoreError> {
             self.items.borrow_mut().push(finding.clone());
             Ok(())
         }
-        fn list(&self) -> Result<Vec<Finding>, StoreError> {
-            Ok(self.items.borrow().clone())
+        fn list(&self) -> Result<Vec<StoredFinding>, StoreError> {
+            Ok(self
+                .items
+                .borrow()
+                .iter()
+                .cloned()
+                .map(|finding| StoredFinding {
+                    finding,
+                    host: None,
+                    network: "internet".to_string(),
+                    service: None,
+                    first_seen: 0,
+                    last_seen: 0,
+                })
+                .collect())
         }
     }
 
@@ -551,12 +578,26 @@ mod tests {
         items: RefCell<Vec<Loot>>,
     }
     impl LootStore for MemLoot {
-        fn emit(&self, loot: &Loot) -> Result<(), StoreError> {
+        fn emit(&self, loot: &Loot, _context: &RecordContext) -> Result<(), StoreError> {
             self.items.borrow_mut().push(loot.clone());
             Ok(())
         }
-        fn list(&self) -> Result<Vec<Loot>, StoreError> {
-            Ok(self.items.borrow().clone())
+        fn list(&self) -> Result<Vec<StoredLoot>, StoreError> {
+            Ok(self
+                .items
+                .borrow()
+                .iter()
+                .cloned()
+                .map(|loot| StoredLoot {
+                    loot,
+                    tool: String::new(),
+                    host: None,
+                    network: "internet".to_string(),
+                    service: None,
+                    first_seen: 0,
+                    last_seen: 0,
+                })
+                .collect())
         }
     }
 
@@ -565,12 +606,31 @@ mod tests {
         items: RefCell<Vec<Observation>>,
     }
     impl ObservationStore for MemObservations {
-        fn emit(&self, observation: &Observation) -> Result<(), StoreError> {
+        fn emit(
+            &self,
+            observation: &Observation,
+            _context: &RecordContext,
+        ) -> Result<(), StoreError> {
             self.items.borrow_mut().push(observation.clone());
             Ok(())
         }
-        fn list(&self) -> Result<Vec<Observation>, StoreError> {
-            Ok(self.items.borrow().clone())
+        fn list(&self) -> Result<Vec<StoredObservation>, StoreError> {
+            Ok(self
+                .items
+                .borrow()
+                .iter()
+                .cloned()
+                .map(|observation| StoredObservation {
+                    observation,
+                    tool: String::new(),
+                    technique: String::new(),
+                    host: None,
+                    network: "internet".to_string(),
+                    service: None,
+                    first_seen: 0,
+                    last_seen: 0,
+                })
+                .collect())
         }
     }
 
@@ -1009,30 +1069,36 @@ mod tests {
     fn query_findings_filters_by_technique() {
         let store = MemFindings::default();
         store
-            .emit(&Finding {
-                tool: "commix".to_string(),
-                target: LOCAL.to_string(),
-                title: "a".to_string(),
-                severity: Severity::Critical,
-                status: Status::Confirmed,
-                attack_technique: vec!["T1190".to_string()],
-                cwe: vec![78],
-                evidence: String::new(),
-                loot_fingerprint: None,
-            })
+            .emit(
+                &Finding {
+                    tool: "commix".to_string(),
+                    target: LOCAL.to_string(),
+                    title: "a".to_string(),
+                    severity: Severity::Critical,
+                    status: Status::Confirmed,
+                    attack_technique: vec!["T1190".to_string()],
+                    cwe: vec![78],
+                    evidence: String::new(),
+                    loot_fingerprint: None,
+                },
+                &RecordContext::default(),
+            )
             .unwrap();
         store
-            .emit(&Finding {
-                tool: "nmap".to_string(),
-                target: LOCAL.to_string(),
-                title: "b".to_string(),
-                severity: Severity::Info,
-                status: Status::NeedsReview,
-                attack_technique: vec!["T1046".to_string()],
-                cwe: vec![],
-                evidence: String::new(),
-                loot_fingerprint: None,
-            })
+            .emit(
+                &Finding {
+                    tool: "nmap".to_string(),
+                    target: LOCAL.to_string(),
+                    title: "b".to_string(),
+                    severity: Severity::Info,
+                    status: Status::NeedsReview,
+                    attack_technique: vec!["T1046".to_string()],
+                    cwe: vec![],
+                    evidence: String::new(),
+                    loot_fingerprint: None,
+                },
+                &RecordContext::default(),
+            )
             .unwrap();
 
         let query = QueryFindings { findings: store };
