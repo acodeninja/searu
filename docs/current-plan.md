@@ -212,15 +212,16 @@ Four issues surfaced running a full assessment against a local OWASP Juice Shop
    settings-level hook fires inside a subagent; the `permissions.deny` Bash specifiers are enforced
    regardless. Relates to decision 1 (hook hardening) and the *Invariants → Scope* entry.
 
-2. **The sqlmap wrapper never records dumped credentials as loot.** A confirmed T1190/CWE-89 injection
-   in `/rest/products/search?q=` was exploited to dump the `Users` table (24 rows: id, role, email,
-   MD5 password) yet `searu loot` stays empty — the emails/hashes live only in the raw
-   `pentest/outputs/sqlmap/…` stdout/CSV. The wrapper's `parse()`
-   (`crates/tools/wrappers/sqlmap/src/lib.rs`) extracts only the injection finding and the DBMS
-   observation; it has no `--dump`→loot path, unlike commix/hydra (credential subjects landed in
-   `a813bb2`). The sqlmap specialist doc implies dumped credentials land in loot; they do not.
-   Fix belongs with M6 slice 4 (credential subject + CWE-522) — parse `--dump` output into `Loot`
-   (principal/authenticates) + a CWE-522 finding per secret, fingerprint-linked, never the plaintext.
+2. **The sqlmap wrapper never records dumped credentials as loot.** **Fixed.** A confirmed
+   T1190/CWE-89 injection in `/rest/products/search?q=` was exploited to dump the `Users` table (24
+   rows: id, role, email, MD5 password) yet `searu loot` stayed empty — the emails/hashes lived only
+   in the raw `pentest/outputs/sqlmap/…` stdout/CSV. A new `text::dump_tables` parser reads sqlmap's
+   `+----+`-bordered `--dump` tables, and the wrapper's `parse()`
+   (`crates/tools/wrappers/sqlmap/src/lib.rs`) now maps each row's secret column
+   (`password`/`hash`/…) to `Loot` (principal from a `username`/`email` column or a connection
+   string's userinfo; `authenticates` = the target host), deduped by fingerprint, plus one CWE-522
+   exposed-credential finding per secret — fingerprint-linked, never the plaintext (mirrors the
+   commix credential-subject pattern from `a813bb2`, M6 slice 4).
 
 3. **sqlmap's default SQLite payload crashed the target (incidental DoS).** The default technique mix
    included a time-based payload (`RANDOMBLOB(500000000/2)`) that segfaulted Juice Shop's

@@ -6,3 +6,4 @@ license.workspace = true
 
 [dependencies]
 searu-domain = { path = "../../../domain" }
+searu-tool-parser = { path = "../../parser" }

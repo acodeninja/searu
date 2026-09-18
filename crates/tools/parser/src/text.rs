@@ -78,6 +78,53 @@ pub fn commix_command_outputs(text: &str) -> Vec<(String, String)> {
         .collect()
 }
 
+/// A parsed sqlmap `--dump` table: the column headers and the data rows beneath them, read from the
+/// `+----+`-bordered ASCII table sqlmap prints. Cells are trimmed and the bordering pipes dropped.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DumpTable {
+    pub headers: Vec<String>,
+    pub rows: Vec<Vec<String>>,
+}
+
+/// Parse every bordered table in `text` (sqlmap `--dump` output). A run of adjacent `+…+` separator
+/// and `|…|` content lines is one table: its first content row is the header, the rest are data.
+pub fn dump_tables(text: &str) -> Vec<DumpTable> {
+    let mut tables = Vec::new();
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('+') && trimmed.ends_with('+') {
+            continue;
+        }
+        if trimmed.starts_with('|') && trimmed.ends_with('|') {
+            rows.push(dump_cells(trimmed));
+            continue;
+        }
+        flush_table(&mut tables, &mut rows);
+    }
+    flush_table(&mut tables, &mut rows);
+    tables
+}
+
+fn flush_table(tables: &mut Vec<DumpTable>, rows: &mut Vec<Vec<String>>) {
+    if rows.is_empty() {
+        return;
+    }
+    let mut drained = std::mem::take(rows);
+    let headers = drained.remove(0);
+    tables.push(DumpTable {
+        headers,
+        rows: drained,
+    });
+}
+
+fn dump_cells(line: &str) -> Vec<String> {
+    line.trim_matches('|')
+        .split('|')
+        .map(|cell| cell.trim().to_string())
+        .collect()
+}
+
 /// Scan text for secrets, returning `(category, value)` pairs. Matches env-style assignments whose
 /// name looks sensitive (e.g. `DATABASE_URL`, `*_PASSWORD`, `*_TOKEN`, `*_SECRET`, `*_KEY`) and
 /// database/broker connection-string URLs. Deliberately conservative; extend as tools surface more.
@@ -180,6 +227,49 @@ mod tests {
         let secrets = secrets(text);
         assert!(secrets.contains(&("database-url".to_string(), "testing".to_string())));
         assert!(!secrets.iter().any(|(c, _)| c == "npm-package-name"));
+    }
+
+    #[test]
+    fn parses_a_bordered_dump_table_into_headers_and_rows() {
+        let dump = "Database: juiceshop\nTable: Users\n[2 entries]\n\
++----+-------+-------------------+----------------------------------+\n\
+| id | role  | email             | password                         |\n\
++----+-------+-------------------+----------------------------------+\n\
+| 1  | admin | admin@juice-sh.op | 0192023a7bbd73250516f069df18b500 |\n\
+| 2  | user  | jim@juice-sh.op   | e10adc3949ba59abbe56e057f20f883e |\n\
++----+-------+-------------------+----------------------------------+\n";
+        let tables = dump_tables(dump);
+        assert_eq!(tables.len(), 1);
+        assert_eq!(tables[0].headers, ["id", "role", "email", "password"]);
+        assert_eq!(tables[0].rows.len(), 2);
+        assert_eq!(
+            tables[0].rows[0],
+            [
+                "1",
+                "admin",
+                "admin@juice-sh.op",
+                "0192023a7bbd73250516f069df18b500"
+            ]
+        );
+    }
+
+    #[test]
+    fn separates_two_adjacent_dump_tables() {
+        let dump = "Table: Users\n\
++----+-------+\n| id | email |\n+----+-------+\n| 1  | a@x   |\n+----+-------+\n\
+\n\
+Table: Secrets\n\
++----+--------+\n| id | token  |\n+----+--------+\n| 1  | s3cr3t |\n+----+--------+\n";
+        let tables = dump_tables(dump);
+        assert_eq!(tables.len(), 2);
+        assert_eq!(tables[0].headers, ["id", "email"]);
+        assert_eq!(tables[1].headers, ["id", "token"]);
+        assert_eq!(tables[1].rows[0], ["1", "s3cr3t"]);
+    }
+
+    #[test]
+    fn text_without_a_table_yields_none() {
+        assert!(dump_tables("all tested parameters do not appear to be injectable").is_empty());
     }
 
     #[test]
