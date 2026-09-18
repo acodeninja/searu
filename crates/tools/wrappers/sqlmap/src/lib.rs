@@ -5,7 +5,7 @@
 use searu_domain::findings::{Finding, Loot, Observation, Severity, Status};
 use searu_domain::ports::ToolOutcome;
 use searu_domain::scope::target_host;
-use searu_domain::tools::{ParsedOutput, Phase, PhaseAdvice, Tool};
+use searu_domain::tools::{InvocationContext, ParsedOutput, Phase, PhaseAdvice, Tool};
 use searu_tool_parser::{fingerprint, text};
 
 pub struct Sqlmap;
@@ -52,6 +52,24 @@ impl Tool for Sqlmap {
         let mut argv = vec!["-u".to_string(), target.to_string(), "--batch".to_string()];
         argv.extend(args.iter().cloned());
         argv
+    }
+
+    fn invocation_in(
+        &self,
+        target: &str,
+        args: &[String],
+        context: InvocationContext,
+    ) -> Vec<String> {
+        // sqlmap's default technique mix includes a time-based payload (SQLite's `RANDOMBLOB` delay)
+        // that can crash a fragile target — availability damage from a default, not a chosen action.
+        // Unless destructive action is authorised, and unless the caller pinned their own --technique,
+        // restrict to boolean/error/union so a plain detection run cannot degrade the target.
+        if context.destructive_authorised || pins_technique(args) {
+            return self.invocation(target, args);
+        }
+        let mut safe = args.to_vec();
+        safe.push("--technique=BEU".to_string());
+        self.invocation(target, &safe)
     }
 
     fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
@@ -167,6 +185,10 @@ fn dump_loot(target: &str, stdout: &str) -> Vec<Loot> {
     loot
 }
 
+fn pins_technique(args: &[String]) -> bool {
+    args.iter().any(|arg| arg.starts_with("--technique"))
+}
+
 fn is_secret_column(header: &str) -> bool {
     matches!(
         header.to_ascii_lowercase().as_str(),
@@ -210,6 +232,37 @@ mod tests {
                 "username=a&password=a"
             ]
         );
+    }
+
+    fn context(destructive: bool) -> InvocationContext {
+        InvocationContext {
+            destructive_authorised: destructive,
+        }
+    }
+
+    #[test]
+    fn a_non_destructive_run_drops_the_time_based_payload() {
+        let argv = SQLMAP.invocation_in("http://t/", &[], context(false));
+        assert!(argv.contains(&"--technique=BEU".to_string()));
+    }
+
+    #[test]
+    fn a_destructive_authorised_run_keeps_the_full_defaults() {
+        let argv = SQLMAP.invocation_in("http://t/", &[], context(true));
+        assert!(!argv.iter().any(|arg| arg.starts_with("--technique")));
+    }
+
+    #[test]
+    fn a_caller_pinned_technique_is_never_overridden() {
+        let pinned = ["--technique=BEUST".to_string()];
+        let argv = SQLMAP.invocation_in("http://t/", &pinned, context(false));
+        assert_eq!(
+            argv.iter()
+                .filter(|arg| arg.starts_with("--technique"))
+                .count(),
+            1
+        );
+        assert!(argv.contains(&"--technique=BEUST".to_string()));
     }
 
     #[test]

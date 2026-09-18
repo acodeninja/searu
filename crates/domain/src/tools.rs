@@ -12,6 +12,13 @@ pub struct ParsedOutput {
     pub observations: Vec<Observation>,
 }
 
+/// What the ROE authorises for a run, made available when a tool builds its invocation so a tool whose
+/// *default* behaviour could damage availability can tighten it unless the operator opted in.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct InvocationContext {
+    pub destructive_authorised: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
     Reconnaissance,
@@ -71,6 +78,16 @@ pub trait Tool: Sync {
     fn uses(&self) -> &'static [PhaseAdvice];
     /// The tool arguments (not `docker`) for a run against `target` with the caller's extra `args`.
     fn invocation(&self, target: &str, args: &[String]) -> Vec<String>;
+    /// The invocation with authorisation context in hand. Defaults to `invocation`; a tool overrides
+    /// this only to make its *default* behaviour safer when the run is not destructive-authorised.
+    fn invocation_in(
+        &self,
+        target: &str,
+        args: &[String],
+        _context: InvocationContext,
+    ) -> Vec<String> {
+        self.invocation(target, args)
+    }
     /// Normalise the tool's output into findings/loot for a run against `target` under `technique` — the
     /// ATT&CK technique the run performed, so a tool can label or branch on what the run was for.
     fn parse(&self, target: &str, technique: &str, outcome: &ToolOutcome) -> ParsedOutput;

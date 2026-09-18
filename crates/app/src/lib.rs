@@ -17,7 +17,7 @@ use searu_domain::ports::{
     ToolRunner, WordlistError, WordlistProvider,
 };
 use searu_domain::scope::{output_target, source_target, target_host, OUTPUT_MOUNT, SOURCE_MOUNT};
-use searu_domain::tools::ToolRegistry;
+use searu_domain::tools::{InvocationContext, ToolRegistry};
 
 const SECLISTS_TOKEN: &str = "seclists:";
 const SECLISTS_MOUNT: &str = "/seclists";
@@ -129,7 +129,11 @@ where
         }
 
         let output = self.outputs.prepare(tool_name).map_err(RunError::Output)?;
-        let (argv, mounts) = self.resolve_mounts(target, &output, tool.invocation(target, args))?;
+        let context = InvocationContext {
+            destructive_authorised: roe.authorisation.destructive_authorised,
+        };
+        let (argv, mounts) =
+            self.resolve_mounts(target, &output, tool.invocation_in(target, args, context))?;
         let invocation = ToolInvocation {
             tool: tool.name(),
             target,

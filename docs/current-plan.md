@@ -223,13 +223,15 @@ Four issues surfaced running a full assessment against a local OWASP Juice Shop
    exposed-credential finding per secret — fingerprint-linked, never the plaintext (mirrors the
    commix credential-subject pattern from `a813bb2`, M6 slice 4).
 
-3. **sqlmap's default SQLite payload crashed the target (incidental DoS).** The default technique mix
-   included a time-based payload (`RANDOMBLOB(500000000/2)`) that segfaulted Juice Shop's
-   `better-sqlite3` binding (container exit 139); re-running restricted to `--technique=BE`
-   (boolean+error) completed cleanly. In-scope here (destructive was authorised) but availability
-   damage from a *default*, not a chosen destructive action, is a foot-gun. Consider filtering the
-   heavy-`RANDOMBLOB` payload or defaulting SQLite runs to `BE` unless `destructive_authorised`.
-   Tension with *"preserve each tool's hard-won defaults"* — worth a decision.
+3. **sqlmap's default SQLite payload crashed the target (incidental DoS).** **Fixed.** The default
+   technique mix included a time-based payload (`RANDOMBLOB(500000000/2)`) that segfaulted Juice Shop's
+   `better-sqlite3` binding (container exit 139); re-running restricted to boolean/error/union
+   completed cleanly. Decision (user): gate on `destructive_authorised`. A new `InvocationContext`
+   (`domain::tools`) threads the ROE's `destructive_authorised` into a provided `Tool::invocation_in`
+   (defaults to `invocation`, so the ~40 other wrappers are untouched); the app passes it at the single
+   call site. sqlmap overrides it to append `--technique=BEU` unless destructive is authorised or the
+   caller pinned their own `--technique`. Full defaults (incl. time-based) return the moment destructive
+   is authorised, preserving sqlmap's hard-won behaviour where the operator opted into impact.
 
 4. **nmap cannot run against a `url`-type target.** With ROE target `http://localhost:3000/`, `searu`
    passes `host.docker.internal:3000` to nmap as a single argument; nmap tries to resolve the whole

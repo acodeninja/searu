@@ -18,5 +18,12 @@ results:
     searu findings                    # confirmed SQL-injection finding, CWE-89
     searu observations --kind tech    # the fingerprinted back-end DBMS
 
-To retrieve data add sqlmap's own flags after `--` (e.g. `--dump`, `--current-db`). A negative with no
-oracle means "sqlmap could not tell", not "clean". See `searu tool advice sqlmap` for detail.
+To retrieve data add sqlmap's own flags after `--` (e.g. `--dump`, `--current-db`). Dumped credentials
+land in `searu loot` (subject + host), each also raised as a CWE-522 exposed-credential finding.
+
+Unless the ROE authorises destructive action, searu restricts a run to `--technique=BEU`
+(boolean/error/union) — sqlmap's default time-based payload can crash a fragile target (a SQLite
+`RANDOMBLOB` delay took Juice Shop down). Pin your own `-- --technique=...` (e.g. add `T`) to override.
+
+A negative with no oracle means "sqlmap could not tell", not "clean". See `searu tool advice sqlmap`
+for detail.
