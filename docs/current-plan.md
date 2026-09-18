@@ -233,12 +233,17 @@ Four issues surfaced running a full assessment against a local OWASP Juice Shop
    caller pinned their own `--technique`. Full defaults (incl. time-based) return the moment destructive
    is authorised, preserving sqlmap's hard-won behaviour where the operator opted into impact.
 
-4. **nmap cannot run against a `url`-type target.** With ROE target `http://localhost:3000/`, `searu`
-   passes `host.docker.internal:3000` to nmap as a single argument; nmap tries to resolve the whole
-   `host:port` string as a hostname and fails. A host-only `--target localhost` is then refused as
-   out-of-scope. Recon fell back to httpx/whatweb for the service fingerprint. The nmap wrapper needs
-   to split host from port (`-p <port> <host>`) when the resolved target carries one, or the gate must
-   accept the bare host of an in-scope `url` target for `T1046`.
+4. **nmap cannot run against a `url`-type target.** **Fixed** (scope-authoring approach, user
+   decision). With ROE target `http://localhost:3000/`, nmap (which needs a bare host, never a URL)
+   could not run: a host-only `--target localhost` was refused out-of-scope because the `url` entry
+   pins port 3000. Rather than split host:port in the wrapper or relax the gate, searu now guides the
+   operator to scope the host. `domain::scope::suggest_addition` detects a target refused only on the
+   port — or a loopback alias of an in-scope loopback host — and `searu run` prints a `hint:` naming
+   the `host`/`ip` entries to add (for a loopback URL, both `localhost` and `127.0.0.1`). The scoping
+   section and the nmap specialist tell the operator to add them (explicitly — searu never widens
+   scope). With `localhost` scoped as a host, `searu run nmap --target localhost` reaches
+   `host.docker.internal` via the adapter's existing rewrite and scans normally. Upholds *scope is
+   intrinsic* and *identity-never-expands-scope*.
 
 ## old-version reference map (semantics/tests to port)
 

@@ -262,6 +262,15 @@ fn run_action(matches: &ArgMatches) -> i32 {
         }
         Ok(RunReport::Refused(decision)) => {
             eprintln!("REFUSED: {decision}");
+            if matches!(decision, searu_domain::gate::Decision::OutOfScope) {
+                use searu_domain::ports::RoeRepository;
+                if let Ok(loaded) = JsonRoeRepository::new(roe).load() {
+                    if let Some(hint) = searu_domain::scope::suggest_addition(target, &loaded.scope)
+                    {
+                        eprintln!("hint: {hint}");
+                    }
+                }
+            }
             1
         }
         Err(RunError::Repo(error)) => {

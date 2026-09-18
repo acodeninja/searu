@@ -89,6 +89,66 @@ pub fn is_host_in_scope(target: &str, scope: &Scope) -> bool {
     true
 }
 
+/// When a target is refused as out of scope but its host is already named by an in-scope host entry
+/// (only a pinned port kept it out), or it is a loopback alias of such a host, suggest the `host`
+/// scope entries the operator can add so host-level techniques (e.g. T1046/nmap, which need a bare
+/// host, never a URL) can run. Returns `None` when the target is in scope or genuinely foreign. searu
+/// never widens scope on its own — this only tells the operator what to add.
+pub fn suggest_addition(target: &str, scope: &Scope) -> Option<String> {
+    if is_host_in_scope(target, scope) {
+        return None;
+    }
+    let host = target_host(target);
+    let names_host = scope
+        .targets
+        .iter()
+        .any(|entry| entry_names_host(&host, entry));
+    let loopback_in_scope = is_loopback(&host)
+        && scope
+            .targets
+            .iter()
+            .any(|entry| entry_host(entry).is_some_and(|h| is_loopback(&h)));
+    if !names_host && !loopback_in_scope {
+        return None;
+    }
+    let hosts = if is_loopback(&host) {
+        "localhost and 127.0.0.1".to_string()
+    } else {
+        host.clone()
+    };
+    Some(format!(
+        "{host} is named by an in-scope target but reachable only on a pinned port. To run host-level \
+         techniques (e.g. T1046/nmap), add {hosts} to the ROE scope as host entries."
+    ))
+}
+
+fn entry_names_host(host: &str, entry: &ScopeEntry) -> bool {
+    match entry {
+        ScopeEntry::Host { form, value, .. } => host_form_matches(host, *form, value),
+        _ => false,
+    }
+}
+
+fn entry_host(entry: &ScopeEntry) -> Option<String> {
+    match entry {
+        ScopeEntry::Host {
+            form: HostForm::Url,
+            value,
+            ..
+        } => Some(target_host(value)),
+        ScopeEntry::Host {
+            form: HostForm::Domain | HostForm::Ip,
+            value,
+            ..
+        } => Some(value.to_ascii_lowercase()),
+        _ => None,
+    }
+}
+
+fn is_loopback(host: &str) -> bool {
+    host == "localhost" || host == "::1" || host.starts_with("127.")
+}
+
 fn host_matches(host: &str, port: Option<u16>, entry: &ScopeEntry) -> bool {
     match entry {
         ScopeEntry::Host {
@@ -393,5 +453,44 @@ mod tests {
         assert_eq!(target_port("http://localhost:5000/x"), Some(5000));
         assert_eq!(target_port("localhost:5000"), Some(5000));
         assert_eq!(target_port("127.0.0.1"), None);
+    }
+
+    fn loopback_url_scope() -> Scope {
+        Scope {
+            targets: vec![host_on_port(HostForm::Url, "http://localhost:3000/", 3000)],
+            exclusions: vec![],
+        }
+    }
+
+    #[test]
+    fn a_bare_loopback_host_refused_on_port_suggests_adding_both_aliases() {
+        let hint = suggest_addition("localhost", &loopback_url_scope()).expect("a suggestion");
+        assert!(hint.contains("localhost and 127.0.0.1"));
+        assert!(hint.contains("host entries"));
+    }
+
+    #[test]
+    fn the_other_loopback_alias_is_also_suggested() {
+        assert!(suggest_addition("127.0.0.1", &loopback_url_scope()).is_some());
+    }
+
+    #[test]
+    fn an_in_scope_target_needs_no_suggestion() {
+        assert!(suggest_addition("http://localhost:3000/x", &loopback_url_scope()).is_none());
+    }
+
+    #[test]
+    fn a_foreign_host_gets_no_suggestion() {
+        assert!(suggest_addition("evil.example.org", &loopback_url_scope()).is_none());
+    }
+
+    #[test]
+    fn a_named_host_refused_only_on_port_is_suggested() {
+        let scope = Scope {
+            targets: vec![host_on_port(HostForm::Domain, "staging.example.com", 443)],
+            exclusions: vec![],
+        };
+        let hint = suggest_addition("staging.example.com", &scope).expect("a suggestion");
+        assert!(hint.contains("staging.example.com"));
     }
 }

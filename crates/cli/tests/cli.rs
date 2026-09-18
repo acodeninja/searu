@@ -21,6 +21,12 @@ const BOGUS_TECHNIQUE_ROE: &str = r#"{
     "authorisation": { "exploitation_authorised_by": { "name": "Lab", "email": "lab@example.com" } }
 }"#;
 
+const LOOPBACK_URL_ROE: &str = r#"{
+    "scope": { "targets": [ { "type": "url", "value": "http://localhost:3000/", "port": 3000 } ] },
+    "allowed_techniques": ["T1046"],
+    "authorisation": { "exploitation_authorised_by": { "name": "Lab", "email": "lab@example.com" } }
+}"#;
+
 fn roe_file(content: &str) -> (tempfile::TempDir, String) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("rules-of-engagement.json");
@@ -95,6 +101,30 @@ fn run_refuses_an_out_of_scope_target() {
     let audit = std::fs::read_to_string(dir.path().join("pentest").join("audit.jsonl")).unwrap();
     assert!(audit.contains("OUT OF SCOPE"));
     assert!(audit.contains("evil.example.org"));
+}
+
+#[test]
+fn a_host_only_target_of_a_url_scope_is_refused_with_a_scope_hint() {
+    let (dir, roe) = roe_file(LOOPBACK_URL_ROE);
+    Command::cargo_bin("searu")
+        .unwrap()
+        .current_dir(dir.path())
+        .args([
+            "run",
+            "nmap",
+            "--technique",
+            "T1046",
+            "--target",
+            "localhost",
+            "--roe",
+            &roe,
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(contains("OUT OF SCOPE"))
+        .stderr(contains("hint:"))
+        .stderr(contains("localhost and 127.0.0.1"));
 }
 
 #[test]

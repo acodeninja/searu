@@ -37,6 +37,13 @@ Target `type` is one of `domain` / `ip` / `cidr` / `url` (optional `port`); non-
 `person`, `osint-domain` never grant network scope. Add `"destructive_authorised": true` under
 `authorisation` only if destructive techniques are signed off.
 
+A `url` target is pinned to its port, so a host-level technique that needs a bare host (e.g. T1046
+with nmap, which takes a host, never a URL) is refused against it. When you scope a `url` — especially
+a loopback one like `http://localhost:3000/` — **ask the operator** whether to also add the URL's host
+as a `host`/`ip` entry, and for a loopback URL both `localhost` and `127.0.0.1`, so host-level scans
+can run. Add them explicitly; searu never widens scope on its own. (`searu run` prints this hint when a
+host-only target is refused only on the port.)
+
 Then validate it:
 
 ```
@@ -56,6 +63,8 @@ Before any tool runs, close the network side-doors so every target-facing action
 searu harden
 ```
 
-This writes a project-scoped `.claude/settings.json` that denies `WebFetch`, `WebSearch` and MCP
-tools for this engagement (merged with any existing settings, idempotent). It is the enforced backstop
-to the PreToolUse hook: reach a target only via `searu run`.
+This writes a project-scoped `.claude/settings.json` (merged with any existing settings, idempotent):
+a settings-level `PreToolUse` hook running `searu scope-hook` and a `permissions.deny` over `WebFetch`,
+`WebSearch`, MCP tools and the target-reaching Bash programs (`docker`, `curl`, `wget`, `nc`, `ncat`,
+`socat`). Unlike a skill-frontmatter hook, this reaches a spawned specialist — the enforced layer that
+makes every target-facing action go through `searu run`.
