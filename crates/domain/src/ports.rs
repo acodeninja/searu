@@ -130,12 +130,20 @@ pub trait ObservationStore {
 #[derive(Debug)]
 pub enum WordlistError {
     Fetch(String),
+    NotFound(String),
 }
 
 impl std::fmt::Display for WordlistError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             WordlistError::Fetch(message) => write!(f, "could not fetch the wordlist: {message}"),
+            WordlistError::NotFound(relative) => write!(
+                f,
+                "no such SecLists wordlist: {relative}. Only a `seclists:<path>` reference resolves \
+                 inside the container — host filesystem paths and URLs are invisible to the tool. \
+                 Check the path exists in SecLists (e.g. \
+                 seclists:Passwords/Common-Credentials/xato-net-10-million-passwords-10000.txt)."
+            ),
         }
     }
 }
@@ -239,4 +247,18 @@ pub struct AuditEntry<'a> {
 
 pub trait AuditLog {
     fn record(&self, entry: &AuditEntry) -> Result<(), StoreError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_missing_wordlist_names_the_path_and_steers_away_from_host_paths() {
+        let message =
+            WordlistError::NotFound("Passwords/darkweb2017-top100.txt".to_string()).to_string();
+        assert!(message.contains("Passwords/darkweb2017-top100.txt"));
+        assert!(message.contains("seclists:"));
+        assert!(message.contains("host filesystem paths and URLs are invisible"));
+    }
 }

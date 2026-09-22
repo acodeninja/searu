@@ -159,6 +159,17 @@ fn searu_home() -> PathBuf {
     PathBuf::from(home).join(".searu")
 }
 
+/// A 404 means the caller asked for a wordlist that does not exist (a stale or invented SecLists
+/// path) — a mistake to correct, not a transient fetch failure — so it earns its own actionable
+/// variant. Anything else (DNS, connection, other HTTP status) stays a generic fetch error.
+fn classify_fetch_failure(relative: &str, url: &str, stderr: &str) -> WordlistError {
+    if stderr.contains("The requested URL returned error: 404") {
+        WordlistError::NotFound(relative.to_string())
+    } else {
+        WordlistError::Fetch(format!("curl failed for {url}: {stderr}"))
+    }
+}
+
 impl WordlistProvider for DockerWordlistProvider {
     fn root(&self) -> String {
         self.root.to_string_lossy().into_owned()
@@ -189,10 +200,8 @@ impl WordlistProvider for DockerWordlistProvider {
             .output()
             .map_err(|e| WordlistError::Fetch(e.to_string()))?;
         if !output.status.success() {
-            return Err(WordlistError::Fetch(format!(
-                "curl failed for {url}: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            )));
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(classify_fetch_failure(relative, &url, stderr.trim()));
         }
         if output.stdout.is_empty() {
             return Err(WordlistError::Fetch(format!("empty wordlist at {url}")));
@@ -278,6 +287,28 @@ mod tests {
             argv[dash_v + 1],
             "/work/pentest/outputs/gowitness/0001:/out"
         );
+    }
+
+    #[test]
+    fn a_404_is_classified_as_a_missing_wordlist() {
+        let error = classify_fetch_failure(
+            "Passwords/darkweb2017-top100.txt",
+            "https://example/Passwords/darkweb2017-top100.txt",
+            "curl: (22) The requested URL returned error: 404",
+        );
+        assert!(
+            matches!(error, WordlistError::NotFound(path) if path == "Passwords/darkweb2017-top100.txt")
+        );
+    }
+
+    #[test]
+    fn a_connection_failure_stays_a_generic_fetch_error() {
+        let error = classify_fetch_failure(
+            "Passwords/x.txt",
+            "https://example/Passwords/x.txt",
+            "curl: (7) Failed to connect",
+        );
+        assert!(matches!(error, WordlistError::Fetch(_)));
     }
 
     #[test]
