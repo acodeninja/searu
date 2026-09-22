@@ -15,7 +15,7 @@ pub static HYDRA: Hydra = Hydra;
 static USES: &[PhaseAdvice] = &[PhaseAdvice {
     phase: Phase::InitialAccess,
     when: "online credential brute-force — guess valid login/password pairs against a live auth endpoint (web form, basic auth, a service) (T1110, CWE-307). Exploitation tier: the ROE must allow-list T1110 and name an authoriser",
-    invoke: "searu run hydra --technique T1110 --target <host> -- -s <port> -l <user> -P seclists:Passwords/Common-Credentials/xato-net-10-million-passwords-10000.txt http-post-form '<path>:<body-with-^USER^/^PASS^>:H=Content-Type\\: application/json:<fail-string>'  (the host is the target; everything else — service, spec, login/password lists — after `--`)",
+    invoke: "searu run hydra --technique T1110 --target <host> -- -s <port> -l <user> -P seclists:Passwords/Common-Credentials/Pwdb_top-10000.txt http-post-form '<path>:<body-with-^USER^/^PASS^>:H=Content-Type\\: application/json:S=<success-token>'  (the host is the target; everything else after `--`. A JSON/REST login answers failure with 401/403, so match the success response with S=<token>, not a fail-string; F=<text> only works when failure returns 200)",
     interpret: "searu findings --tool hydra — a weak-credentials finding (CWE-307) per cracked account; the password is stored as loot (searu loot --reveal), not in the finding",
     chain: "log in with the cracked credential and pivot to the authenticated attack surface (IDOR, admin functions) within the ROE",
 }];
@@ -109,10 +109,15 @@ mod tests {
     #[test]
     fn the_recommended_wordlist_is_a_live_seclists_path() {
         let invoke = HYDRA.uses()[0].invoke;
-        assert!(invoke.contains(
-            "seclists:Passwords/Common-Credentials/xato-net-10-million-passwords-10000.txt"
-        ));
+        assert!(invoke.contains("seclists:Passwords/Common-Credentials/Pwdb_top-10000.txt"));
         assert!(!invoke.contains("darkweb2017-top100.txt"));
+    }
+
+    #[test]
+    fn the_json_login_hint_matches_the_success_response_not_a_fail_string() {
+        let invoke = HYDRA.uses()[0].invoke;
+        assert!(invoke.contains("S=<success-token>"));
+        assert!(!invoke.contains(":<fail-string>'"));
     }
 
     #[test]

