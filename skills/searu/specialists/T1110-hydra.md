@@ -10,7 +10,8 @@ or a network service. Exploitation tier — the ROE must allow-list T1110 and na
 Run — the target is the **host**; the service, form spec and login/password lists are hydra's own flags
 after `--`:
 
-    searu run hydra --technique T1110 --target host -- -s 443 -l admin -P seclists:Passwords/darkweb2017-top100.txt \
+    searu run hydra --technique T1110 --target host -- -s 443 -l admin \
+      -P seclists:Passwords/Common-Credentials/xato-net-10-million-passwords-10000.txt \
       http-post-form '/login:user=^USER^&pass=^PASS^:F=Invalid credentials'
 
 For a JSON API, put the body as JSON and add the content-type header, e.g.
