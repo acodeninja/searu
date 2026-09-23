@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1
+FROM debian:bookworm-slim AS build
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       git ca-certificates build-essential libssl-dev zlib1g-dev yasm libgmp-dev libpcap-dev libbz2-dev \
+    && git clone https://github.com/openwall/john.git /opt/john \
+    && git -C /opt/john checkout 9a336d800a091bec9650c29282485145f31c9ffc \
+    && cd /opt/john/src && ./configure && make -sj4 \
+    && rm -rf /opt/john/.git /opt/john/src
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       libssl3 libgomp1 libgmp10 libbz2-1.0 libpcap0.8 zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /opt/john /opt/john
+
+RUN cat > /opt/crack.sh <<'CRACK_EOF'

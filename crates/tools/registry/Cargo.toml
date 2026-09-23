@@ -14,6 +14,7 @@ searu-tool-browser = { path = "../wrappers/browser" }
 searu-tool-checkov = { path = "../wrappers/checkov" }
 searu-tool-commix = { path = "../wrappers/commix" }
 searu-tool-corsy = { path = "../wrappers/corsy" }
+searu-tool-crack = { path = "../wrappers/crack" }
 searu-tool-crlfuzz = { path = "../wrappers/crlfuzz" }
 searu-tool-dalfox = { path = "../wrappers/dalfox" }
 searu-tool-dnsx = { path = "../wrappers/dnsx" }

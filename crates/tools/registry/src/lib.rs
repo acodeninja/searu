@@ -10,6 +10,7 @@ use searu_tool_browser::BROWSER;
 use searu_tool_checkov::CHECKOV;
 use searu_tool_commix::COMMIX;
 use searu_tool_corsy::CORSY;
+use searu_tool_crack::CRACK;
 use searu_tool_crlfuzz::CRLFUZZ;
 use searu_tool_dalfox::DALFOX;
 use searu_tool_dnsx::DNSX;
@@ -55,6 +56,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &CHECKOV,
     &COMMIX,
     &CORSY,
+    &CRACK,
     &CRLFUZZ,
     &DALFOX,
     &DNSX,

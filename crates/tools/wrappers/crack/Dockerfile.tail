@@ -1,0 +1,3 @@
+CRACK_EOF
+
+ENTRYPOINT ["sh", "/opt/crack.sh"]
