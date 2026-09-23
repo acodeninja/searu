@@ -25,7 +25,17 @@ done
 work=$(mktemp -d)
 hashfile="$work/hashes"
 if [ -n "$FILE" ]; then
-    "$K2J" "$FILE" > "$hashfile" 2>/dev/null || cp "$FILE" "$hashfile"
+    if [ ! -x "$K2J" ]; then
+        echo "crack: keepass2john not found at $K2J (this john build lacks it)" >&2
+        exit 3
+    fi
+    # Surface keepass2john's real error (unsupported KDBX version, keyfile-protected DB, …) instead of
+    # hiding it and feeding John a raw binary blob that yields a misleading "No password hashes loaded".
+    if ! "$K2J" "$FILE" > "$hashfile" 2>"$work/k2j.err" || [ ! -s "$hashfile" ]; then
+        echo "crack: keepass2john could not convert $FILE:" >&2
+        cat "$work/k2j.err" >&2
+        exit 3
+    fi
     FORMAT=""
 elif [ -n "$HASH" ]; then
     printf '%s\n' "$HASH" > "$hashfile"

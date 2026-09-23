@@ -44,10 +44,18 @@ impl Tool for Crack {
         USES
     }
 
-    fn invocation(&self, _target: &str, args: &[String]) -> Vec<String> {
-        // The hash/file/wordlist are the caller's flags; the target is only for scope. A `seclists:`
-        // wordlist and an `out:` file are resolved and mounted by the runner.
-        args.to_vec()
+    fn invocation(&self, target: &str, args: &[String]) -> Vec<String> {
+        // The hash/file/wordlist are the caller's flags; a `seclists:` wordlist is resolved by the
+        // runner. To crack a downloaded file, point the *target* at it with `src:<path>` — the runner
+        // mounts it read-only at the source mount, and we hand that mount to `--file` here (only a
+        // `src:` target mounts a file, so this is the way to feed crack a `.kdbx`/zip).
+        let mut argv = args.to_vec();
+        let has_input = args.iter().any(|a| a == "--file" || a == "--hash");
+        if target.starts_with("src:") && !has_input {
+            argv.push("--file".to_string());
+            argv.push(searu_domain::scope::SOURCE_MOUNT.to_string());
+        }
+        argv
     }
 
     fn parse(&self, target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
@@ -129,6 +137,26 @@ mod tests {
                 "raw-md5"
             ]
         );
+    }
+
+    #[test]
+    fn a_src_file_target_is_handed_to_john_as_the_source_mount() {
+        let argv = CRACK.invocation(
+            "src:incident-support.kdbx",
+            &[
+                "--wordlist".to_string(),
+                "seclists:Passwords/Common-Credentials/Pwdb_top-10000.txt".to_string(),
+            ],
+        );
+        assert!(argv
+            .windows(2)
+            .any(|w| w[0] == "--file" && w[1] == searu_domain::scope::SOURCE_MOUNT));
+    }
+
+    #[test]
+    fn an_explicit_input_is_not_overridden_by_a_src_target() {
+        let argv = CRACK.invocation("src:x", &["--hash".to_string(), "abc".to_string()]);
+        assert!(!argv.iter().any(|a| a == "--file"));
     }
 
     #[test]

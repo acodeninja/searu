@@ -6,6 +6,7 @@ RUN apt-get update \
     && git clone https://github.com/openwall/john.git /opt/john \
     && git -C /opt/john checkout 9a336d800a091bec9650c29282485145f31c9ffc \
     && cd /opt/john/src && ./configure && make -sj4 \
+    && test -x /opt/john/run/keepass2john \
     && rm -rf /opt/john/.git /opt/john/src
 
 FROM debian:bookworm-slim
