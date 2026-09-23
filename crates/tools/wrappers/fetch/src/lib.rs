@@ -1,9 +1,10 @@
-//! The fetch tool wrapper: download an in-scope file to the run's output directory so a later tool can
-//! work on it — the `.bak`, backup and KeePass files an app leaves exposed. It writes the body to the
-//! output mount (`/out` via the `out:` token) and records the saved file as a download observation; the
-//! generic output collector lists it too. Pair it with crack to open a downloaded `.kdbx`.
+//! The fetch tool wrapper: a general HTTP request. GET downloads an in-scope file to the run's output
+//! directory (the `.bak`, backup and KeePass files an app leaves exposed); `--method POST/PUT` with
+//! `--data` drives an API — most importantly `POST /rest/user/login` to **mint a session token**, which
+//! is surfaced as loot so `authz --header`/`jwt` can carry it. The response body is written to the
+//! output mount (`/out` via the `out:` token) and recorded as a download observation.
 
-use searu_domain::findings::Observation;
+use searu_domain::findings::{Loot, Observation};
 use searu_domain::ports::ToolOutcome;
 use searu_domain::tools::{ParsedOutput, Phase, PhaseAdvice, Tool};
 
@@ -13,10 +14,10 @@ pub static FETCH: Fetch = Fetch;
 
 static USES: &[PhaseAdvice] = &[PhaseAdvice {
     phase: Phase::Discovery,
-    when: "retrieve an exposed file for offline work — a backup (.bak), a config, an archive or a KeePass database found in a listing or by forced browsing (T1083). Active tier: allow-listing the technique is enough",
-    invoke: "searu run fetch --technique T1083 --target http://host:port/ftp/incident-support.kdbx  (a 403 backup often yields to a null-byte suffix, e.g. .../coupons.md.bak%2500.md; add --name to rename, --header for auth)",
-    interpret: "searu observations --kind download (the saved file and its size); the file lands in the run's output directory (searu observations --kind output)",
-    chain: "feed the file to the tool that opens it — a KeePass/zip to `searu run crack --file out:<name>`, source to a src: analysis, secrets to loot",
+    when: "make an HTTP request — GET to retrieve an exposed file (.bak/config/archive/KeePass) for offline work, or POST/PUT to drive an API, above all to mint a session token by logging in (T1083). Active tier: allow-listing the technique is enough",
+    invoke: "GET a file: searu run fetch --technique T1083 --target http://host:port/ftp/incident-support.kdbx  (403 backups often yield to a null-byte suffix .../x.bak%2500.md). Mint a JWT: searu run fetch --technique T1083 --target http://host:port/rest/user/login -- --method POST --header 'Content-Type: application/json' --data '{\"email\":\"<u>\",\"password\":\"<p>\"}'  (add --name to rename the saved body)",
+    interpret: "searu loot --category session-token --reveal for a minted token; searu observations --kind download for a saved file (also under --kind output)",
+    chain: "carry a minted token into `authz --header 'Authorization: Bearer <token>'` (IDOR) and `jwt` (forge); feed a downloaded KeePass/zip to `searu run crack --target src:<path>`; POST/PUT a `$ne`/`$where` body for NoSQL",
 }];
 
 impl Tool for Fetch {
@@ -57,26 +58,40 @@ impl Tool for Fetch {
 
     fn parse(&self, _target: &str, _technique: &str, outcome: &ToolOutcome) -> ParsedOutput {
         let mut observations = Vec::new();
+        let mut loot = Vec::new();
         for line in outcome.stdout.lines() {
             let Ok(record) = serde_json::from_str::<serde_json::Value>(line) else {
                 continue;
             };
-            if record["kind"] != "download" {
-                continue;
+            match record["kind"].as_str() {
+                Some("download") => {
+                    let (Some(name), Some(url)) = (record["name"].as_str(), record["url"].as_str())
+                    else {
+                        continue;
+                    };
+                    let bytes = record["bytes"].as_i64().unwrap_or_default();
+                    let status = record["status"].as_i64().unwrap_or_default();
+                    observations.push(Observation {
+                        kind: "download".to_string(),
+                        value: name.to_string(),
+                        detail: Some(format!("{bytes} bytes from {url} (status {status})")),
+                    });
+                }
+                Some("token") => {
+                    if let Some(token) = record["value"].as_str() {
+                        loot.push(Loot::secret(
+                            searu_tool_parser::fingerprint(token),
+                            "session-token".to_string(),
+                            token.to_string(),
+                        ));
+                    }
+                }
+                _ => {}
             }
-            let (Some(name), Some(url)) = (record["name"].as_str(), record["url"].as_str()) else {
-                continue;
-            };
-            let bytes = record["bytes"].as_i64().unwrap_or_default();
-            let status = record["status"].as_i64().unwrap_or_default();
-            observations.push(Observation {
-                kind: "download".to_string(),
-                value: name.to_string(),
-                detail: Some(format!("{bytes} bytes from {url} (status {status})")),
-            });
         }
         ParsedOutput {
             observations,
+            loot,
             ..Default::default()
         }
     }
@@ -92,6 +107,26 @@ mod tests {
         assert_eq!(
             argv,
             vec!["--url", "http://h:3000/ftp/x.kdbx", "--out", "out:"]
+        );
+    }
+
+    #[test]
+    fn a_minted_token_is_recorded_as_loot() {
+        let outcome = ToolOutcome {
+            code: 0,
+            stdout: "{\"kind\":\"download\",\"url\":\"http://h/rest/user/login\",\"name\":\"login\",\"bytes\":784,\"status\":200}\n\
+                     {\"kind\":\"token\",\"value\":\"eyJhbGciOiJSUzI1NiJ9.payload.sig\"}\n"
+                .to_string(),
+            stderr: String::new(),
+        };
+        let parsed = FETCH.parse("http://h/rest/user/login", "T1083", &outcome);
+        assert_eq!(parsed.loot.len(), 1);
+        assert_eq!(parsed.loot[0].category, "session-token");
+        assert_eq!(parsed.loot[0].value, "eyJhbGciOiJSUzI1NiJ9.payload.sig");
+        assert_eq!(
+            parsed.observations.len(),
+            1,
+            "the login body is still recorded"
         );
     }
 

@@ -572,6 +572,7 @@ name = "searu-tool-fetch"
 version = "0.0.1"
 dependencies = [
  "searu-domain",
+ "searu-tool-parser",
  "serde_json",
 ]
 
