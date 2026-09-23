@@ -49,6 +49,9 @@ function buildUrl(base, payload) {
     } catch { /* ignore */ }
   });
 
+  // Try every payload — do NOT stop at the first hit: a challenge may score only a specific payload
+  // shape (Juice Shop's DOM XSS needs the `<iframe src=javascript:>`, not just any executing payload),
+  // so report each distinct payload whose marked dialog fires.
   const deadline = Date.now() + maxSeconds * 1000;
   for (const payload of payloads) {
     if (Date.now() > deadline) break;
@@ -58,7 +61,6 @@ function buildUrl(base, payload) {
     try { await page.waitForTimeout(1200); } catch { /* ignore */ }
     if (fired) {
       process.stdout.write(JSON.stringify({ kind: 'xss-confirmed', payload, url: target }) + '\n');
-      break;
     }
   }
 

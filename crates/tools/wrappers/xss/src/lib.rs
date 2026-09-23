@@ -108,6 +108,25 @@ mod tests {
     }
 
     #[test]
+    fn every_firing_payload_records_its_own_finding() {
+        // The tool no longer stops at the first hit, so a run that fires two payloads reports both —
+        // including the challenge-canonical iframe, not just whichever executed first.
+        let outcome = ToolOutcome {
+            code: 0,
+            stdout: "{\"kind\":\"xss-confirmed\",\"payload\":\"<img src=x onerror=alert(`x`)>\",\"url\":\"http://h/#/search?q=a\"}\n\
+                     {\"kind\":\"xss-confirmed\",\"payload\":\"<iframe src=javascript:alert(`x`)>\",\"url\":\"http://h/#/search?q=b\"}\n"
+                .to_string(),
+            stderr: String::new(),
+        };
+        let parsed = XSS.parse("http://h/#/search?q=PAYLOAD", "T1595", &outcome);
+        assert_eq!(parsed.findings.len(), 2);
+        assert!(parsed
+            .findings
+            .iter()
+            .any(|f| f.evidence.contains("iframe")));
+    }
+
+    #[test]
     fn no_execution_records_nothing() {
         let outcome = ToolOutcome {
             code: 0,
