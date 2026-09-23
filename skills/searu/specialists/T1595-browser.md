@@ -11,11 +11,13 @@ passive crawler (katana/gospider) cannot see because it never runs the JavaScrip
 a web target; it is what the rest of the engagement works through. Reconnaissance, Active tier —
 allow-list T1595; no authoriser needed.
 
-Run unauthenticated first, then again authenticated once you hold a credential (widen with
-`--depth`/`--max-routes`/`--max-seconds`):
+Run unauthenticated first, then again authenticated once you hold a credential. Routes that no link
+exposes (hidden or authenticated-only) will not be reached by crawling — feed them in with `--seed`
+(comma-separated paths). Widen with `--depth`/`--max-routes`/`--max-seconds`:
 
     searu run browser --technique T1595 --target http://host:port
-    searu run browser --technique T1595 --target http://host:port -- --login-email <user> --login-password <pass>
+    searu run browser --technique T1595 --target http://host:port -- --login-email <user> --login-password <pass> \
+      --seed /#/wallet,/#/order-history,/#/administration
 
 Read the surface map:
 

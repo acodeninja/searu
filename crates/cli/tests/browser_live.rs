@@ -90,8 +90,8 @@ fn browser_maps_the_spa_surface() {
     );
     let routes = String::from_utf8_lossy(&routes.stdout);
     assert!(
-        routes.contains("/#/score-board"),
-        "browser did not reach the score-board route; routes were:\n{routes}"
+        routes.contains("/#/contact"),
+        "browser did not follow the SPA's client-side routes; routes were:\n{routes}"
     );
 }
 

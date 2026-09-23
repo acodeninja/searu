@@ -6,10 +6,16 @@ accelerates the coverage loop but does not replace it — finish by clearing `se
 list. Fingerprint: the browser records the `/#/score-board` route and `/api/Challenges/` endpoint.
 
 **Step 0 — drive the SPA first.** Before attacking any row below, understand the app by driving it:
-`searu run browser --technique T1595 --target http://host:port`. It maps the client routes, the
-`/rest`/`/api` calls behind them, the forms and the score-board. Register or crack a credential, then
-drive it again authenticated (`-- --login-email <u> --login-password <p>`) to reveal the logged-in
-surface (baskets, orders, the JWT). Then `searu coverage` turns that surface into the work list.
+`searu run browser --technique T1595 --target http://host:port`. It maps the linked client routes, the
+`/rest`/`/api` calls behind them and the forms. Several routes are hidden or authenticated-only (no link
+exposes them), so feed them in with `--seed` and drive them authenticated once you hold a credential:
+
+    searu run browser --technique T1595 --target http://host:port -- \
+      --login-email <u> --login-password <p> \
+      --seed /#/score-board,/#/administration,/#/accounting,/#/wallet,/#/order-history,/#/order-summary,/#/address,/#/saved-payment-methods,/#/privacy-security/change-password,/#/2fa/enter,/#/complain,/#/track-result,/#/recycle,/#/photo-wall,/#/deluxe-membership,/#/basket
+
+Register or crack a credential first (a fresh `/#/register` account is enough to expose the logged-in
+surface: baskets, orders, wallet, the JWT). Then `searu coverage` turns that surface into the work list.
 
 Recognise it, then map its weakness categories (from *Pwning OWASP Juice Shop*) to searu:
 

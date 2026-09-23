@@ -19,7 +19,7 @@ static USES: &[PhaseAdvice] = &[
     PhaseAdvice {
         phase: Phase::Reconnaissance,
         when: "understand a web app before attacking it — drive it as a real browser to render an SPA, follow its client-side routes and capture the API calls it makes, mapping the surface a blind scanner cannot see (T1595, Active: allow-listing the technique is enough)",
-        invoke: "searu run browser --technique T1595 --target http://host:port  (authenticate to reach the logged-in surface with `-- --login-email <user> --login-password <pass>`; widen with `--depth 3`)",
+        invoke: "searu run browser --technique T1595 --target http://host:port  (authenticate with `-- --login-email <user> --login-password <pass>`; drive hidden/authed routes no link exposes with `--seed /#/wallet,/#/administration,...`; widen with `--depth`/`--max-routes`/`--max-seconds`)",
         interpret: "searu observations --kind route / --kind endpoint / --kind param / --kind form — the client routes, API endpoints (detail = method), their parameters (detail = endpoint) and forms (detail = fields); screenshots are under the run's output directory (searu observations --kind output)",
         chain: "the recorded endpoints and parameters are the surface Initial access and Exploitation work through — feed each into the injection, access-control and auth tools",
     },
