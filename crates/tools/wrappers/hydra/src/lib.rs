@@ -38,9 +38,18 @@ impl Tool for Hydra {
     }
 
     fn invocation(&self, target: &str, args: &[String]) -> Vec<String> {
-        // hydra takes the host as its first positional (the runner rewrites it for reachability) and
-        // permutes the caller's options/service/spec that follow.
-        let mut argv = vec![target.to_string()];
+        // hydra's first positional must be a *bare host* (the port is the separate `-s` flag), but the
+        // driver naturally hands over a web URL like every other tool. Strip it to host + port so hydra
+        // does not try to DNS-resolve `http://host:port/path`; synthesize `-s <port>` unless the caller
+        // already passed one. The runner rewrites the bare host for container reachability.
+        let (host, port) = split_host_port(target);
+        let mut argv = vec![host];
+        if let Some(port) = port {
+            if !args.iter().any(|arg| arg == "-s") {
+                argv.push("-s".to_string());
+                argv.push(port);
+            }
+        }
         argv.extend(args.iter().cloned());
         argv
     }
@@ -89,6 +98,22 @@ impl Tool for Hydra {
     }
 }
 
+/// Reduce a target to hydra's `(host, port)`: drop any `scheme://` and `/path`, and split a trailing
+/// numeric `:port`. A bare host with no port yields `None` (the caller supplies `-s` itself).
+fn split_host_port(target: &str) -> (String, Option<String>) {
+    let after_scheme = target.split_once("://").map_or(target, |(_, rest)| rest);
+    let host_port = after_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or(after_scheme);
+    match host_port.rsplit_once(':') {
+        Some((host, port)) if !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) => {
+            (host.to_string(), Some(port.to_string()))
+        }
+        _ => (host_port.to_string(), None),
+    }
+}
+
 fn credential(line: &str, marker: &str) -> Option<String> {
     let (_, rest) = line.split_once(marker)?;
     let value = rest
@@ -131,6 +156,27 @@ mod tests {
             ],
         );
         assert_eq!(argv, vec!["localhost", "-s", "5090", "http-post-form"]);
+    }
+
+    #[test]
+    fn a_url_target_is_reduced_to_a_bare_host_with_a_synthesized_port() {
+        let argv = HYDRA.invocation(
+            "http://localhost:3000/rest/user/login",
+            &["-l".to_string(), "admin".to_string()],
+        );
+        assert_eq!(argv, vec!["localhost", "-s", "3000", "-l", "admin"]);
+    }
+
+    #[test]
+    fn a_host_port_target_splits_the_port() {
+        let argv = HYDRA.invocation("host.docker.internal:3000", &[]);
+        assert_eq!(argv, vec!["host.docker.internal", "-s", "3000"]);
+    }
+
+    #[test]
+    fn a_caller_supplied_port_is_not_duplicated() {
+        let argv = HYDRA.invocation("http://h:3000", &["-s".to_string(), "443".to_string()]);
+        assert_eq!(argv, vec!["h", "-s", "443"]);
     }
 
     #[test]

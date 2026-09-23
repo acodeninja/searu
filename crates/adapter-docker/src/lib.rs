@@ -96,17 +96,10 @@ impl ToolRunner for DockerToolRunner {
         self.ensure_image(&image, invocation.tool, invocation.dockerfile)?;
 
         let reachable_target = reachable(invocation.target);
-        let args: Vec<String> = invocation
-            .args
-            .iter()
-            .map(|arg| {
-                if arg == invocation.target {
-                    reachable_target.clone()
-                } else {
-                    arg.clone()
-                }
-            })
-            .collect();
+        // Rewrite the host in *every* argument, not just an arg that equals the target verbatim: a
+        // wrapper may transform the target (e.g. hydra strips a URL to a bare host + `-s port`), and the
+        // host token still needs to be reachable from inside the container.
+        let args: Vec<String> = invocation.args.iter().map(|arg| reachable(arg)).collect();
 
         // The reachable target is fed on the tool's stdin (commix reads its target list there); a
         // tool that takes the target as an argument simply ignores the extra line.
@@ -231,6 +224,14 @@ mod tests {
             reachable("http://127.0.0.1:5000/"),
             "http://host.docker.internal:5000/"
         );
+    }
+
+    #[test]
+    fn a_bare_host_argument_is_made_reachable() {
+        // hydra passes a bare host (not the verbatim URL target) as its positional; it must still be
+        // rewritten to the container-reachable host.
+        assert_eq!(reachable("localhost"), "host.docker.internal");
+        assert_eq!(reachable("127.0.0.1"), "host.docker.internal");
     }
 
     #[test]
