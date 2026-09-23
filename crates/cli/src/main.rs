@@ -129,6 +129,24 @@ fn cli() -> Command {
                 ),
         )
         .subcommand(
+            Command::new("benchmark")
+                .about("Score the engagement against a benchmark target's answer key (decoupled)")
+                .subcommand_required(true)
+                .arg_required_else_help(true)
+                .subcommand(
+                    Command::new("score")
+                        .about("Read the target's score board and report solved/total by category")
+                        .arg(
+                            Arg::new("target").long("target").value_name("URL").help(
+                                "Benchmark target (default: the first URL target in the ROE)",
+                            ),
+                        )
+                        .arg(Arg::new("roe").long("roe").value_name("PATH").help(
+                            "Rules-of-engagement JSON (default: pentest/rules-of-engagement.json)",
+                        )),
+                ),
+        )
+        .subcommand(
             Command::new("tool")
                 .about("Inspect the available tools")
                 .subcommand_required(true)
@@ -161,6 +179,7 @@ fn main() {
         Some(("observations", matches)) => std::process::exit(run_observations(matches)),
         Some(("hosts", _)) => std::process::exit(run_hosts()),
         Some(("coverage", matches)) => std::process::exit(run_coverage(matches)),
+        Some(("benchmark", matches)) => std::process::exit(run_benchmark(matches)),
         Some(("tool", matches)) => std::process::exit(run_tool(matches)),
         Some((name, _)) => {
             eprintln!("searu: '{name}' is not implemented yet");
@@ -648,6 +667,70 @@ fn run_hosts() -> i32 {
             1
         }
     }
+}
+
+fn run_benchmark(matches: &ArgMatches) -> i32 {
+    use searu_adapter_scoreboard::DockerScoreboard;
+    use searu_adapter_store::{JsonRoeRepository, JsonlBenchmarkStore};
+    use searu_app::BenchmarkScore;
+
+    let Some(("score", args)) = matches.subcommand() else {
+        eprintln!("searu benchmark: unknown subcommand");
+        return 2;
+    };
+    let roe = args
+        .get_one::<String>("roe")
+        .map(String::as_str)
+        .unwrap_or(DEFAULT_ROE);
+    let target = match args.get_one::<String>("target") {
+        Some(target) => target.clone(),
+        None => match default_target(roe) {
+            Some(target) => target,
+            None => {
+                eprintln!("no URL target in the ROE; pass --target <url>");
+                return 1;
+            }
+        },
+    };
+
+    let use_case = BenchmarkScore {
+        roe: JsonRoeRepository::new(roe),
+        scoreboard: DockerScoreboard::default(),
+        store: JsonlBenchmarkStore::new(ENGAGEMENT_DIR),
+    };
+    match use_case.score(&target) {
+        Ok((score, delta)) => {
+            for category in &score.by_category {
+                println!(
+                    "{}\t{}/{}",
+                    category.category, category.solved, category.total
+                );
+            }
+            let sign = if delta >= 0 { "+" } else { "" };
+            eprintln!(
+                "benchmark: {}/{} solved ({}%) on {target}; {sign}{delta} since the last run",
+                score.solved,
+                score.total,
+                score.pct(),
+            );
+            0
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            1
+        }
+    }
+}
+
+fn default_target(roe: &str) -> Option<String> {
+    use searu_adapter_store::JsonRoeRepository;
+    use searu_domain::ports::RoeRepository;
+    use searu_domain::scope::ScopeEntry;
+    let loaded = JsonRoeRepository::new(roe).load().ok()?;
+    loaded.scope.targets.iter().find_map(|entry| match entry {
+        ScopeEntry::Host { value, .. } if value.starts_with("http") => Some(value.clone()),
+        _ => None,
+    })
 }
 
 fn run_coverage(matches: &ArgMatches) -> i32 {

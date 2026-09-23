@@ -1,5 +1,6 @@
 //! Ports: the traits the application depends on, implemented by adapters.
 
+use crate::benchmark::Challenge;
 use crate::findings::{
     Finding, Loot, Observation, RecordContext, StoredFinding, StoredLoot, StoredObservation,
 };
@@ -263,6 +264,39 @@ pub struct StoredAudit {
 
 pub trait AuditReader {
     fn list(&self) -> Result<Vec<StoredAudit>, StoreError>;
+}
+
+#[derive(Debug)]
+pub enum BenchmarkError {
+    Fetch(String),
+    Parse(String),
+}
+
+impl std::fmt::Display for BenchmarkError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BenchmarkError::Fetch(message) => {
+                write!(f, "could not read the benchmark score board: {message}")
+            }
+            BenchmarkError::Parse(message) => {
+                write!(f, "could not parse the benchmark score board: {message}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for BenchmarkError {}
+
+/// Reads a benchmark target's own progress API (its answer key) — a decoupled measurement source, never
+/// consulted by the engine while it attacks.
+pub trait ScoreboardProvider {
+    fn challenges(&self, target: &str) -> Result<Vec<Challenge>, BenchmarkError>;
+}
+
+/// Persists each scoring run so the next one can report progress since last time.
+pub trait BenchmarkStore {
+    fn record(&self, solved: usize, total: usize) -> Result<(), StoreError>;
+    fn last(&self) -> Result<Option<(usize, usize)>, StoreError>;
 }
 
 #[cfg(test)]

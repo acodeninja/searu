@@ -5,6 +5,7 @@ use searu_domain::assets::{
     parse_claim, parse_service, project, resolve_target, Address, Attribution, Host, HostStatus,
     ResolvedTarget, Service, IDENTITY_CLAIM_KIND,
 };
+use searu_domain::benchmark::{self, Score};
 use searu_domain::coverage::{self, CoverageCell, CoverageSummary, ItemKind, Signal, SurfaceItem};
 use searu_domain::egress::merge_deny;
 use searu_domain::findings::{
@@ -12,12 +13,15 @@ use searu_domain::findings::{
 };
 use searu_domain::gate::{decide, Decision};
 use searu_domain::ports::{
-    AuditEntry, AuditLog, AuditReader, FindingsStore, LootStore, Mount, ObservationStore,
-    OutputDir, OutputError, OutputStore, ProjectSettings, RepoError, RoeRepository, RunnerError,
-    SettingsError, SourceError, SourceProvider, StoreError, StoredAudit, ToolInvocation,
-    ToolOutcome, ToolRunner, WordlistError, WordlistProvider,
+    AuditEntry, AuditLog, AuditReader, BenchmarkError, BenchmarkStore, FindingsStore, LootStore,
+    Mount, ObservationStore, OutputDir, OutputError, OutputStore, ProjectSettings, RepoError,
+    RoeRepository, RunnerError, ScoreboardProvider, SettingsError, SourceError, SourceProvider,
+    StoreError, StoredAudit, ToolInvocation, ToolOutcome, ToolRunner, WordlistError,
+    WordlistProvider,
 };
-use searu_domain::scope::{output_target, source_target, target_host, OUTPUT_MOUNT, SOURCE_MOUNT};
+use searu_domain::scope::{
+    is_host_in_scope, output_target, source_target, target_host, OUTPUT_MOUNT, SOURCE_MOUNT,
+};
 use searu_domain::tools::{InvocationContext, ToolRegistry};
 
 const SECLISTS_TOKEN: &str = "seclists:";
@@ -461,6 +465,64 @@ fn success_signals(findings: &[StoredFinding]) -> Vec<Signal> {
         .collect()
 }
 
+/// Scores a completed engagement against a benchmark target's own answer key (Juice Shop's score
+/// board). It reads ground truth, tallies solved/total by category, and reports the change since the
+/// last run — a measurement bolt-on, gated on scope but never touched by the engine while it attacks.
+pub struct BenchmarkScore<R, P, B> {
+    pub roe: R,
+    pub scoreboard: P,
+    pub store: B,
+}
+
+#[derive(Debug)]
+pub enum BenchmarkScoreError {
+    Repo(RepoError),
+    OutOfScope,
+    Board(BenchmarkError),
+    Store(StoreError),
+}
+
+impl std::fmt::Display for BenchmarkScoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BenchmarkScoreError::Repo(error) => write!(f, "{error}"),
+            BenchmarkScoreError::OutOfScope => write!(f, "OUT OF SCOPE"),
+            BenchmarkScoreError::Board(error) => write!(f, "{error}"),
+            BenchmarkScoreError::Store(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl std::error::Error for BenchmarkScoreError {}
+
+impl<R: RoeRepository, P: ScoreboardProvider, B: BenchmarkStore> BenchmarkScore<R, P, B> {
+    pub fn score(&self, target: &str) -> Result<(Score, i64), BenchmarkScoreError> {
+        let roe = self.roe.load().map_err(BenchmarkScoreError::Repo)?;
+        if !is_host_in_scope(target, &roe.scope) {
+            return Err(BenchmarkScoreError::OutOfScope);
+        }
+        let challenges = self
+            .scoreboard
+            .challenges(target)
+            .map_err(BenchmarkScoreError::Board)?;
+        let score = benchmark::score(&challenges);
+        let previous =
+            self.store
+                .last()
+                .map_err(BenchmarkScoreError::Store)?
+                .map(|(solved, total)| Score {
+                    solved,
+                    total,
+                    by_category: Vec::new(),
+                });
+        let delta = score.delta_from(previous.as_ref());
+        self.store
+            .record(score.solved, score.total)
+            .map_err(BenchmarkScoreError::Store)?;
+        Ok((score, delta))
+    }
+}
+
 pub struct ValidateRoe<R> {
     pub roe: R,
 }
@@ -856,6 +918,73 @@ mod tests {
         fn list(&self) -> Result<Vec<StoredAudit>, StoreError> {
             Ok(self.0.clone())
         }
+    }
+
+    struct FakeScoreboard(Vec<searu_domain::benchmark::Challenge>);
+    impl ScoreboardProvider for FakeScoreboard {
+        fn challenges(
+            &self,
+            _target: &str,
+        ) -> Result<Vec<searu_domain::benchmark::Challenge>, BenchmarkError> {
+            Ok(self.0.clone())
+        }
+    }
+
+    #[derive(Default)]
+    struct MemBenchmarkStore {
+        runs: RefCell<Vec<(usize, usize)>>,
+    }
+    impl BenchmarkStore for MemBenchmarkStore {
+        fn record(&self, solved: usize, total: usize) -> Result<(), StoreError> {
+            self.runs.borrow_mut().push((solved, total));
+            Ok(())
+        }
+        fn last(&self) -> Result<Option<(usize, usize)>, StoreError> {
+            Ok(self.runs.borrow().last().copied())
+        }
+    }
+
+    fn challenge(key: &str, solved: bool) -> searu_domain::benchmark::Challenge {
+        searu_domain::benchmark::Challenge {
+            key: key.to_string(),
+            name: key.to_string(),
+            category: "Injection".to_string(),
+            difficulty: 1,
+            solved,
+        }
+    }
+
+    #[test]
+    fn benchmark_scores_an_in_scope_target_and_reports_delta() {
+        let use_case = BenchmarkScore {
+            roe: StubRoe(authorising),
+            scoreboard: FakeScoreboard(vec![challenge("a", true), challenge("b", false)]),
+            store: MemBenchmarkStore::default(),
+        };
+        let (score, delta) = use_case.score("http://localhost:5000").unwrap();
+        assert_eq!(score.solved, 1);
+        assert_eq!(score.total, 2);
+        assert_eq!(
+            delta, 1,
+            "no previous run, so delta is the whole solved count"
+        );
+        // The run was recorded, so a second scoring reports progress against it.
+        let (_, delta2) = use_case.score("http://localhost:5000").unwrap();
+        assert_eq!(delta2, 0);
+    }
+
+    #[test]
+    fn benchmark_refuses_an_out_of_scope_target() {
+        let use_case = BenchmarkScore {
+            roe: StubRoe(authorising),
+            scoreboard: FakeScoreboard(vec![challenge("a", true)]),
+            store: MemBenchmarkStore::default(),
+        };
+        assert!(matches!(
+            use_case.score("http://evil.example.org"),
+            Err(BenchmarkScoreError::OutOfScope)
+        ));
+        assert!(use_case.store.runs.borrow().is_empty());
     }
 
     const LOCAL: &str = "http://localhost:5000/cmd/dig?ip_addr=1";

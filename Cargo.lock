@@ -414,6 +414,7 @@ dependencies = [
  "include_dir",
  "predicates",
  "searu-adapter-docker",
+ "searu-adapter-scoreboard",
  "searu-adapter-store",
  "searu-app",
  "searu-domain",
@@ -427,6 +428,14 @@ name = "searu-adapter-docker"
 version = "0.0.1"
 dependencies = [
  "searu-domain",
+]
+
+[[package]]
+name = "searu-adapter-scoreboard"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
 ]
 
 [[package]]

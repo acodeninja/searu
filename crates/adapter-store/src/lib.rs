@@ -5,9 +5,9 @@ use searu_domain::findings::{
     StoredObservation,
 };
 use searu_domain::ports::{
-    AuditEntry, AuditLog, AuditReader, Authorisation, Authoriser, FindingsStore, LootStore,
-    ObservationStore, OutputDir, OutputError, OutputStore, ProjectSettings, RepoError, Roe,
-    RoeRepository, SettingsError, SourceError, SourceProvider, StoreError, StoredAudit,
+    AuditEntry, AuditLog, AuditReader, Authorisation, Authoriser, BenchmarkStore, FindingsStore,
+    LootStore, ObservationStore, OutputDir, OutputError, OutputStore, ProjectSettings, RepoError,
+    Roe, RoeRepository, SettingsError, SourceError, SourceProvider, StoreError, StoredAudit,
 };
 use searu_domain::scope::{HostForm, Scope, ScopeEntry};
 use serde::{Deserialize, Serialize};
@@ -671,6 +671,50 @@ impl AuditReader for JsonlAuditLog {
             }
         }
         Ok(entries)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct BenchmarkRecord {
+    kind: String,
+    at: u64,
+    solved: usize,
+    total: usize,
+}
+
+pub struct JsonlBenchmarkStore {
+    path: PathBuf,
+}
+
+impl JsonlBenchmarkStore {
+    pub fn new(dir: impl Into<PathBuf>) -> Self {
+        Self {
+            path: dir.into().join("benchmark.jsonl"),
+        }
+    }
+}
+
+impl BenchmarkStore for JsonlBenchmarkStore {
+    fn record(&self, solved: usize, total: usize) -> Result<(), StoreError> {
+        let record = BenchmarkRecord {
+            kind: "benchmark".to_string(),
+            at: now_secs(),
+            solved,
+            total,
+        };
+        let line =
+            serde_json::to_string(&record).map_err(|e| StoreError::Serialise(e.to_string()))?;
+        append_line(&self.path, &line)
+    }
+
+    fn last(&self) -> Result<Option<(usize, usize)>, StoreError> {
+        let mut last = None;
+        for line in read_lines(&self.path)? {
+            if let Ok(record) = serde_json::from_str::<BenchmarkRecord>(&line) {
+                last = Some((record.solved, record.total));
+            }
+        }
+        Ok(last)
     }
 }
 

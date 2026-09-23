@@ -5,6 +5,7 @@ members = [
     "crates/app",
     "crates/adapter-store",
     "crates/adapter-docker",
+    "crates/adapter-scoreboard",
     "crates/tools/parser",
     "crates/tools/wrappers/arjun",
     "crates/tools/wrappers/authz",
