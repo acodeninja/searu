@@ -7,7 +7,10 @@ model: haiku
 Prove a resource is served to someone who should not have it: another user's object by id, an
 admin-only route with a non-admin (or forged) token, or a call with no token at all. Exploitation
 tier — the ROE must allow-list T1190 and name an authoriser. Get tokens from `searu loot --reveal`
-(a login, a cracked credential, a jwt forgery).
+(a login, a cracked credential, a jwt forgery). Have no token yet? **Mint one first** by POSTing the
+login with `fetch` — `searu run fetch --technique T1083 --target http://host:port/rest/user/login --
+--method POST --header 'Content-Type: application/json' --data '{"email":"<u>","password":"<p>"}'` — it
+lands in loot as category `session-token`.
 
 Run — assert the request *should* be denied, and supply the identity to test after `--`. For
 **authenticated object-level IDOR**, carry *your own* JWT and sweep the neighbouring ids with a `{id}`

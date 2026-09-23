@@ -14,6 +14,10 @@ Choose from this phase's tools (the roster is owned by the tools, not this file)
 Each line says when to reach for that tool; delegate a run to its specialist, which fetches the how-to
 (`searu tool advice <tool>`) and keeps the output out of this conversation.
 
+Many weaknesses only appear behind a login. Mint a session token early with `fetch --method POST`
+against the login endpoint (it records a `session-token` in loot), then carry it into the
+access-control (`authz --header`) and token-forgery (`jwt`) classes.
+
 ## Read the results
 
     searu findings

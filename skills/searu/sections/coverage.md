@@ -21,13 +21,19 @@ surface item** until the surface is exhausted. `searu coverage` is how you know 
    stop at the first success. This replaces "stop when the objective is met": here the objective is an
    exhausted surface.
 
+## Authenticated classes need a token first
+
+Broken access control / IDOR (`authz`), token forgery (`jwt`) and most of the authenticated surface
+need a session token before their tool can do anything. Mint one with `fetch --method POST` against the
+login endpoint — it records a `session-token` in loot — then carry it (`authz --header 'Authorization:
+Bearer <token>'`). Drive `xss` per sink (it now reports every payload that fires, not just the first).
+
 ## Gaps with no tool (`manual`)
 
-Some classes have no searu tool yet — broken access control / IDOR, broken authentication / token
-forgery, open redirect / SSRF. These still show as applicable gaps. Work them by hand through
-`searu run` where a tool exists for the mechanics (replaying a request with a swapped id or a forged
-token), and record what you confirm as a finding so the pairing flips to `succeeded`. When a capability
-is missing entirely, name it in the report rather than letting the gap pass silently.
+The summary line counts classes with no tool yet. When one remains, work it by hand through `searu run`
+where a tool exists for the mechanics, record what you confirm as a finding so the pairing flips to
+`succeeded`, and when a capability is missing entirely name it in the report rather than letting the gap
+pass silently.
 
 ## Known apps
 
