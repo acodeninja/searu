@@ -4,12 +4,15 @@ model: haiku
 
 # browser — drive the app to understand it (T1595)
 
-Render one in-scope web app as a real browser: it executes the SPA, follows client-side routes and
-records every same-origin API call — the surface a passive crawler (katana/gospider) cannot see
-because it never runs the JavaScript. Run this **first** on a web target; it is what the rest of the
-engagement works through. Reconnaissance, Active tier — allow-list T1595; no authoriser needed.
+Render one in-scope web app as a real browser and *drive* it: it executes the SPA, follows client-side
+routes (including Angular `routerLink`s on buttons/menus, not just `<a href>`), opens the nav/side menus,
+submits the search box, scrolls for lazy content, and records every same-origin API call — the surface a
+passive crawler (katana/gospider) cannot see because it never runs the JavaScript. Run this **first** on
+a web target; it is what the rest of the engagement works through. Reconnaissance, Active tier —
+allow-list T1595; no authoriser needed.
 
-Run (authenticate to reach the logged-in surface; widen with `--depth 3`):
+Run unauthenticated first, then again authenticated once you hold a credential (widen with
+`--depth`/`--max-routes`/`--max-seconds`):
 
     searu run browser --technique T1595 --target http://host:port
     searu run browser --technique T1595 --target http://host:port -- --login-email <user> --login-password <pass>

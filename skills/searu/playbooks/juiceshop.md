@@ -5,6 +5,12 @@ back-end, whose progress is tracked on a score board. Use this to head straight 
 accelerates the coverage loop but does not replace it — finish by clearing `searu coverage`, not this
 list. Fingerprint: the browser records the `/#/score-board` route and `/api/Challenges/` endpoint.
 
+**Step 0 — drive the SPA first.** Before attacking any row below, understand the app by driving it:
+`searu run browser --technique T1595 --target http://host:port`. It maps the client routes, the
+`/rest`/`/api` calls behind them, the forms and the score-board. Register or crack a credential, then
+drive it again authenticated (`-- --login-email <u> --login-password <p>`) to reveal the logged-in
+surface (baskets, orders, the JWT). Then `searu coverage` turns that surface into the work list.
+
 Recognise it, then map its weakness categories (from *Pwning OWASP Juice Shop*) to searu:
 
 | Category | Surface to attack | Class / how |

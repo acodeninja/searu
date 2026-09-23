@@ -3,6 +3,12 @@
 Map the reachable surface — content and parameters — on an in-scope target. Active, read-only:
 allow-list the technique; no authoriser needed.
 
+For a web app, the browser run in Reconnaissance already recorded the app's real surface — its
+client-side routes, the API endpoints they call, their parameters and forms. Start from that
+(`searu observations --kind route|endpoint|param|form`); Discovery's job here is to find what the browser
+could not reach — hidden/unlinked content and backup files via content brute-force (ffuf/feroxbuster/
+gobuster) and extra parameters (arjun). If you have not driven the app in the browser yet, do that first.
+
 ## Tools
 
 Choose from this phase's tools (the roster is owned by the tools, not this file):

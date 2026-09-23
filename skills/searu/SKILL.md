@@ -40,6 +40,7 @@ first** (`~/.claude/skills/searu/sections/<file>`):
 | When you are…                                                    | Read                         |
 |------------------------------------------------------------------|------------------------------|
 | starting/resuming an engagement, defining scope, writing the ROE | `sections/scoping.md`        |
+| understanding a web app before scanning it (drive it, browser)   | `sections/reconnaissance.md` |
 | fingerprinting a live target                                     | `sections/reconnaissance.md` |
 | enumerating endpoints, content, parameters                       | `sections/discovery.md`      |
 | detecting an exploitable weakness                                | `sections/initial-access.md` |
@@ -47,12 +48,14 @@ first** (`~/.claude/skills/searu/sections/<file>`):
 | driving toward exhaustive coverage of the attack surface         | `sections/coverage.md`       |
 | reviewing and summarising what was recorded                      | `sections/reporting.md`      |
 
-Start at scoping unless a valid `./pentest/rules-of-engagement.json` already exists.
+Start at scoping unless a valid `./pentest/rules-of-engagement.json` already exists. Then, for a web/SPA
+target, the **first target-facing action is `searu run browser`** — drive the app to understand it before
+you reach for any scanner or exploit tool (`sections/reconnaissance.md` says how).
 
 The objective is exhaustive, not opportunistic: try every applicable technique against every discovered
-surface item. Understand the app first (`searu run browser`), then work `searu coverage --gaps` until no
-automatable pairing is left untried — do not stop at the first success. For a recognised target, read
-`playbooks/<app>.md` to head straight for its real weaknesses.
+surface item. Understand the app first by driving it in the browser, then work `searu coverage --gaps`
+until no automatable pairing is left untried — do not stop at the first success. For a recognised target,
+read `playbooks/<app>.md` to head straight for its real weaknesses.
 
 For a noisy tool run, delegate it to its **specialist** rather than running it inline: spawn
 `specialists/<technique>-<tool>.md` via the Agent tool on the `model:` that file names, so scanner

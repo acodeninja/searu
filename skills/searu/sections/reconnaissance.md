@@ -3,6 +3,21 @@
 Learn what the target *is* before choosing an attack. Passive/active, read-only: allow-listing the
 technique in the ROE is enough — no authoriser needed.
 
+## Web app? Drive it in the browser first
+
+For anything that renders in a browser (especially a single-page app), your **first** target-facing
+action is to *understand it by driving it*:
+
+    searu run browser --technique T1595 --target http://host:port
+
+The browser executes the SPA, follows its client-side routes, opens its menus and search, and records
+every same-origin API call as observations — the real attack surface. Passive crawlers (httpx, whatweb,
+katana) cannot see JS-rendered routes/APIs, so run the browser **before** them; then use the passive
+roster below to fill in what a headless browser misses (raw ports, server banners, TLS, non-HTML paths).
+Once you hold a credential (registered or cracked), drive it again authenticated
+(`-- --login-email <u> --login-password <p>`) to map the logged-in surface. See
+`specialists/T1595-browser.md`.
+
 ## Tools
 
 Choose from this phase's tools — the roster is owned by the tools, not this file, so a new tool appears
