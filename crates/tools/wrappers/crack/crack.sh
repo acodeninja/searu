@@ -12,12 +12,14 @@ HASH=""
 FILE=""
 FORMAT="raw-md5"
 WORDLIST=""
+RULES=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --hash) HASH="$2"; shift 2 ;;
         --file) FILE="$2"; shift 2 ;;
         --format) FORMAT="$2"; shift 2 ;;
         --wordlist) WORDLIST="$2"; shift 2 ;;
+        --rules) RULES="$2"; shift 2 ;;
         *) shift ;;
     esac
 done
@@ -48,9 +50,12 @@ fmt=""
 [ -n "$FORMAT" ] && fmt="--format=$FORMAT"
 wl=""
 [ -n "$WORDLIST" ] && wl="--wordlist=$WORDLIST"
+# Mangle the wordlist with a John rule set (e.g. best64, jumbo) to reach passwords a plain list misses.
+rules=""
+[ -n "$RULES" ] && rules="--rules=$RULES"
 
 # shellcheck disable=SC2086
-"$JOHN" $fmt $wl "$hashfile" >&2 2>&1 || true
+"$JOHN" $fmt $wl $rules "$hashfile" >&2 2>&1 || true
 # shellcheck disable=SC2086
 "$JOHN" --show $fmt "$hashfile" 2>/dev/null | while IFS= read -r line; do
     case "$line" in
