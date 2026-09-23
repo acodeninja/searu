@@ -5,16 +5,17 @@ use searu_domain::assets::{
     parse_claim, parse_service, project, resolve_target, Address, Attribution, Host, HostStatus,
     ResolvedTarget, Service, IDENTITY_CLAIM_KIND,
 };
+use searu_domain::coverage::{self, CoverageCell, CoverageSummary, ItemKind, Signal, SurfaceItem};
 use searu_domain::egress::merge_deny;
 use searu_domain::findings::{
-    Observation, RecordContext, StoredFinding, StoredLoot, StoredObservation,
+    Observation, RecordContext, Status, StoredFinding, StoredLoot, StoredObservation,
 };
 use searu_domain::gate::{decide, Decision};
 use searu_domain::ports::{
-    AuditEntry, AuditLog, FindingsStore, LootStore, Mount, ObservationStore, OutputDir,
-    OutputError, OutputStore, ProjectSettings, RepoError, RoeRepository, RunnerError,
-    SettingsError, SourceError, SourceProvider, StoreError, ToolInvocation, ToolOutcome,
-    ToolRunner, WordlistError, WordlistProvider,
+    AuditEntry, AuditLog, AuditReader, FindingsStore, LootStore, Mount, ObservationStore,
+    OutputDir, OutputError, OutputStore, ProjectSettings, RepoError, RoeRepository, RunnerError,
+    SettingsError, SourceError, SourceProvider, StoreError, StoredAudit, ToolInvocation,
+    ToolOutcome, ToolRunner, WordlistError, WordlistProvider,
 };
 use searu_domain::scope::{output_target, source_target, target_host, OUTPUT_MOUNT, SOURCE_MOUNT};
 use searu_domain::tools::{InvocationContext, ToolRegistry};
@@ -393,6 +394,71 @@ impl<FS: FindingsStore, LS: LootStore, OS: ObservationStore> QueryHosts<FS, LS, 
         }
         Ok(project(attributions))
     }
+}
+
+/// Projects the engagement's stored records into the attack-surface coverage matrix: observations
+/// become the surface, authorised audit entries become attempt signals, and confirmed findings become
+/// success signals. The matrix and its gaps are what drive the exhaustive loop — no coverage is stored,
+/// it is derived on demand, exactly like the host graph.
+pub struct QueryCoverage<OS, A, FS> {
+    pub observations: OS,
+    pub audit: A,
+    pub findings: FS,
+}
+
+impl<OS: ObservationStore, A: AuditReader, FS: FindingsStore> QueryCoverage<OS, A, FS> {
+    pub fn project(&self) -> Result<(Vec<CoverageCell>, CoverageSummary), StoreError> {
+        let items = surface_items(&self.observations.list()?);
+        let attempts = attempt_signals(&self.audit.list()?);
+        let successes = success_signals(&self.findings.list()?);
+        let cells = coverage::project(&items, &attempts, &successes);
+        let summary = coverage::summarise(&cells);
+        Ok((cells, summary))
+    }
+}
+
+fn surface_items(observations: &[StoredObservation]) -> Vec<SurfaceItem> {
+    let mut items: Vec<SurfaceItem> = Vec::new();
+    for stored in observations {
+        let Some(kind) = ItemKind::parse(&stored.observation.kind) else {
+            continue;
+        };
+        let endpoint = match kind {
+            ItemKind::Param => stored.observation.detail.clone(),
+            _ => None,
+        };
+        let item = SurfaceItem {
+            kind,
+            value: stored.observation.value.clone(),
+            endpoint,
+        };
+        if !items.contains(&item) {
+            items.push(item);
+        }
+    }
+    items
+}
+
+fn attempt_signals(audit: &[StoredAudit]) -> Vec<Signal> {
+    audit
+        .iter()
+        .filter(|entry| entry.decision == "authorised")
+        .map(|entry| Signal {
+            tool: entry.tool.clone(),
+            reference: format!("{} {}", entry.target, entry.args.join(" ")),
+        })
+        .collect()
+}
+
+fn success_signals(findings: &[StoredFinding]) -> Vec<Signal> {
+    findings
+        .iter()
+        .filter(|stored| stored.finding.status == Status::Confirmed)
+        .map(|stored| Signal {
+            tool: stored.finding.tool.clone(),
+            reference: format!("{} {}", stored.finding.target, stored.finding.evidence),
+        })
+        .collect()
 }
 
 pub struct ValidateRoe<R> {
@@ -782,6 +848,13 @@ mod tests {
                 .borrow_mut()
                 .push((entry.tool.to_string(), entry.decision.to_string()));
             Ok(())
+        }
+    }
+
+    struct MemAuditReader(Vec<StoredAudit>);
+    impl AuditReader for MemAuditReader {
+        fn list(&self) -> Result<Vec<StoredAudit>, StoreError> {
+            Ok(self.0.clone())
         }
     }
 
@@ -1225,6 +1298,60 @@ mod tests {
         );
         assert_eq!(stored[0].network, "internet");
         assert_eq!(stored[0].service.as_deref(), Some("tcp/5000"));
+    }
+
+    #[test]
+    fn query_coverage_projects_succeeded_attempted_and_untried() {
+        let observations = MemObservations::default();
+        observations
+            .emit(
+                &Observation {
+                    kind: "param".to_string(),
+                    value: "q".to_string(),
+                    detail: Some("/rest/products/search".to_string()),
+                },
+                &RecordContext::default(),
+            )
+            .unwrap();
+        let findings = MemFindings::default();
+        findings
+            .emit(
+                &Finding {
+                    tool: "sqlmap".to_string(),
+                    target: "http://h/rest/products/search?q=test".to_string(),
+                    title: "SQL injection".to_string(),
+                    severity: Severity::Critical,
+                    status: Status::Confirmed,
+                    attack_technique: vec!["T1190".to_string()],
+                    cwe: vec![89],
+                    evidence: "q is injectable".to_string(),
+                    loot_fingerprint: None,
+                },
+                &RecordContext::default(),
+            )
+            .unwrap();
+        let audit = MemAuditReader(vec![StoredAudit {
+            tool: "dalfox".to_string(),
+            technique: "T1595".to_string(),
+            target: "http://h/rest/products/search?q=FUZZ".to_string(),
+            decision: "authorised".to_string(),
+            args: vec![],
+            at: 0,
+        }]);
+
+        let query = QueryCoverage {
+            observations,
+            audit,
+            findings,
+        };
+        let (cells, summary) = query.project().unwrap();
+        let sqli = cells.iter().find(|c| c.class_id == "sqli").unwrap();
+        assert_eq!(sqli.state, searu_domain::coverage::CoverageState::Succeeded);
+        let xss = cells.iter().find(|c| c.class_id == "xss").unwrap();
+        assert_eq!(xss.state, searu_domain::coverage::CoverageState::Attempted);
+        assert_eq!(summary.succeeded, 1);
+        assert_eq!(summary.attempted, 1);
+        assert!(summary.untried >= 1);
     }
 
     #[test]

@@ -5,9 +5,9 @@ use searu_domain::findings::{
     StoredObservation,
 };
 use searu_domain::ports::{
-    AuditEntry, AuditLog, Authorisation, Authoriser, FindingsStore, LootStore, ObservationStore,
-    OutputDir, OutputError, OutputStore, ProjectSettings, RepoError, Roe, RoeRepository,
-    SettingsError, SourceError, SourceProvider, StoreError,
+    AuditEntry, AuditLog, AuditReader, Authorisation, Authoriser, FindingsStore, LootStore,
+    ObservationStore, OutputDir, OutputError, OutputStore, ProjectSettings, RepoError, Roe,
+    RoeRepository, SettingsError, SourceError, SourceProvider, StoreError, StoredAudit,
 };
 use searu_domain::scope::{HostForm, Scope, ScopeEntry};
 use serde::{Deserialize, Serialize};
@@ -606,6 +606,22 @@ struct AuditRecord<'a> {
     args: &'a [String],
 }
 
+#[derive(Deserialize)]
+struct AuditRow {
+    #[serde(default)]
+    at: u64,
+    #[serde(default)]
+    tool: String,
+    #[serde(default)]
+    technique: String,
+    #[serde(default)]
+    target: String,
+    #[serde(default)]
+    decision: String,
+    #[serde(default)]
+    args: Vec<String>,
+}
+
 pub struct JsonlAuditLog {
     path: PathBuf,
 }
@@ -636,6 +652,25 @@ impl AuditLog for JsonlAuditLog {
         let line =
             serde_json::to_string(&record).map_err(|e| StoreError::Serialise(e.to_string()))?;
         append_line(&self.path, &line)
+    }
+}
+
+impl AuditReader for JsonlAuditLog {
+    fn list(&self) -> Result<Vec<StoredAudit>, StoreError> {
+        let mut entries = Vec::new();
+        for line in read_lines(&self.path)? {
+            if let Ok(row) = serde_json::from_str::<AuditRow>(&line) {
+                entries.push(StoredAudit {
+                    tool: row.tool,
+                    technique: row.technique,
+                    target: row.target,
+                    decision: row.decision,
+                    args: row.args,
+                    at: row.at,
+                });
+            }
+        }
+        Ok(entries)
     }
 }
 
@@ -1075,6 +1110,27 @@ mod tests {
         assert!(text.contains("T1190"));
         assert!(text.contains("--batch"));
         assert!(text.contains("\"at\":"));
+    }
+
+    #[test]
+    fn audit_entries_are_read_back_for_coverage() {
+        let dir = tempfile::tempdir().unwrap();
+        let audit = JsonlAuditLog::new(dir.path());
+        audit
+            .record(&AuditEntry {
+                tool: "sqlmap",
+                technique: "T1190",
+                target: "http://h/rest/products/search?q=test",
+                decision: "authorised",
+                args: &["-p".to_string(), "q".to_string()],
+            })
+            .unwrap();
+
+        let entries = AuditReader::list(&audit).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].tool, "sqlmap");
+        assert_eq!(entries[0].decision, "authorised");
+        assert_eq!(entries[0].args, vec!["-p".to_string(), "q".to_string()]);
     }
 
     #[test]

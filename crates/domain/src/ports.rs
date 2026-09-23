@@ -249,6 +249,22 @@ pub trait AuditLog {
     fn record(&self, entry: &AuditEntry) -> Result<(), StoreError>;
 }
 
+/// A recorded run as read back from the audit log: the same fields as an [`AuditEntry`] but owned, plus
+/// the timestamp the store stamped. Coverage reads these to know which techniques have been attempted.
+#[derive(Debug, Clone)]
+pub struct StoredAudit {
+    pub tool: String,
+    pub technique: String,
+    pub target: String,
+    pub decision: String,
+    pub args: Vec<String>,
+    pub at: u64,
+}
+
+pub trait AuditReader {
+    fn list(&self) -> Result<Vec<StoredAudit>, StoreError>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

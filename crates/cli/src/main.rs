@@ -117,6 +117,18 @@ fn cli() -> Command {
         )
         .subcommand(Command::new("hosts").about("List the hosts discovered across the engagement"))
         .subcommand(
+            Command::new("coverage")
+                .about(
+                    "Show attack-surface coverage: every surface item x applicable technique class",
+                )
+                .arg(
+                    Arg::new("gaps")
+                        .long("gaps")
+                        .action(ArgAction::SetTrue)
+                        .help("Show only the untried pairings — the work list"),
+                ),
+        )
+        .subcommand(
             Command::new("tool")
                 .about("Inspect the available tools")
                 .subcommand_required(true)
@@ -148,6 +160,7 @@ fn main() {
         Some(("loot", matches)) => std::process::exit(run_loot(matches)),
         Some(("observations", matches)) => std::process::exit(run_observations(matches)),
         Some(("hosts", _)) => std::process::exit(run_hosts()),
+        Some(("coverage", matches)) => std::process::exit(run_coverage(matches)),
         Some(("tool", matches)) => std::process::exit(run_tool(matches)),
         Some((name, _)) => {
             eprintln!("searu: '{name}' is not implemented yet");
@@ -628,6 +641,49 @@ fn run_hosts() -> i32 {
                     .join(",");
                 println!("{}\t{status}\t{addresses}\t{services}\t{claims}", host.id);
             }
+            0
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            1
+        }
+    }
+}
+
+fn run_coverage(matches: &ArgMatches) -> i32 {
+    use searu_adapter_store::{JsonlAuditLog, JsonlFindingsStore, JsonlObservationStore};
+    use searu_app::QueryCoverage;
+    use searu_domain::coverage::CoverageState;
+
+    let query = QueryCoverage {
+        observations: JsonlObservationStore::new(ENGAGEMENT_DIR),
+        audit: JsonlAuditLog::new(ENGAGEMENT_DIR),
+        findings: JsonlFindingsStore::new(ENGAGEMENT_DIR),
+    };
+    match query.project() {
+        Ok((cells, summary)) => {
+            let gaps_only = matches.get_flag("gaps");
+            for cell in &cells {
+                if gaps_only && cell.state != CoverageState::Untried {
+                    continue;
+                }
+                println!(
+                    "{}\t{}\t{}\t{}",
+                    cell.state.as_str(),
+                    cell.class_id,
+                    if cell.automated { "auto" } else { "manual" },
+                    cell.item.id(),
+                );
+            }
+            eprintln!(
+                "coverage: {}/{} pairings tried ({}%); {} succeeded, {} untried ({} need a tool searu lacks)",
+                summary.attempted + summary.succeeded,
+                summary.total,
+                summary.attempted_pct(),
+                summary.succeeded,
+                summary.untried,
+                summary.untried_no_tool,
+            );
             0
         }
         Err(error) => {
