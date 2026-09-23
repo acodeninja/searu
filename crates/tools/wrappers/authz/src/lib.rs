@@ -14,10 +14,10 @@ pub static AUTHZ: Authz = Authz;
 
 static USES: &[PhaseAdvice] = &[PhaseAdvice {
     phase: Phase::Exploitation,
-    when: "test broken access control / IDOR — request a resource you should not be allowed (another user's object id, an admin route, an unauthenticated call) and prove it is served (T1190, CWE-639/CWE-862). Exploitation tier: the ROE must allow-list T1190 and name an authoriser",
-    invoke: "searu run authz --technique T1190 --target http://host:port/rest/basket/2 -- --should-deny --header 'Authorization: Bearer <other-users-or-forged-token>'  (add --method/--data for writes; omit the header to test unauthenticated access)",
-    interpret: "searu findings --tool authz — a confirmed broken-access-control finding when a should-deny request returned 2xx/3xx; searu observations --kind replay for the raw status/length of every replay",
-    chain: "with access confirmed, read or tamper the exposed object, and sweep the neighbouring ids/routes the same way",
+    when: "test broken access control / IDOR — request a resource you should not be allowed (another user's object by id, an admin route, an unauthenticated call) and prove it is served (T1190, CWE-639/CWE-862). Exploitation tier: the ROE must allow-list T1190 and name an authoriser",
+    invoke: "searu run authz --technique T1190 --target 'http://host:port/rest/basket/{id}' -- --should-deny --range 1-20 --header 'Authorization: Bearer <your-own-JWT>'  (authenticated IDOR: carry your token and sweep other ids; a served id that is not yours is the bug. Drop the header for unauth access; add --method/--data for write tampering. A single object needs no {id}/--range)",
+    interpret: "searu findings --tool authz — one confirmed broken-access-control finding per served id; searu observations --kind replay for the status/length of every request",
+    chain: "read or tamper each exposed object (`--method PUT --data ...`), and sweep the neighbouring routes (/api/Cards/{id}, /api/Addresss/{id}) the same way",
 }];
 
 impl Tool for Authz {
@@ -56,17 +56,21 @@ impl Tool for Authz {
         for line in outcome.stdout.lines() {
             if let Some(rest) = line.strip_prefix("VIOLATION ") {
                 let status = field(rest, "status=");
+                // Each served id in a sweep carries its own url, so record a distinct finding per object
+                // rather than collapsing the whole range into one.
+                let url = field(rest, "url=");
                 findings.push(Finding {
                     tool: "authz".to_string(),
-                    target: target.to_string(),
+                    target: url.clone().unwrap_or_else(|| target.to_string()),
                     title: "Broken access control".to_string(),
                     severity: Severity::High,
                     status: Status::Confirmed,
                     attack_technique: vec!["T1190".to_string()],
                     cwe: vec![639],
                     evidence: format!(
-                        "a request that should have been denied was served (status {})",
-                        status.as_deref().unwrap_or("2xx")
+                        "a request that should have been denied was served (status {}){}",
+                        status.as_deref().unwrap_or("2xx"),
+                        url.as_deref().map(|u| format!(": {u}")).unwrap_or_default()
                     ),
                     loot_fingerprint: None,
                 });
@@ -138,6 +142,27 @@ mod tests {
         assert!(parsed.findings[0].evidence.contains("200"));
         assert_eq!(parsed.observations.len(), 1);
         assert_eq!(parsed.observations[0].kind, "replay");
+    }
+
+    #[test]
+    fn an_id_sweep_records_one_finding_per_served_object() {
+        // Baskets 3 and 5 were served to a token that owns neither (4 correctly denied) — two distinct
+        // IDOR findings, each pinned to its own object url, not one collapsed finding.
+        let out = outcome(
+            "{\"kind\":\"replay\",\"status\":200,\"length\":90,\"url\":\"http://h/rest/basket/3\"}\n\
+             VIOLATION status=200 length=90 label=b#3 url=http://h/rest/basket/3\n\
+             {\"kind\":\"replay\",\"status\":401,\"length\":9,\"url\":\"http://h/rest/basket/4\"}\n\
+             {\"kind\":\"replay\",\"status\":200,\"length\":88,\"url\":\"http://h/rest/basket/5\"}\n\
+             VIOLATION status=200 length=88 label=b#5 url=http://h/rest/basket/5\n",
+        );
+        let parsed = AUTHZ.parse("http://h/rest/basket/{id}", "T1190", &out);
+        assert_eq!(parsed.findings.len(), 2);
+        assert_eq!(parsed.findings[0].target, "http://h/rest/basket/3");
+        assert_eq!(parsed.findings[1].target, "http://h/rest/basket/5");
+        assert!(parsed.findings[1]
+            .evidence
+            .contains("http://h/rest/basket/5"));
+        assert_eq!(parsed.observations.len(), 3);
     }
 
     #[test]
