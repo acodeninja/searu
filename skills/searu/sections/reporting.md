@@ -15,6 +15,19 @@ Group findings into issues (one defect can affect many endpoints), lead with the
 and tie each to its ATT&CK technique and evidence. Loot values are sensitive — reveal them only when
 the report needs them, and remember findings themselves store only a fingerprint.
 
+## Measure coverage and score
+
+Before you call an engagement done, confirm you were exhaustive and record the result:
+
+```
+searu coverage --gaps               # any automatable surface x class pairing still untried?
+searu benchmark score               # for a lab with a score board (Juice Shop), the solved/total delta
+```
+
+`searu coverage --gaps` is the completeness check — drive the remaining automatable pairings to zero
+before reporting. On a benchmark target, `searu benchmark score` writes the machine-readable scorecard
+(solved/total by category, and the change since the last run) so progress is a number, not a guess.
+
 ## Formal report & export (planned, M4)
 
 A `searu report` deliverable (PDF, with a rules-of-engagement appendix and an ATT&CK coverage

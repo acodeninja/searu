@@ -22,8 +22,8 @@ Recognise it, then map its weakness categories (from *Pwning OWASP Juice Shop*) 
 | Category | Surface to attack | Class / how |
 | --- | --- | --- |
 | Injection | `q` on `/rest/products/search`; the `email` field on `/rest/user/login` | `sqli` — `sqlmap`/`ghauri` on the parameter; login bypass is a `' OR 1=1--` style payload |
-| Broken authentication | `/rest/user/login`; JWT in the `Authorization: Bearer` token | `brute-force` — `hydra` with `S=authentication`; `auth` — forge/alter the RS256 JWT (needs the JWT hand) |
-| Broken access control | `/rest/basket/{id}`, `/api/Users/{id}`, admin-only routes (`/#/administration`), `/#/score-board` | `access-control` — replay a request with another object's id or without the admin role (manual until the IDOR hand exists) |
+| Broken authentication | `/rest/user/login`; JWT in the `Authorization: Bearer` token | `brute-force` — `hydra` with `S=authentication`; `auth` — forge with `jwt` (`-X a` alg:none / `-X k` key-confusion), then **confirm** by replaying the forged token with `authz` against `/rest/user/whoami` (a 2xx = signature not verified) |
+| Broken access control | `/rest/basket/{id}`, `/api/Cards/{id}`, `/api/Addresss/{id}`, `/api/Users/{id}`; admin routes (`/rest/admin/*`) | `access-control` — `authz` with a held user JWT and `--range` to sweep object ids (a served id that is not yours is IDOR); drop the header to test admin/unauth routes |
 | XSS | reflected/DOM sinks: the search parameter, the `/#/track-result?id=` route | `xss` — `dalfox` on the parameter |
 | Sensitive data exposure | `/ftp/` directory: `*.bak`, `package.json.bak`, `coupons_*.md.bak`, `incident-support.kdbx` | download the file, then crack the KeePass DB / hashes (needs the file-download + crack hands); the `.bak` 403 is bypassed with a `%2500.md` null-byte trick |
 | Unvalidated redirect | the `to`/`redirect` parameter on `/redirect` | `redirect-ssrf` — supply an allow-listed-prefix bypass (manual) |
@@ -33,5 +33,6 @@ Recognise it, then map its weakness categories (from *Pwning OWASP Juice Shop*) 
 
 Always authenticate the browser crawl with a registered or cracked credential to reveal the logged-in
 surface (baskets, orders, the token), then re-run `searu coverage` — the authenticated endpoints are
-new items to clear. The score board (`/api/Challenges/`) is the ground truth for how much of the app
-you have actually broken; scoring against it is a separate, opt-in step and never a prerequisite.
+new items to clear. Between rounds, run `searu benchmark score` to read the score board
+(`/api/Challenges/`) — the ground truth for how much you have actually broken and the delta since last
+round; it is an opt-in measurement, never a prerequisite.
