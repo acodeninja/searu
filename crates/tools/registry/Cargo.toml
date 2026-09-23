@@ -32,6 +32,7 @@ searu-tool-grype = { path = "../wrappers/grype" }
 searu-tool-hadolint = { path = "../wrappers/hadolint" }
 searu-tool-hydra = { path = "../wrappers/hydra" }
 searu-tool-httpx = { path = "../wrappers/httpx" }
+searu-tool-jwt = { path = "../wrappers/jwt" }
 searu-tool-katana = { path = "../wrappers/katana" }
 searu-tool-nikto = { path = "../wrappers/nikto" }
 searu-tool-njsscan = { path = "../wrappers/njsscan" }

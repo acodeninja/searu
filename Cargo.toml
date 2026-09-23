@@ -32,6 +32,7 @@ members = [
     "crates/tools/wrappers/hadolint",
     "crates/tools/wrappers/hydra",
     "crates/tools/wrappers/httpx",
+    "crates/tools/wrappers/jwt",
     "crates/tools/wrappers/katana",
     "crates/tools/wrappers/nikto",
     "crates/tools/wrappers/njsscan",

@@ -28,6 +28,7 @@ use searu_tool_grype::GRYPE;
 use searu_tool_hadolint::HADOLINT;
 use searu_tool_httpx::HTTPX;
 use searu_tool_hydra::HYDRA;
+use searu_tool_jwt::JWT;
 use searu_tool_katana::KATANA;
 use searu_tool_nikto::NIKTO;
 use searu_tool_njsscan::NJSSCAN;
@@ -70,6 +71,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &HADOLINT,
     &HTTPX,
     &HYDRA,
+    &JWT,
     &KATANA,
     &NIKTO,
     &NJSSCAN,

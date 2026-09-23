@@ -166,7 +166,7 @@ pub static CLASSES: &[TechniqueClass] = &[
     TechniqueClass {
         id: "auth",
         label: "broken authentication / token forgery",
-        tools: &[],
+        tools: &["jwt"],
         applies: &[ItemKind::Endpoint, ItemKind::Form],
     },
     TechniqueClass {
