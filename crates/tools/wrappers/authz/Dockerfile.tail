@@ -1,0 +1,3 @@
+REPLAY_EOF
+
+ENTRYPOINT ["python3", "/app/replay.py"]

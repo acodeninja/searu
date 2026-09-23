@@ -7,6 +7,7 @@ members = [
     "crates/adapter-docker",
     "crates/tools/parser",
     "crates/tools/wrappers/arjun",
+    "crates/tools/wrappers/authz",
     "crates/tools/wrappers/bandit",
     "crates/tools/wrappers/brakeman",
     "crates/tools/wrappers/browser",

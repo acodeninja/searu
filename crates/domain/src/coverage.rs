@@ -160,7 +160,7 @@ pub static CLASSES: &[TechniqueClass] = &[
     TechniqueClass {
         id: "access-control",
         label: "broken access control / IDOR",
-        tools: &[],
+        tools: &["authz"],
         applies: &[ItemKind::Endpoint, ItemKind::Param],
     },
     TechniqueClass {
