@@ -559,6 +559,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-fetch"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
 name = "searu-tool-ffuf"
 version = "0.0.1"
 dependencies = [
@@ -744,6 +752,7 @@ dependencies = [
  "searu-tool-dnsx",
  "searu-tool-dotdotpwn",
  "searu-tool-feroxbuster",
+ "searu-tool-fetch",
  "searu-tool-ffuf",
  "searu-tool-fuxploider",
  "searu-tool-gau",
