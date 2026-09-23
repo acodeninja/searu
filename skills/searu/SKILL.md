@@ -28,7 +28,7 @@ You decide what to do next; `searu` gates and runs each step and remembers the r
   the Exploitation tier also needs a named authoriser, and destructive techniques need
   `destructive_authorised: true`.
 - **Never reach a target with anything but `searu`.** The PreToolUse hook (`searu scope-hook`) blocks
-  any Bash command that is not a `searu …` call, and blocks every network-capable tool outright —
+  any Bash or PowerShell command that is not a `searu …` call, and blocks every network-capable tool outright —
   `WebFetch`, `WebSearch`, other skills, MCP tools. Drive tools only through `searu run`. Nothing
   else — `docker`, `curl`, `wget`, a scanner, a browser skill — may touch a target.
 

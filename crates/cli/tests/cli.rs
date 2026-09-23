@@ -295,6 +295,31 @@ fn scope_hook_blocks_a_raw_docker_command() {
 }
 
 #[test]
+fn scope_hook_allows_a_searu_command_via_powershell() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .arg("scope-hook")
+        .write_stdin(
+            r#"{"tool_name":"PowerShell","tool_input":{"command":"searu run katana --technique T1595 --target http://localhost:3000"}}"#,
+        )
+        .assert()
+        .success()
+        .stdout(contains(r#""permissionDecision":"allow""#));
+}
+
+#[test]
+fn scope_hook_blocks_a_raw_command_via_powershell() {
+    Command::cargo_bin("searu")
+        .unwrap()
+        .arg("scope-hook")
+        .write_stdin(r#"{"tool_name":"PowerShell","tool_input":{"command":"docker run alpine"}}"#)
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(contains("searu"));
+}
+
+#[test]
 fn scope_hook_allows_a_file_read_tool() {
     Command::cargo_bin("searu")
         .unwrap()

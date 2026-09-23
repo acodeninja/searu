@@ -7,11 +7,11 @@ pub enum HookDecision {
 }
 
 pub fn decide(tool_name: &str, command: Option<&str>) -> HookDecision {
-    if tool_name == "Bash" {
+    if is_shell(tool_name) {
         return match command.and_then(program) {
             Some(program) if is_searu(&program) => HookDecision::Allow,
             _ => HookDecision::Block(
-                "searu scope-hook: only `searu` commands are permitted in Bash; run tools via `searu run`"
+                "searu scope-hook: only `searu` commands are permitted in a shell; run tools via `searu run`"
                     .to_string(),
             ),
         };
@@ -23,6 +23,12 @@ pub fn decide(tool_name: &str, command: Option<&str>) -> HookDecision {
             "searu scope-hook: `{tool_name}` cannot reach a target during an engagement; reach targets only via `searu run`"
         ))
     }
+}
+
+/// The shell tools that execute an arbitrary command: on Windows the agent's shell is `PowerShell`, so
+/// it must be gated exactly like `Bash` — a `searu` command passes, anything else is blocked.
+fn is_shell(tool_name: &str) -> bool {
+    matches!(tool_name, "Bash" | "PowerShell" | "pwsh")
 }
 
 fn is_allowed_local(tool_name: &str) -> bool {
@@ -47,14 +53,23 @@ fn is_allowed_local(tool_name: &str) -> bool {
             | "TaskGet"
             | "TaskOutput"
             | "TaskStop"
+            | "BashOutput"
+            | "KillShell"
+            | "KillBash"
     )
 }
 
 fn program(command: &str) -> Option<String> {
     command
         .split_whitespace()
-        .find(|token| !is_assignment(token))
-        .map(basename)
+        .find(|token| !is_assignment(token) && *token != "&")
+        .map(|token| basename(strip_quotes(token)))
+}
+
+/// PowerShell invokes an executable at a quoted path with the call operator, e.g.
+/// `& "C:\…\searu.exe" run …`; strip the surrounding quotes so the basename resolves to `searu.exe`.
+fn strip_quotes(token: &str) -> &str {
+    token.trim_matches(['"', '\'']).trim()
 }
 
 fn is_assignment(token: &str) -> bool {
@@ -121,6 +136,45 @@ mod tests {
             "Bash",
             Some("curl http://localhost:5000")
         )));
+    }
+
+    #[test]
+    fn a_searu_command_via_powershell_passes() {
+        assert!(is_allowed(decide(
+            "PowerShell",
+            Some("searu run katana --technique T1595 --target http://localhost:3000")
+        )));
+        assert!(is_allowed(decide("pwsh", Some("searu findings"))));
+    }
+
+    #[test]
+    fn a_raw_scanner_via_powershell_is_blocked() {
+        assert!(!is_allowed(decide("PowerShell", Some("docker run alpine"))));
+        assert!(!is_allowed(decide("PowerShell", Some("Get-ChildItem"))));
+    }
+
+    #[test]
+    fn a_windows_searu_exe_path_passes_in_either_shell() {
+        let command = r"C:\Users\Lawrence\.cargo\bin\searu.exe run sqlmap --technique T1190 --target http://localhost:3000";
+        assert!(is_allowed(decide("Bash", Some(command))));
+        assert!(is_allowed(decide("PowerShell", Some(command))));
+    }
+
+    #[test]
+    fn a_powershell_call_operator_invocation_passes() {
+        assert!(is_allowed(decide(
+            "PowerShell",
+            Some(
+                r#"& "C:\Users\Lawrence\.cargo\bin\searu.exe" run hydra --technique T1110 --target host"#
+            )
+        )));
+    }
+
+    #[test]
+    fn background_shell_management_tools_pass() {
+        assert!(is_allowed(decide("BashOutput", None)));
+        assert!(is_allowed(decide("KillShell", None)));
+        assert!(is_allowed(decide("KillBash", None)));
     }
 
     #[test]
