@@ -100,7 +100,7 @@ pub static CLASSES: &[TechniqueClass] = &[
     TechniqueClass {
         id: "xss",
         label: "cross-site scripting",
-        tools: &["dalfox"],
+        tools: &["dalfox", "xss"],
         applies: &[ItemKind::Param],
     },
     TechniqueClass {

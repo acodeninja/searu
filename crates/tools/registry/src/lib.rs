@@ -47,6 +47,7 @@ use searu_tool_trivy::TRIVY;
 use searu_tool_trufflehog::TRUFFLEHOG;
 use searu_tool_wafw00f::WAFW00F;
 use searu_tool_whatweb::WHATWEB;
+use searu_tool_xss::XSS;
 
 static TOOLS: &[&'static dyn Tool] = &[
     &ARJUN,
@@ -93,6 +94,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &TRUFFLEHOG,
     &WAFW00F,
     &WHATWEB,
+    &XSS,
     &FFUF,
 ];
 

@@ -51,3 +51,4 @@ searu-tool-trivy = { path = "../wrappers/trivy" }
 searu-tool-trufflehog = { path = "../wrappers/trufflehog" }
 searu-tool-wafw00f = { path = "../wrappers/wafw00f" }
 searu-tool-whatweb = { path = "../wrappers/whatweb" }
+searu-tool-xss = { path = "../wrappers/xss" }

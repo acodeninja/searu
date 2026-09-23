@@ -792,6 +792,7 @@ dependencies = [
  "searu-tool-trufflehog",
  "searu-tool-wafw00f",
  "searu-tool-whatweb",
+ "searu-tool-xss",
 ]
 
 [[package]]
@@ -859,6 +860,14 @@ dependencies = [
 
 [[package]]
 name = "searu-tool-whatweb"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
+name = "searu-tool-xss"
 version = "0.0.1"
 dependencies = [
  "searu-domain",

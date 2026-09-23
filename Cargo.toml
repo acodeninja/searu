@@ -52,6 +52,7 @@ members = [
     "crates/tools/wrappers/trufflehog",
     "crates/tools/wrappers/wafw00f",
     "crates/tools/wrappers/whatweb",
+    "crates/tools/wrappers/xss",
     "crates/tools/registry",
     "crates/cli",
     "crates/xtask",
