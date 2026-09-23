@@ -73,11 +73,12 @@ impl Tool for Commix {
 
         let command_outputs = searu_tool_parser::text::commix_command_outputs(&decoded);
 
-        let lower = decoded.to_ascii_lowercase();
+        // Confirm on hard evidence (commix returned injected-command output or a secret) or on its
+        // *affirmative* verdict — never on a bare "injectable"/"vulnerable" substring, which also appears
+        // in commix's negatives ("does not seem to be injectable") and probe lines.
         let confirmed = !loot.is_empty()
             || !command_outputs.is_empty()
-            || lower.contains("vulnerable")
-            || lower.contains("injectable");
+            || asserts_injection(&decoded.to_ascii_lowercase());
 
         // The injection itself is one finding (T1190 → T1059), recorded when the run that confirms the
         // foothold executes; collection runs through the foothold record observations, not findings.
@@ -133,6 +134,20 @@ impl Tool for Commix {
             observations,
         }
     }
+}
+
+/// commix confirms an injection with an affirmative verdict; its negatives ("does not seem to be
+/// injectable", "not vulnerable") and its probe chatter also contain those words, so require the
+/// affirmative phrasing on a line that carries no negation.
+fn asserts_injection(lower: &str) -> bool {
+    lower.lines().any(|line| {
+        let affirmative = line.contains("is vulnerable")
+            || line.contains("seems injectable")
+            || line.contains("seems to be injectable via")
+            || line.contains("is injectable via")
+            || line.contains("appears to be vulnerable");
+        affirmative && !line.contains("not") && !line.contains("n't")
+    })
 }
 
 /// Turn one executed command's output into structured observations: the accounts in `/etc/passwd`, the
@@ -303,6 +318,32 @@ mod tests {
         };
         let parsed = COMMIX.parse("http://localhost:5000/", "T1046", &outcome);
         assert!(parsed.findings.is_empty());
+        assert!(parsed.loot.is_empty());
+    }
+
+    #[test]
+    fn a_negative_verdict_mentioning_injectable_is_not_confirmed() {
+        // commix's own negative — the word "injectable" appears, but the verdict is negative and the
+        // target 500s. This must NOT become a critical finding (the false positive from the field run).
+        let outcome = ToolOutcome {
+            code: 1,
+            stdout: "[*] Testing the (results based) command injection technique.\n\
+                     [warning] The (GET) 'q' parameter does not seem to be injectable.\n\
+                     [critical] The tested parameter is not vulnerable. Skipping further testing.\n\
+                     [info] Ignoring HTTP error code '500'.\n"
+                .to_string(),
+            stderr: String::new(),
+        };
+        let parsed = COMMIX.parse(
+            "http://localhost:3000/rest/products/search?q=1",
+            "T1190",
+            &outcome,
+        );
+        assert!(
+            parsed.findings.is_empty(),
+            "a negative commix verdict must not confirm: {:?}",
+            parsed.findings
+        );
         assert!(parsed.loot.is_empty());
     }
 
