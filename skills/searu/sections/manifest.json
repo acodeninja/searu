@@ -31,6 +31,12 @@
       "trigger": "exercising an authorised weakness and collecting from the foothold"
     },
     {
+      "id": "coverage",
+      "file": "coverage.md",
+      "title": "Coverage",
+      "trigger": "driving toward exhaustive coverage; deciding what technique to try against which surface item next"
+    },
+    {
       "id": "reporting",
       "file": "reporting.md",
       "title": "Reporting",

@@ -37,16 +37,22 @@ You decide what to do next; `searu` gates and runs each step and remembers the r
 An engagement flows through ATT&CK-aligned phases. **Before acting in a phase, read its section file
 first** (`~/.claude/skills/searu/sections/<file>`):
 
-| When you are… | Read |
-| --- | --- |
-| starting/resuming an engagement, defining scope, writing the ROE | `sections/scoping.md` |
-| fingerprinting a live target | `sections/reconnaissance.md` |
-| enumerating endpoints, content, parameters | `sections/discovery.md` |
-| detecting an exploitable weakness | `sections/initial-access.md` |
-| exercising an authorised weakness and collecting | `sections/exploitation.md` |
-| reviewing and summarising what was recorded | `sections/reporting.md` |
+| When you are…                                                    | Read                         |
+|------------------------------------------------------------------|------------------------------|
+| starting/resuming an engagement, defining scope, writing the ROE | `sections/scoping.md`        |
+| fingerprinting a live target                                     | `sections/reconnaissance.md` |
+| enumerating endpoints, content, parameters                       | `sections/discovery.md`      |
+| detecting an exploitable weakness                                | `sections/initial-access.md` |
+| exercising an authorised weakness and collecting                 | `sections/exploitation.md`   |
+| driving toward exhaustive coverage of the attack surface         | `sections/coverage.md`       |
+| reviewing and summarising what was recorded                      | `sections/reporting.md`      |
 
 Start at scoping unless a valid `./pentest/rules-of-engagement.json` already exists.
+
+The objective is exhaustive, not opportunistic: try every applicable technique against every discovered
+surface item. Understand the app first (`searu run browser`), then work `searu coverage --gaps` until no
+automatable pairing is left untried — do not stop at the first success. For a recognised target, read
+`playbooks/<app>.md` to head straight for its real weaknesses.
 
 For a noisy tool run, delegate it to its **specialist** rather than running it inline: spawn
 `specialists/<technique>-<tool>.md` via the Agent tool on the `model:` that file names, so scanner
@@ -61,5 +67,7 @@ the specialist.
   against an in-scope, authorised target (needs Docker).
 - `searu findings [--technique|--severity|--tool]`, `searu loot [--category] [--reveal]`,
   `searu observations [--kind]` — query what was recorded under `./pentest/`.
+- `searu coverage [--gaps]` — the attack surface crossed with the technique classes that apply to it,
+  each pairing scored untried/attempted/succeeded; `--gaps` lists the untried work to drive to zero.
 - `searu tool list [--phase <phase>]` — the tools; with `--phase`, the phase's tools and when to use each.
 - `searu tool advice <tool> [--phase <phase>]` — how to drive a tool: invoke, interpret, chain (per phase).
