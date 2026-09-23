@@ -43,6 +43,7 @@ members = [
     "crates/tools/wrappers/nmap",
     "crates/tools/wrappers/nuclei",
     "crates/tools/wrappers/osv-scanner",
+    "crates/tools/wrappers/redirect",
     "crates/tools/wrappers/semgrep",
     "crates/tools/wrappers/sqlmap",
     "crates/tools/wrappers/sstimap",

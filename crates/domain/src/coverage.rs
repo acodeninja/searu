@@ -172,7 +172,7 @@ pub static CLASSES: &[TechniqueClass] = &[
     TechniqueClass {
         id: "redirect-ssrf",
         label: "open redirect / SSRF",
-        tools: &[],
+        tools: &["redirect"],
         applies: &[ItemKind::Param],
     },
 ];
@@ -362,7 +362,7 @@ mod tests {
     }
 
     #[test]
-    fn the_summary_counts_states_and_flags_gaps_with_no_tool() {
+    fn the_summary_counts_states_and_every_param_class_now_has_a_tool() {
         let items = [param("q", "/rest/products/search")];
         let successes = [Signal {
             tool: "sqlmap".to_string(),
@@ -371,7 +371,30 @@ mod tests {
         let cells = project(&items, &[], &successes);
         let summary = summarise(&cells);
         assert_eq!(summary.succeeded, 1);
-        assert!(summary.untried_no_tool >= 1); // access-control/redirect-ssrf have no tool yet
         assert!(summary.attempted_pct() < 100);
+        // Every class that applies to a parameter now has an automated tool (access-control→authz,
+        // redirect-ssrf→redirect, …), so nothing is left tool-less.
+        assert_eq!(summary.untried_no_tool, 0);
+    }
+
+    #[test]
+    fn a_tool_less_class_is_still_flagged() {
+        // Guard the untried_no_tool accounting itself against a synthetic tool-less class.
+        let class = TechniqueClass {
+            id: "x",
+            label: "x",
+            tools: &[],
+            applies: &[ItemKind::Param],
+        };
+        let item = param("q", "/e");
+        let cell = CoverageCell {
+            item,
+            class_id: class.id,
+            class_label: class.label,
+            automated: class.automated(),
+            state: CoverageState::Untried,
+        };
+        let summary = summarise(&[cell]);
+        assert_eq!(summary.untried_no_tool, 1);
     }
 }

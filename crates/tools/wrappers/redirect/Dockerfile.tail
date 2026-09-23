@@ -1,0 +1,3 @@
+REDIRECT_EOF
+
+ENTRYPOINT ["python3", "/app/redirect.py"]

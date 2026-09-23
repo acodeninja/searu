@@ -42,6 +42,7 @@ searu-tool-njsscan = { path = "../wrappers/njsscan" }
 searu-tool-nmap = { path = "../wrappers/nmap" }
 searu-tool-nuclei = { path = "../wrappers/nuclei" }
 searu-tool-osv-scanner = { path = "../wrappers/osv-scanner" }
+searu-tool-redirect = { path = "../wrappers/redirect" }
 searu-tool-semgrep = { path = "../wrappers/semgrep" }
 searu-tool-sqlmap = { path = "../wrappers/sqlmap" }
 searu-tool-sstimap = { path = "../wrappers/sstimap" }

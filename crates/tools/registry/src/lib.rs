@@ -38,6 +38,7 @@ use searu_tool_njsscan::NJSSCAN;
 use searu_tool_nmap::NMAP;
 use searu_tool_nuclei::NUCLEI;
 use searu_tool_osv_scanner::OSV_SCANNER;
+use searu_tool_redirect::REDIRECT;
 use searu_tool_semgrep::SEMGREP;
 use searu_tool_sqlmap::SQLMAP;
 use searu_tool_sstimap::SSTIMAP;
@@ -85,6 +86,7 @@ static TOOLS: &[&'static dyn Tool] = &[
     &NMAP,
     &NUCLEI,
     &OSV_SCANNER,
+    &REDIRECT,
     &SEMGREP,
     &SQLMAP,
     &SSTIMAP,

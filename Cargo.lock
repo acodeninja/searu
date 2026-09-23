@@ -744,6 +744,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "searu-tool-redirect"
+version = "0.0.1"
+dependencies = [
+ "searu-domain",
+ "serde_json",
+]
+
+[[package]]
 name = "searu-tool-registry"
 version = "0.0.1"
 dependencies = [
@@ -784,6 +792,7 @@ dependencies = [
  "searu-tool-nmap",
  "searu-tool-nuclei",
  "searu-tool-osv-scanner",
+ "searu-tool-redirect",
  "searu-tool-semgrep",
  "searu-tool-sqlmap",
  "searu-tool-sstimap",
