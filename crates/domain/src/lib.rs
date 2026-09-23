@@ -2,6 +2,7 @@
 
 pub mod assets;
 pub mod attack;
+pub mod benchmark;
 pub mod coverage;
 pub mod egress;
 pub mod findings;
