@@ -1,0 +1,8 @@
+# syntax=docker/dockerfile:1
+FROM mcr.microsoft.com/playwright:v1.63.0-noble
+
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+WORKDIR /app
+RUN npm init -y >/dev/null 2>&1 && npm install playwright@1.63.0 >/dev/null 2>&1
+
+RUN cat > /app/crawl.js <<'CRAWL_EOF'

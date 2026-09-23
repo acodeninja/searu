@@ -9,6 +9,7 @@ members = [
     "crates/tools/wrappers/arjun",
     "crates/tools/wrappers/bandit",
     "crates/tools/wrappers/brakeman",
+    "crates/tools/wrappers/browser",
     "crates/tools/wrappers/checkov",
     "crates/tools/wrappers/commix",
     "crates/tools/wrappers/corsy",
