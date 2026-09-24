@@ -43,12 +43,14 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-639 / CWE-200 | IDOR on users leaks password hash + API token | `routes/users.js` `GET /users/:id` | `GET /api/users/{id}` |
 | CWE-639 | Reaction endpoint leaks private incident titles (IDOR oracle) | `services/incidentService.js` | `GET /api/incidents/{id}/reactions` |
 | CWE-862 | Broken function-level auth: any user lists all incidents incl. private | `routes/incidents.js` `GET /incidents` | Authenticated `GET /api/incidents` |
+| CWE-602 / CWE-285 | Admin settings restricted only in the SPA; server has no role check | `routes/admin.js` (`requireAuth` only) | `GET /api/admin/settings` with a customer token leaks the signing/share keys |
 | CWE-915 | Mass assignment of `role` on register/profile | `services/authService.js` `register` | `POST /api/users/register` with `"role":"admin"` |
 | CWE-863 / CWE-807 | Authorisation decision trusts a spoofable header | `middleware/authenticate.js` (`x-sife-role`) | `curl -H 'X-Sife-Role: admin' /api/users` |
 | CWE-306 | Missing auth on a critical function (post to public timeline) | `routes/incidents.js` `POST /incidents/:id/updates` | Unauthenticated status-update injection |
 | CWE-345 | Inbound webhook signature never verified | `routes/webhooks.js`, `services/webhookService.js` | `POST /api/webhooks/monitor` unsigned → change component health |
 | CWE-348 / CWE-290 | Access decision trusts `X-Forwarded-For` (spoofable) | `routes/internal.js` | `GET /api/internal/metrics` with `X-Forwarded-For: 127.0.0.1` |
 | CWE-841 | No approval workflow on account credits | `services/billingService.js` `refund` | `POST /api/billing/refund {"amount":9999}` self-approves |
+| CWE-1284 | No bounds on billing quantities (amount/seats) | `services/billingService.js` | `POST /api/billing/refund {"amount":-100000}` |
 
 ## Injection
 
@@ -64,6 +66,9 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-502 | Insecure deserialization (RCE) | `services/preferenceService.js` | `sife.prefs` cookie with a `node-serialize` function payload |
 | CWE-95 | Eval injection (RCE) via metric expression | `services/reportService.js` `compute` (`new Function`) | `GET /api/reports/compute?expr=process.env.JWT_SECRET` |
 | CWE-776 | XML entity-expansion amplification (`huge` enabled) | `services/importService.js` | `POST /api/incidents/import` with nested entities |
+| CWE-91 | XML injection in the generated RSS feed (no escaping) | `services/feedService.js` | Seed an update via `POST /api/incidents/:id/updates`, read `GET /api/status.rss` |
+| CWE-643 | XPath injection over the service catalogue | `services/catalogueService.js` | `GET /api/catalogue/search?q=') or contains(name,'` leaks internal services |
+| CWE-88 | Argument injection into `curl` (execFile, user tokens) | `services/monitorService.js` `connectivityCheck` | `POST /api/monitors/connectivity {"target":"-o /app/public/x.txt file:///etc/hostname"}` |
 | CWE-1321 | Prototype pollution via `lodash.merge` | `services/authService.js` `register` | `POST /api/users/register` with `"__proto__"` |
 | CWE-79 | Stored XSS in incident bodies, ticket replies (Markdown), reaction emoji | React `dangerouslySetInnerHTML` in `StatusPage`, `TicketDetail`, `Reactions` | Post markup; renders raw |
 | CWE-79 | Reflected DOM XSS in search term | `web/src/pages/Search.tsx` | `/search?q=<img src=x onerror=…>` |

@@ -39,6 +39,9 @@ export const StatusPage = () => {
       </div>
 
       <Subscribe />
+      <p className="notice">
+        <a href="/api/status.rss">Subscribe via RSS</a>
+      </p>
 
       <section>
         <h2>Components</h2>
