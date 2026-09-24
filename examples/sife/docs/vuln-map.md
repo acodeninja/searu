@@ -86,6 +86,7 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE | Weakness | Location | Reach |
 | --- | --- | --- | --- |
 | CWE-22 | Path traversal / LFI | `services/attachmentService.js` `readByPath` | `GET /api/attachments?path=../../../../etc/passwd` |
+| CWE-73 | External control of a file name → arbitrary write | `services/reportStoreService.js` | `POST /api/reports/save {"name":"../public/rfd.html","content":"<script>…"}` then `GET /rfd.html` |
 | CWE-434 | Unrestricted file upload | `routes/attachments.js` | `POST /api/tickets/{id}/attachments` any type |
 | CWE-918 | SSRF | `services/monitorService.js` `probe` | `POST /api/monitors/probe` `{"url":"http://internal/…"}` |
 | CWE-601 | Open redirect (naive substring allow-list) | `routes/redirect.js` | `GET /api/out?to=https://sife.io.evil.example` |
@@ -95,6 +96,9 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-312 | Third-party API keys stored & returned in cleartext (and readable by any user) | `services/integrationService.js` | `GET /api/integrations` |
 | CWE-295 | Outbound probe disables TLS certificate validation | `services/monitorService.js` (`rejectUnauthorized: false`) | `POST /api/monitors/probe {"url":"https://expired.badssl.com/"}` |
 | CWE-327 / CWE-326 | Share tokens use AES-ECB with a hardcoded key | `services/shareService.js`, `config.js` (`shareKey`, leaked in `.env.bak`) | Forge a token for any ticket id; `GET /api/shared/<token>` |
+| CWE-329 / CWE-323 | Export encryption uses AES-CBC with a fixed all-zero IV | `services/exportCryptoService.js`, `config.js` (`exportKey`) | `POST /api/exports/encrypt` twice with the same data → identical ciphertext |
+| CWE-256 | Security-question answer stored in cleartext | `repositories/userRepository.js`, `services/recoveryService.js` | `GET /api/users/:id` shows `security_answer`; `POST /rest/user/security-recover` |
+| CWE-778 | Insufficient logging: only login is audited | `services/auditService.js` | Password change / refund / config import produce no audit entry |
 | CWE-532 | Credentials written to the service log | `services/auditService.js` | `docker compose logs api` shows `password=…` |
 | CWE-117 | Unsanitised email forges audit-log lines | `services/auditService.js`, `routes/audit.js` | Login with a newline in the email; read `GET /api/audit` |
 

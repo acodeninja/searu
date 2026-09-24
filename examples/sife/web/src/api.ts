@@ -109,6 +109,12 @@ export const requestReset = (email: string) =>
 export const performReset = (token: string, newPassword: string) =>
   request('/rest/user/reset', { method: 'POST', body: JSON.stringify({ token, newPassword }) });
 
+export const securityRecover = (email: string, answer: string): Promise<{ token: string }> =>
+  request('/rest/user/security-recover', {
+    method: 'POST',
+    body: JSON.stringify({ email, answer }),
+  });
+
 export const subscribeStatus = (email: string, components: string[]) =>
   request('/api/subscribers', { method: 'POST', body: JSON.stringify({ email, components }) });
 
