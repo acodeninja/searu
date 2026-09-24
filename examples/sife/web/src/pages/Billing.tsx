@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getBilling, getToken, subscribePlan, type Plan } from '../api';
+import { getBilling, getToken, requestCredit, subscribePlan, type Plan } from '../api';
 import { useNavigate } from 'react-router-dom';
 
 const tiers = [
@@ -11,6 +11,8 @@ const tiers = [
 export const Billing = () => {
   const navigate = useNavigate();
   const [current, setCurrent] = useState<Plan | null>(null);
+  const [creditAmount, setCreditAmount] = useState('');
+  const [balance, setBalance] = useState<number | null>(null);
 
   useEffect(() => {
     if (!getToken()) {
@@ -23,6 +25,13 @@ export const Billing = () => {
   const choose = async (plan: string, seats: number, amount: number) => {
     await subscribePlan(plan, seats, amount);
     setCurrent(await getBilling());
+  };
+
+  const claimCredit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const { balance: updated } = await requestCredit(Number(creditAmount));
+    setBalance(updated);
+    setCreditAmount('');
   };
 
   return (
@@ -49,6 +58,22 @@ export const Billing = () => {
           </article>
         ))}
       </div>
+
+      <section>
+        <h2>Request a credit</h2>
+        <form className="ticket-search" onSubmit={claimCredit}>
+          <input
+            type="number"
+            value={creditAmount}
+            onChange={(event) => setCreditAmount(event.target.value)}
+            placeholder="Amount (£)"
+          />
+          <button className="btn btn-ghost" type="submit">
+            Request credit
+          </button>
+        </form>
+        {balance !== null && <p className="notice">Credit balance: £{balance}</p>}
+      </section>
     </div>
   );
 };

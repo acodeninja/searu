@@ -115,6 +115,12 @@ export const subscribePlan = (plan: string, seats: number, amount: number) =>
     body: JSON.stringify({ plan, seats, amount }),
   });
 
+export const requestCredit = (amount: number): Promise<{ balance: number }> =>
+  request('/api/billing/refund', { method: 'POST', body: JSON.stringify({ amount }) });
+
+export const shareTicket = (id: number): Promise<{ token: string; url: string }> =>
+  request(`/api/tickets/${id}/share`, { method: 'POST' });
+
 export type Article = {
   slug: string;
   title: string;

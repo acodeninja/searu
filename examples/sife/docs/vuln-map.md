@@ -47,6 +47,8 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-863 / CWE-807 | Authorisation decision trusts a spoofable header | `middleware/authenticate.js` (`x-sife-role`) | `curl -H 'X-Sife-Role: admin' /api/users` |
 | CWE-306 | Missing auth on a critical function (post to public timeline) | `routes/incidents.js` `POST /incidents/:id/updates` | Unauthenticated status-update injection |
 | CWE-345 | Inbound webhook signature never verified | `routes/webhooks.js`, `services/webhookService.js` | `POST /api/webhooks/monitor` unsigned → change component health |
+| CWE-348 / CWE-290 | Access decision trusts `X-Forwarded-For` (spoofable) | `routes/internal.js` | `GET /api/internal/metrics` with `X-Forwarded-For: 127.0.0.1` |
+| CWE-841 | No approval workflow on account credits | `services/billingService.js` `refund` | `POST /api/billing/refund {"amount":9999}` self-approves |
 
 ## Injection
 
@@ -61,6 +63,7 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-611 | XXE (external entities enabled) | `services/importService.js` | `POST /api/incidents/import` with a `SYSTEM` entity |
 | CWE-502 | Insecure deserialization (RCE) | `services/preferenceService.js` | `sife.prefs` cookie with a `node-serialize` function payload |
 | CWE-95 | Eval injection (RCE) via metric expression | `services/reportService.js` `compute` (`new Function`) | `GET /api/reports/compute?expr=process.env.JWT_SECRET` |
+| CWE-776 | XML entity-expansion amplification (`huge` enabled) | `services/importService.js` | `POST /api/incidents/import` with nested entities |
 | CWE-1321 | Prototype pollution via `lodash.merge` | `services/authService.js` `register` | `POST /api/users/register` with `"__proto__"` |
 | CWE-79 | Stored XSS in incident bodies, ticket replies (Markdown), reaction emoji | React `dangerouslySetInnerHTML` in `StatusPage`, `TicketDetail`, `Reactions` | Post markup; renders raw |
 | CWE-79 | Reflected DOM XSS in search term | `web/src/pages/Search.tsx` | `/search?q=<img src=x onerror=…>` |
@@ -82,6 +85,9 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-916 / CWE-759 | Weak, unsalted password hashing (MD5) | `auth/hashing.js` | Crack leaked hashes |
 | CWE-312 | Third-party API keys stored & returned in cleartext (and readable by any user) | `services/integrationService.js` | `GET /api/integrations` |
 | CWE-295 | Outbound probe disables TLS certificate validation | `services/monitorService.js` (`rejectUnauthorized: false`) | `POST /api/monitors/probe {"url":"https://expired.badssl.com/"}` |
+| CWE-327 / CWE-326 | Share tokens use AES-ECB with a hardcoded key | `services/shareService.js`, `config.js` (`shareKey`, leaked in `.env.bak`) | Forge a token for any ticket id; `GET /api/shared/<token>` |
+| CWE-532 | Credentials written to the service log | `services/auditService.js` | `docker compose logs api` shows `password=…` |
+| CWE-117 | Unsanitised email forges audit-log lines | `services/auditService.js`, `routes/audit.js` | Login with a newline in the email; read `GET /api/audit` |
 
 ## Configuration & transport
 

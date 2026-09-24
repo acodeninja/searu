@@ -5,6 +5,7 @@ import {
   getComments,
   getTicket,
   postComment,
+  shareTicket,
   uploadAttachment,
   type Attachment,
   type Comment,
@@ -18,6 +19,7 @@ export const TicketDetail = () => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [draft, setDraft] = useState('');
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   const loadComments = () => getComments(ticketId).then(setComments);
   const loadAttachments = () => getAttachments(ticketId).then(setAttachments).catch(() => setAttachments([]));
@@ -47,12 +49,25 @@ export const TicketDetail = () => {
     return <p className="notice">Loading ticket…</p>;
   }
 
+  const share = async () => {
+    const { url } = await shareTicket(ticketId);
+    setShareUrl(`${window.location.origin}${url}`);
+  };
+
   return (
     <div className="ticket-detail">
       <h1>{ticket.subject}</h1>
       <p className="notice">
         Ticket #{ticket.id} · {ticket.priority} · {ticket.status}
       </p>
+      <button type="button" className="btn btn-ghost" onClick={share}>
+        Share
+      </button>
+      {shareUrl && (
+        <p className="notice">
+          Share link: <a href={shareUrl}>{shareUrl}</a>
+        </p>
+      )}
       <div className="ticket-body" dangerouslySetInnerHTML={{ __html: ticket.body ?? '' }} />
 
       <h2>Attachments</h2>
