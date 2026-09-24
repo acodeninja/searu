@@ -25,6 +25,8 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-347 | JWT accepts `alg:none` | `auth/jwt.js` `verifyToken` | Forge `{"alg":"none"}` token with `role:"admin"` |
 | CWE-798 / CWE-321 | Weak, guessable, leaked HMAC secret (`sife-signing-key`) | `config.js`, leaked in `/downloads/.env.bak` | Crack HS256 / sign arbitrary tokens |
 | CWE-1275 | Session cookie has no `HttpOnly`/`Secure`/`SameSite` | `auth/session.js` | Inspect `sife.sid` |
+| CWE-539 | "Remember me" persistent cookie carries a decodable identity | `auth/session.js` `issueRemember` | Login `{remember:true}` → `sife.remember` (Max-Age 1y, base64 `id:email`) |
+| CWE-208 | Non-constant-time comparison of the API key | `repositories/userRepository.js` `findByApiToken`, `routes/v1.js` | `GET /api/v1/export` with a leaked `X-Api-Key` |
 | CWE-384 | Forgeable session token (`base64("uid:<id>")`), not rotated on login | `auth/session.js` | Set `sife.sid` to any user id |
 | CWE-307 / CWE-770 | No rate limiting / lockout on login | `routes/auth.js` | `hydra` against `/rest/user/login` |
 | CWE-204 | Account enumeration via response discrepancy | `services/recoveryService.js`, `routes/users.js` | `reset-request` returns a token for a known email, `{sent:true}` for an unknown one; register 409s on an existing email |
@@ -42,6 +44,7 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | --- | --- | --- | --- |
 | CWE-639 | IDOR on tickets (no ownership check) | `routes/tickets.js`, `services/ticketService.js` `getTicket` | `GET /api/tickets/{id}` for any id |
 | CWE-639 / CWE-200 | IDOR on users leaks password hash + API token | `routes/users.js` `GET /users/:id` | `GET /api/users/{id}` |
+| CWE-212 | Public status leaks internal incident notes (field not stripped) | `repositories/statusRepository.js`, `services/statusService.js` | `GET /api/status` → `internal_notes` |
 | CWE-639 | Reaction endpoint leaks private incident titles (IDOR oracle) | `services/incidentService.js` | `GET /api/incidents/{id}/reactions` |
 | CWE-862 | Broken function-level auth: any user lists all incidents incl. private | `routes/incidents.js` `GET /incidents` | Authenticated `GET /api/incidents` |
 | CWE-602 / CWE-285 | Admin settings restricted only in the SPA; server has no role check | `routes/admin.js` (`requireAuth` only) | `GET /api/admin/settings` with a customer token leaks the signing/share keys |
@@ -73,6 +76,8 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-88 | Argument injection into `curl` (execFile, user tokens) | `services/monitorService.js` `connectivityCheck` | `POST /api/monitors/connectivity {"target":"-o /app/public/x.txt file:///etc/hostname"}` |
 | CWE-93 | Email header injection in teammate invites | `services/teamService.js` | `POST /api/team/invite` with `\r\nBcc:` in `name`; read `GET /api/team/outbox` |
 | CWE-829 / CWE-494 | Status config imported from a URL, no allow-list or integrity check | `services/configImportService.js`, `routes/admin.js` | `POST /api/admin/import-config {"url":"http://.../evil.json"}` |
+| CWE-353 | Third-party analytics `<script>` loaded without SRI/`integrity` | `web/index.html` | `GET /index.html` — external script, no `integrity=` |
+| CWE-1022 | Reverse tabnabbing: incident source link is `target="_blank"` without `rel="noopener"` | `web/src/pages/StatusPage.tsx` | Rendered status page / JS bundle |
 | CWE-1321 | Prototype pollution via `lodash.merge` | `services/authService.js` `register` | `POST /api/users/register` with `"__proto__"` |
 | CWE-79 | Stored XSS in incident bodies, ticket replies (Markdown), reaction emoji | React `dangerouslySetInnerHTML` in `StatusPage`, `TicketDetail`, `Reactions` | Post markup; renders raw |
 | CWE-79 | Reflected DOM XSS in search term | `web/src/pages/Search.tsx` | `/search?q=<img src=x onerror=…>` |
