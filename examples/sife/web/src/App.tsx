@@ -2,6 +2,9 @@ import { Link, Route, Routes } from 'react-router-dom';
 import { Landing } from './pages/Landing';
 import { StatusPage } from './pages/StatusPage';
 import { Login } from './pages/Login';
+import { Search } from './pages/Search';
+import { Dashboard } from './pages/Dashboard';
+import { TicketDetail } from './pages/TicketDetail';
 
 const Header = () => (
   <header className="site-header">
@@ -11,6 +14,7 @@ const Header = () => (
     </Link>
     <nav>
       <Link to="/status">Status</Link>
+      <Link to="/search">Search</Link>
       <a href="/docs">Docs</a>
       <Link to="/login" className="btn btn-ghost">
         Sign in
@@ -35,7 +39,10 @@ export const App = () => (
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/status" element={<StatusPage />} />
+        <Route path="/search" element={<Search />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/app" element={<Dashboard />} />
+        <Route path="/app/tickets/:id" element={<TicketDetail />} />
       </Routes>
     </main>
     <Footer />

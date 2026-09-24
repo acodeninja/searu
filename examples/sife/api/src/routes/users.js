@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { register } from '../services/authService.js';
 import { issueSession } from '../auth/session.js';
+import { requireAuth, requireRole } from '../middleware/authenticate.js';
+import * as userService from '../services/userService.js';
 
 export const usersRouter = Router();
 
@@ -12,6 +14,22 @@ usersRouter.post('/users/register', async (req, res, next) => {
       user,
       authentication: { token, bid: user.id, umail: user.email, role: user.role },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+usersRouter.get('/users', requireAuth, requireRole('admin'), async (req, res, next) => {
+  try {
+    res.json(await userService.listUsers());
+  } catch (err) {
+    next(err);
+  }
+});
+
+usersRouter.get('/users/:id', requireAuth, async (req, res, next) => {
+  try {
+    res.json(await userService.getUser(Number.parseInt(req.params.id, 10)));
   } catch (err) {
     next(err);
   }

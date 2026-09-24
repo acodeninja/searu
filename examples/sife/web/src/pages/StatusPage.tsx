@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getStatus, type StatusPage as StatusPageData } from '../api';
+import { Reactions } from '../components/Reactions';
 
 const statusLabel: Record<string, string> = {
   operational: 'All systems operational',
@@ -59,7 +60,7 @@ export const StatusPage = () => {
               <h3>{incident.title}</h3>
               <span className={`pill severity-${incident.severity}`}>{incident.severity}</span>
             </header>
-            <p>{incident.body}</p>
+            <div className="incident-body" dangerouslySetInnerHTML={{ __html: incident.body }} />
             <ol className="timeline">
               {incident.updates.map((update, index) => (
                 <li key={index}>
@@ -67,6 +68,7 @@ export const StatusPage = () => {
                 </li>
               ))}
             </ol>
+            <Reactions incidentId={incident.id} />
           </article>
         ))}
       </section>

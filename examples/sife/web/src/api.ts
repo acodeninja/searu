@@ -81,3 +81,62 @@ export const logout = async () => {
   await request('/rest/user/logout', { method: 'POST' });
   clearToken();
 };
+
+export type Reaction = { emoji: string; count: number };
+export type ReactionSummary = {
+  incident: { id: number; title: string } | null;
+  total: number;
+  reactions: Reaction[];
+};
+
+export const getReactions = (incidentId: number): Promise<ReactionSummary> =>
+  request(`/api/incidents/${incidentId}/reactions`);
+
+export const postReaction = (incidentId: number, emoji: string): Promise<ReactionSummary> =>
+  request(`/api/incidents/${incidentId}/reactions`, {
+    method: 'POST',
+    body: JSON.stringify({ emoji }),
+  });
+
+export type IncidentSearchHit = {
+  id: number;
+  title: string;
+  body: string;
+  severity: string;
+  status: string;
+};
+
+export const searchIncidents = (q: string): Promise<IncidentSearchHit[]> =>
+  request(`/api/incidents/search?q=${encodeURIComponent(q)}`);
+
+export type Ticket = {
+  id: number;
+  user_id: number;
+  subject: string;
+  body?: string;
+  status: string;
+  priority: string;
+  is_public: boolean;
+  created_at: string;
+  requester?: string;
+};
+
+export type Comment = {
+  id: number;
+  ticket_id: number;
+  author_id: number | null;
+  author_name: string | null;
+  body: string;
+  created_at: string;
+};
+
+export const getTickets = (search?: string): Promise<Ticket[]> =>
+  request(`/api/tickets${search ? `?search=${encodeURIComponent(search)}` : ''}`);
+
+export const getTicket = (id: number): Promise<Ticket> => request(`/api/tickets/${id}`);
+
+export const getComments = (id: number): Promise<Comment[]> =>
+  request(`/api/tickets/${id}/comments`);
+
+export const postComment = (id: number, body: string): Promise<Comment> =>
+  request(`/api/tickets/${id}/comments`, { method: 'POST', body: JSON.stringify({ body }) });

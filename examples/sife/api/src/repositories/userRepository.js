@@ -17,6 +17,23 @@ export const findById = async (id) => {
   return rows[0] ?? null;
 };
 
+export const findProfile = async (id) => {
+  const { rows } = await query(
+    `SELECT id, email, password_md5, full_name, role, organisation, phone, api_token, created_at
+       FROM users WHERE id = $1`,
+    [id],
+  );
+  return rows[0] ?? null;
+};
+
+export const listAll = async () => {
+  const { rows } = await query(
+    `SELECT id, email, full_name, role, organisation, phone, created_at
+       FROM users ORDER BY id ASC`,
+  );
+  return rows;
+};
+
 export const findByEmail = async (email) => {
   const { rows } = await query('SELECT id, email, role FROM users WHERE email = $1', [email]);
   return rows[0] ?? null;
