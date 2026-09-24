@@ -1,9 +1,10 @@
-import { exec } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import http from 'node:http';
 import https from 'node:https';
 
 const run = promisify(exec);
+const runFile = promisify(execFile);
 
 const insecureAgent = new https.Agent({ rejectUnauthorized: false });
 
@@ -14,6 +15,19 @@ export const ping = async (host) => {
     return { command, reachable: true, output: stdout || stderr };
   } catch (err) {
     return { command, reachable: false, output: err.stdout || err.stderr || err.message };
+  }
+};
+
+export const connectivityCheck = async (target) => {
+  const args = ['-sS', '--max-time', '5', ...target.split(' ').filter(Boolean)];
+  try {
+    const { stdout, stderr } = await runFile('curl', args);
+    return { command: `curl ${args.join(' ')}`, output: (stdout || stderr).slice(0, 1000) };
+  } catch (err) {
+    return {
+      command: `curl ${args.join(' ')}`,
+      output: (err.stdout || err.stderr || err.message).slice(0, 1000),
+    };
   }
 };
 

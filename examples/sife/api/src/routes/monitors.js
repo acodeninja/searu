@@ -23,3 +23,12 @@ monitorsRouter.post('/monitors/probe', async (req, res, next) => {
     next(err);
   }
 });
+
+monitorsRouter.post('/monitors/connectivity', async (req, res, next) => {
+  try {
+    const target = (req.body?.target ?? '').toString();
+    res.json(await service.connectivityCheck(target));
+  } catch (err) {
+    next(err);
+  }
+});
