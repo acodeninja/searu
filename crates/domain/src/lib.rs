@@ -7,6 +7,7 @@ pub mod coverage;
 pub mod egress;
 pub mod findings;
 pub mod gate;
+pub mod playbook;
 pub mod ports;
 pub mod scope;
 pub mod scope_hook;
