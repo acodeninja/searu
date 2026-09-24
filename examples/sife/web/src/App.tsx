@@ -1,5 +1,5 @@
 import { Link, Route, Routes, useNavigate } from 'react-router-dom';
-import { getToken, logout } from './api';
+import { getRole, getToken, logout } from './api';
 import { Landing } from './pages/Landing';
 import { StatusPage } from './pages/StatusPage';
 import { Login } from './pages/Login';
@@ -10,10 +10,12 @@ import { Search } from './pages/Search';
 import { Knowledge } from './pages/Knowledge';
 import { Dashboard } from './pages/Dashboard';
 import { TicketDetail } from './pages/TicketDetail';
+import { Admin } from './pages/Admin';
 
 const Header = () => {
   const navigate = useNavigate();
   const signedIn = Boolean(getToken());
+  const isAdmin = getRole() === 'admin';
 
   const signOut = async () => {
     await logout();
@@ -33,6 +35,7 @@ const Header = () => {
         {signedIn ? (
           <>
             <Link to="/app">Dashboard</Link>
+            {isAdmin && <Link to="/admin">Admin</Link>}
             <button type="button" className="btn btn-ghost" onClick={signOut}>
               Sign out
             </button>
@@ -71,6 +74,7 @@ export const App = () => (
         <Route path="/app" element={<Dashboard />} />
         <Route path="/billing" element={<Billing />} />
         <Route path="/app/tickets/:id" element={<TicketDetail />} />
+        <Route path="/admin" element={<Admin />} />
       </Routes>
     </main>
     <Footer />

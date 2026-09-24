@@ -41,10 +41,14 @@ export const getStatus = (): Promise<StatusPage> =>
   fetch('/api/status', { credentials: 'include' }).then(asJson);
 
 const TOKEN_KEY = 'sife.token';
+const ROLE_KEY = 'sife.role';
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+
+export const getRole = () => localStorage.getItem(ROLE_KEY);
+export const setRole = (role: string) => localStorage.setItem(ROLE_KEY, role);
 
 const authHeaders = (): Record<string, string> => {
   const token = getToken();
@@ -72,8 +76,11 @@ export const login = async (email: string, password: string) => {
     body: JSON.stringify({ email, password }),
   });
   setToken(body.authentication.token);
+  setRole(body.authentication.role);
   return body.authentication;
 };
+
+export const getAdminSettings = () => request('/api/admin/settings');
 
 export const whoami = (): Promise<{ user: CurrentUser }> => request('/rest/user/whoami');
 

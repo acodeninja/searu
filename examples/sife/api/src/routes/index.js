@@ -16,6 +16,7 @@ import { webhooksRouter } from './webhooks.js';
 import { auditRouter } from './audit.js';
 import { internalRouter } from './internal.js';
 import { catalogueRouter } from './catalogue.js';
+import { adminRouter } from './admin.js';
 
 export const apiRouter = Router();
 
@@ -36,6 +37,7 @@ apiRouter.use(webhooksRouter);
 apiRouter.use(auditRouter);
 apiRouter.use(internalRouter);
 apiRouter.use(catalogueRouter);
+apiRouter.use(adminRouter);
 
 apiRouter.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'sife-api' });
