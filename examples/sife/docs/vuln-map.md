@@ -27,6 +27,7 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-1275 | Session cookie has no `HttpOnly`/`Secure`/`SameSite` | `auth/session.js` | Inspect `sife.sid` |
 | CWE-384 | Forgeable session token (`base64("uid:<id>")`), not rotated on login | `auth/session.js` | Set `sife.sid` to any user id |
 | CWE-307 / CWE-770 | No rate limiting / lockout on login | `routes/auth.js` | `hydra` against `/rest/user/login` |
+| CWE-204 | Account enumeration via response discrepancy | `services/recoveryService.js`, `routes/users.js` | `reset-request` returns a token for a known email, `{sent:true}` for an unknown one; register 409s on an existing email |
 | CWE-522 | Bearer token stored in `localStorage` | `web/src/api.ts` | Exfiltrate via XSS |
 | CWE-613 | JWT/session never expire (no `exp`) | `auth/jwt.js` | Replay any old token indefinitely |
 | CWE-640 / CWE-330 | Predictable password-reset token (derived from id + MD5 of email) | `services/recoveryService.js` | `POST /rest/user/reset` with a forged token |
@@ -51,6 +52,7 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-348 / CWE-290 | Access decision trusts `X-Forwarded-For` (spoofable) | `routes/internal.js` | `GET /api/internal/metrics` with `X-Forwarded-For: 127.0.0.1` |
 | CWE-841 | No approval workflow on account credits | `services/billingService.js` `refund` | `POST /api/billing/refund {"amount":9999}` self-approves |
 | CWE-1284 | No bounds on billing quantities (amount/seats) | `services/billingService.js` | `POST /api/billing/refund {"amount":-100000}` |
+| CWE-362 / CWE-367 | Race / TOCTOU in coupon redemption (non-atomic check-then-act) | `services/billingService.js` `redeem`, `repositories/couponRepository.js` | Fire concurrent `POST /api/billing/redeem {"code":"WELCOME50"}` → double-spend |
 
 ## Injection
 
@@ -69,6 +71,8 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-91 | XML injection in the generated RSS feed (no escaping) | `services/feedService.js` | Seed an update via `POST /api/incidents/:id/updates`, read `GET /api/status.rss` |
 | CWE-643 | XPath injection over the service catalogue | `services/catalogueService.js` | `GET /api/catalogue/search?q=') or contains(name,'` leaks internal services |
 | CWE-88 | Argument injection into `curl` (execFile, user tokens) | `services/monitorService.js` `connectivityCheck` | `POST /api/monitors/connectivity {"target":"-o /app/public/x.txt file:///etc/hostname"}` |
+| CWE-93 | Email header injection in teammate invites | `services/teamService.js` | `POST /api/team/invite` with `\r\nBcc:` in `name`; read `GET /api/team/outbox` |
+| CWE-829 / CWE-494 | Status config imported from a URL, no allow-list or integrity check | `services/configImportService.js`, `routes/admin.js` | `POST /api/admin/import-config {"url":"http://.../evil.json"}` |
 | CWE-1321 | Prototype pollution via `lodash.merge` | `services/authService.js` `register` | `POST /api/users/register` with `"__proto__"` |
 | CWE-79 | Stored XSS in incident bodies, ticket replies (Markdown), reaction emoji | React `dangerouslySetInnerHTML` in `StatusPage`, `TicketDetail`, `Reactions` | Post markup; renders raw |
 | CWE-79 | Reflected DOM XSS in search term | `web/src/pages/Search.tsx` | `/search?q=<img src=x onerror=…>` |

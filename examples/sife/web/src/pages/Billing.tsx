@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getBilling, getToken, requestCredit, subscribePlan, type Plan } from '../api';
+import { getBilling, getToken, redeemCode, requestCredit, subscribePlan, type Plan } from '../api';
 import { useNavigate } from 'react-router-dom';
 
 const tiers = [
@@ -13,6 +13,7 @@ export const Billing = () => {
   const [current, setCurrent] = useState<Plan | null>(null);
   const [creditAmount, setCreditAmount] = useState('');
   const [balance, setBalance] = useState<number | null>(null);
+  const [code, setCode] = useState('');
 
   useEffect(() => {
     if (!getToken()) {
@@ -32,6 +33,13 @@ export const Billing = () => {
     const { balance: updated } = await requestCredit(Number(creditAmount));
     setBalance(updated);
     setCreditAmount('');
+  };
+
+  const redeem = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const { balance: updated } = await redeemCode(code);
+    setBalance(updated);
+    setCode('');
   };
 
   return (
@@ -73,6 +81,20 @@ export const Billing = () => {
           </button>
         </form>
         {balance !== null && <p className="notice">Credit balance: £{balance}</p>}
+      </section>
+
+      <section>
+        <h2>Redeem a promotional code</h2>
+        <form className="ticket-search" onSubmit={redeem}>
+          <input
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            placeholder="Promo code"
+          />
+          <button className="btn btn-ghost" type="submit">
+            Redeem
+          </button>
+        </form>
       </section>
     </div>
   );

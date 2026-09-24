@@ -128,6 +128,12 @@ export const requestCredit = (amount: number): Promise<{ balance: number }> =>
 export const shareTicket = (id: number): Promise<{ token: string; url: string }> =>
   request(`/api/tickets/${id}/share`, { method: 'POST' });
 
+export const redeemCode = (code: string): Promise<{ balance: number; value: number }> =>
+  request('/api/billing/redeem', { method: 'POST', body: JSON.stringify({ code }) });
+
+export const inviteTeammate = (email: string, name: string) =>
+  request('/api/team/invite', { method: 'POST', body: JSON.stringify({ email, name }) });
+
 export type Article = {
   slug: string;
   title: string;

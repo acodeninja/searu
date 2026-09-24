@@ -1,12 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getTickets, getToken, whoami, type CurrentUser, type Ticket } from '../api';
+import {
+  getTickets,
+  getToken,
+  inviteTeammate,
+  whoami,
+  type CurrentUser,
+  type Ticket,
+} from '../api';
 
 export const Dashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<CurrentUser>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [search, setSearch] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
+  const [inviteSent, setInviteSent] = useState(false);
 
   useEffect(() => {
     if (!getToken()) {
@@ -23,6 +33,14 @@ export const Dashboard = () => {
   useEffect(() => {
     load();
   }, []);
+
+  const invite = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await inviteTeammate(inviteEmail, inviteName);
+    setInviteSent(true);
+    setInviteEmail('');
+    setInviteName('');
+  };
 
   return (
     <div className="dashboard">
@@ -83,6 +101,27 @@ export const Dashboard = () => {
           ))}
         </tbody>
       </table>
+
+      <section>
+        <h2>Invite a teammate</h2>
+        <form className="ticket-search" onSubmit={invite}>
+          <input
+            value={inviteName}
+            onChange={(event) => setInviteName(event.target.value)}
+            placeholder="Name"
+          />
+          <input
+            type="email"
+            value={inviteEmail}
+            onChange={(event) => setInviteEmail(event.target.value)}
+            placeholder="teammate@example.com"
+          />
+          <button className="btn btn-ghost" type="submit">
+            Invite
+          </button>
+        </form>
+        {inviteSent && <p className="notice">Invitation queued.</p>}
+      </section>
     </div>
   );
 };
