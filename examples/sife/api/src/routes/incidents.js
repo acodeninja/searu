@@ -46,6 +46,20 @@ incidentsRouter.get('/incidents/:id', async (req, res, next) => {
   }
 });
 
+incidentsRouter.post('/incidents/:id/updates', async (req, res, next) => {
+  try {
+    const { status, body } = req.body ?? {};
+    const update = await service.postUpdate(
+      Number.parseInt(req.params.id, 10),
+      (status ?? 'update').toString(),
+      (body ?? '').toString(),
+    );
+    res.status(201).json(update);
+  } catch (err) {
+    next(err);
+  }
+});
+
 incidentsRouter.get('/incidents/:id/reactions', async (req, res, next) => {
   try {
     res.json(await service.getReactions(req.params.id));

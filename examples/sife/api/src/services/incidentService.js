@@ -15,6 +15,9 @@ export const getIncident = async (id) => {
   return incident;
 };
 
+export const postUpdate = (incidentId, status, body) =>
+  incidents.addUpdate(incidentId, status, body);
+
 export const createIncident = (body) =>
   incidents.create({
     title: body.title,

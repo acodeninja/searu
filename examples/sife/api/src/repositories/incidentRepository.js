@@ -27,6 +27,16 @@ export const findById = async (id) => {
   return rows[0] ?? null;
 };
 
+export const addUpdate = async (incidentId, status, body) => {
+  const { rows } = await query(
+    `INSERT INTO incident_updates (incident_id, status, body)
+     VALUES ($1, $2, $3)
+     RETURNING id, incident_id, status, body, created_at`,
+    [incidentId, status, body],
+  );
+  return rows[0];
+};
+
 export const create = async ({ title, body, severity, status, component, isPublic }) => {
   const { rows } = await query(
     `INSERT INTO incidents (title, body, severity, status, component, is_public)

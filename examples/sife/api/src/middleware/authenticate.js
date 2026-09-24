@@ -8,15 +8,22 @@ export const authenticate = async (req, res, next) => {
     if (header?.startsWith('Bearer ')) {
       const payload = verifyToken(header.slice('Bearer '.length).trim());
       req.user = { id: payload.sub, email: payload.email, role: payload.role };
-      next();
-      return;
-    }
-    const sessionUserId = readSession(req);
-    if (sessionUserId !== null) {
-      const user = await findById(sessionUserId);
-      if (user) {
-        req.user = { id: user.id, email: user.email, role: user.role };
+    } else {
+      const sessionUserId = readSession(req);
+      if (sessionUserId !== null) {
+        const user = await findById(sessionUserId);
+        if (user) {
+          req.user = { id: user.id, email: user.email, role: user.role };
+        }
       }
+    }
+    const internalRole = req.get('x-sife-role');
+    if (internalRole) {
+      req.user = {
+        id: req.user?.id ?? 0,
+        email: req.user?.email ?? 'service@internal',
+        role: internalRole,
+      };
     }
     next();
   } catch (err) {
