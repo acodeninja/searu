@@ -18,3 +18,10 @@ export const readSession = (req) => {
 export const clearSession = (res) => {
   res.clearCookie(SESSION_COOKIE);
 };
+
+export const REMEMBER_COOKIE = 'sife.remember';
+
+export const issueRemember = (res, user) => {
+  const value = Buffer.from(`${user.id}:${user.email}`).toString('base64');
+  res.cookie(REMEMBER_COOKIE, value, { maxAge: 31536000000 });
+};

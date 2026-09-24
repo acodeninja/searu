@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { login } from '../services/authService.js';
 import { performReset, requestReset, securityRecover } from '../services/recoveryService.js';
 import { record } from '../services/auditService.js';
-import { clearSession, issueSession } from '../auth/session.js';
+import { clearSession, issueRemember, issueSession } from '../auth/session.js';
 
 export const authRouter = Router();
 
@@ -39,6 +39,9 @@ authRouter.post('/user/login', async (req, res, next) => {
     const { user, token } = await login(email, password);
     record('login', { email, password, outcome: 'success' });
     issueSession(res, user.id);
+    if (req.body?.remember) {
+      issueRemember(res, user);
+    }
     res.json({
       authentication: {
         token,

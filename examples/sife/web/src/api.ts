@@ -71,10 +71,10 @@ export const request = async (path: string, init: RequestInit = {}) => {
 
 export type CurrentUser = { id: number; email: string; role: string } | null;
 
-export const login = async (email: string, password: string) => {
+export const login = async (email: string, password: string, remember = false) => {
   const body = await request('/rest/user/login', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, remember }),
   });
   setToken(body.authentication.token);
   setRole(body.authentication.role);

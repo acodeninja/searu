@@ -6,13 +6,14 @@ export const Login = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
     try {
-      await login(email, password);
+      await login(email, password, remember);
       navigate('/app');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed');
@@ -43,6 +44,14 @@ export const Login = () => {
             autoComplete="current-password"
             required
           />
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+          />
+          Remember me on this device
         </label>
         {error && <p className="notice error">{error}</p>}
         <button className="btn btn-primary" type="submit">
