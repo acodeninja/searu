@@ -11,9 +11,9 @@ desk, so your customers always know what is happening — and can reach you when
 
 A single-page React application served alongside a JSON API from one origin.
 
-| Part | Stack |
-| --- | --- |
-| `web/` | React 18 + Vite + TypeScript |
+| Part   | Stack                                                                                  |
+|--------|----------------------------------------------------------------------------------------|
+| `web/` | React 18 + Vite + TypeScript                                                           |
 | `api/` | Node 22, Express, Postgres (relational data) and MongoDB (knowledge base, subscribers) |
 
 The API serves the built SPA and exposes:

@@ -78,6 +78,17 @@ CREATE TABLE IF NOT EXISTS attachments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS coupons (
+  code TEXT PRIMARY KEY,
+  value NUMERIC NOT NULL,
+  uses_remaining INTEGER NOT NULL
+);
+
+INSERT INTO coupons (code, value, uses_remaining) VALUES
+  ('WELCOME50', 50, 1),
+  ('LOYALTY10', 10, 5)
+ON CONFLICT (code) DO NOTHING;
+
 INSERT INTO users (id, email, password_md5, full_name, role, organisation, phone, api_token) VALUES
   (1, 'admin@sife.io', '7c6a180b36896a0a8c02787eeafb0e4c', 'Priya Sharma', 'admin', 'Sife', '+44 20 7946 0100', 'sife_live_9f2a4c7e1b6d'),
   (2, 'ops@sife.io', '0d107d09f5bbe40cade3de5c71e9e9b7', 'Marcus Doyle', 'agent', 'Sife', '+44 20 7946 0142', NULL),
