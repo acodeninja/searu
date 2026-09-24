@@ -37,3 +37,17 @@ Recon lands in observations — `service` (open ports + versions), `server`/`tec
 
 The stack hints decide which SecLists wordlist to pick in Discovery and which weakness to look for in
 Initial access. Recon is not a one-shot phase: fold what you learn back into the next steps.
+
+## Recognise the stack → prioritise the classes
+
+Once the fingerprint has landed as `tech`/`server` observations, run:
+
+    searu playbook
+
+It flags the technology playbook(s) matching what was detected (Angular, React, Express, PHP, WordPress,
+…) and prints the path to read. A playbook tells you how to *confirm* the stack, how to *enumerate* the
+surface it hides (e.g. read an SPA's routes out of its JS bundle, enumerate a CMS's plugins/versions),
+and which weakness **classes** it tends to expose. This prioritises the coverage loop — it decides what to
+hunt first — it never replaces `searu coverage --gaps`; the engine still discovers the real surface
+itself. If a detected technology has no playbook and you confirm a reusable technique for it, write one
+(`playbooks/README.md` has the template).

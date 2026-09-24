@@ -20,8 +20,8 @@ Mint a JWT (then carry it into authz/jwt):
 
 Download a file (a 403 backup often yields to a poison-null-byte suffix the static route guard misses):
 
-    searu run fetch --technique T1083 --target http://host:port/ftp/incident-support.kdbx
-    searu run fetch --technique T1083 --target 'http://host:port/ftp/coupons_2013.md.bak%2500.md'
+    searu run fetch --technique T1083 --target http://host:port/backups/secrets.kdbx
+    searu run fetch --technique T1083 --target 'http://host:port/backups/config.md.bak%2500.md'
 
 Read results:
 

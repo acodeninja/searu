@@ -22,8 +22,8 @@ To retrieve data add sqlmap's own flags after `--` (e.g. `--dump`, `--current-db
 land in `searu loot` (subject + host), each also raised as a CWE-522 exposed-credential finding.
 
 Unless the ROE authorises destructive action, searu restricts a run to `--technique=BEU`
-(boolean/error/union) — sqlmap's default time-based payload can crash a fragile target (a SQLite
-`RANDOMBLOB` delay took Juice Shop down). Pin your own `-- --technique=...` (e.g. add `T`) to override.
+(boolean/error/union) — sqlmap's default time-based payload can crash a fragile target (a heavy SQLite
+`RANDOMBLOB` delay can take one down). Pin your own `-- --technique=...` (e.g. add `T`) to override.
 
 A negative with no oracle means "sqlmap could not tell", not "clean". See `searu tool advice sqlmap`
 for detail.

@@ -21,7 +21,7 @@ exposes (hidden or authenticated-only) will not be reached by crawling — feed 
 
 Read the surface map:
 
-    searu observations --kind route      # client-side routes (e.g. /#/login, /#/score-board)
+    searu observations --kind route      # client-side routes (e.g. /#/login, /#/admin)
     searu observations --kind endpoint   # API endpoints, detail = method
     searu observations --kind param      # parameters, detail = the endpoint they belong to
     searu observations --kind form       # forms, detail = field names

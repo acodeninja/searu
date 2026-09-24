@@ -54,8 +54,10 @@ you reach for any scanner or exploit tool (`sections/reconnaissance.md` says how
 
 The objective is exhaustive, not opportunistic: try every applicable technique against every discovered
 surface item. Understand the app first by driving it in the browser, then work `searu coverage --gaps`
-until no automatable pairing is left untried — do not stop at the first success. For a recognised target,
-read `playbooks/<app>.md` to head straight for its real weaknesses.
+until no automatable pairing is left untried — do not stop at the first success. Once you have
+fingerprinted the stack, run `searu playbook` to read the technology playbook(s) for what you detected
+(e.g. Angular, PHP) — they prioritise which weakness classes to hunt and how they manifest on that stack,
+augmenting the coverage loop rather than replacing it.
 
 For a noisy tool run, delegate it to its **specialist** rather than running it inline: spawn
 `specialists/<technique>-<tool>.md` via the Agent tool on the `model:` that file names, so scanner
@@ -72,5 +74,7 @@ the specialist.
   `searu observations [--kind]` — query what was recorded under `./pentest/`.
 - `searu coverage [--gaps]` — the attack surface crossed with the technique classes that apply to it,
   each pairing scored untried/attempted/succeeded; `--gaps` lists the untried work to drive to zero.
+- `searu playbook` — list the technology playbooks and flag those matching the engagement's `tech`
+  observations, so you read the right per-stack techniques for what was fingerprinted.
 - `searu tool list [--phase <phase>]` — the tools; with `--phase`, the phase's tools and when to use each.
 - `searu tool advice <tool> [--phase <phase>]` — how to drive a tool: invoke, interpret, chain (per phase).

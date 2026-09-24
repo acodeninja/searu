@@ -21,7 +21,7 @@ Before you call an engagement done, confirm you were exhaustive and record the r
 
 ```
 searu coverage --gaps               # any automatable surface x class pairing still untried?
-searu benchmark score               # for a lab with a score board (Juice Shop), the solved/total delta
+searu benchmark score               # for a lab that exposes a score board, the solved/total delta
 ```
 
 `searu coverage --gaps` is the completeness check — drive the remaining automatable pairings to zero

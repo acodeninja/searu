@@ -20,8 +20,8 @@ const password = arg('--login-password');
 const depth = parseInt(arg('--depth', '3'), 10);
 const maxRoutes = parseInt(arg('--max-routes', '60'), 10);
 const maxSeconds = parseInt(arg('--max-seconds', '240'), 10);
-// Extra routes to drive that no link exposes (an app's authenticated or hidden routes); comma-separated
-// paths like `/#/wallet,/#/administration`. A playbook supplies these for a recognised target.
+// Extra routes to drive that no link exposes (authenticated or hidden routes), comma-separated; supplied
+// by the operator from stack enumeration (e.g. an SPA's routes read out of its JS bundle).
 const seed = arg('--seed', '');
 
 function emit(kind, value, detail) {

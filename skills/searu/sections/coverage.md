@@ -35,9 +35,9 @@ where a tool exists for the mechanics, record what you confirm as a finding so t
 `succeeded`, and when a capability is missing entirely name it in the report rather than letting the gap
 pass silently.
 
-## Known apps
+## Known technologies
 
-If the target is a recognised application, read `playbooks/<app>.md` first — it maps that app's
-weakness categories to concrete surface items, techniques and tools, so the loop heads straight for the
-real work instead of rediscovering it. A playbook accelerates the loop; it never replaces it — finish
-by clearing the matrix, not the playbook.
+Once the stack is fingerprinted, run `searu playbook` (see `sections/reconnaissance.md`) to read the
+technology playbook(s) for what was detected — they prioritise which weakness classes to drive first for
+that stack and how they manifest. A playbook accelerates and orders the loop; it never replaces it —
+finish by clearing the matrix, not the playbook.

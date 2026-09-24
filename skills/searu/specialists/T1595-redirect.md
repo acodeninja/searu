@@ -14,13 +14,13 @@ Run — the target is the redirect endpoint; `--param` names the parameter (defa
 
     searu run redirect --technique T1595 --target http://host:port/redirect
     searu run redirect --technique T1595 --target http://host:port/redirect -- \
-      --allowlisted https://github.com/juice-shop/juice-shop --attacker https://evil.example/pwned
+      --allowlisted https://an-allow-listed-url.example/path --attacker https://evil.example/pwned
 
 Read results:
 
     searu findings --tool redirect        # a confirmed CWE-601 finding (payload + the Location it hit)
     searu observations --kind redirect     # every probe's status and Location
 
-A confirmed off-site redirect is the bug. For Juice Shop's `/redirect?to=`, pass its allow-listed
-crypto/GitHub URLs as `--allowlisted` so the substring-bypass payloads are built. Don't paste raw
-output. See `searu tool advice redirect`.
+A confirmed off-site redirect is the bug. When the endpoint's allow-list only substring-matches, pass one
+of its known allow-listed URLs as `--allowlisted` so the substring-bypass payloads are built. Don't paste
+raw output. See `searu tool advice redirect`.

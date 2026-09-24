@@ -10,7 +10,7 @@ parser.add_argument("--url", required=True)  # the redirect endpoint, e.g. http:
 parser.add_argument("--param", default="to")  # the redirect-target parameter
 parser.add_argument("--attacker", default="https://searu-redirect.example/pwned")
 # Known allow-listed strings to embed for a bypass (an allowlist that only substring-matches is defeated
-# by appending an allow-listed URL to an attacker URL). A playbook supplies the app's values.
+# by appending an allow-listed URL to an attacker URL); supplied by the operator per target.
 parser.add_argument("--allowlisted", action="append", default=[])
 args = parser.parse_args()
 
