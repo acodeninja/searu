@@ -1,3 +1,4 @@
+import _ from 'lodash';
 import {
   createUser,
   findByCredentials,
@@ -29,9 +30,7 @@ export const register = async (attributes) => {
     err.status = 409;
     throw err;
   }
-  const user = await createUser({
-    ...attributes,
-    password_md5: hashPassword(attributes.password),
-  });
+  const merged = _.merge({}, attributes, { password_md5: hashPassword(attributes.password) });
+  const user = await createUser(merged);
   return { user, token: tokenFor(user) };
 };

@@ -127,6 +127,7 @@ export type Comment = {
   author_id: number | null;
   author_name: string | null;
   body: string;
+  body_html: string;
   created_at: string;
 };
 

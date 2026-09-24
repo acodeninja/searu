@@ -1,3 +1,4 @@
+import marked from 'marked';
 import * as tickets from '../repositories/ticketRepository.js';
 
 const staff = (user) => user.role === 'agent' || user.role === 'admin';
@@ -26,6 +27,9 @@ export const createTicket = (user, body) =>
 
 export const updateTicket = (id, attributes) => tickets.update(id, attributes);
 
-export const getComments = (ticketId) => tickets.listComments(ticketId);
+export const getComments = async (ticketId) => {
+  const rows = await tickets.listComments(ticketId);
+  return rows.map((comment) => ({ ...comment, body_html: marked(comment.body ?? '') }));
+};
 
 export const addComment = (ticketId, user, body) => tickets.addComment(ticketId, user.id, body);

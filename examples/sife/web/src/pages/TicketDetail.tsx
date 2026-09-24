@@ -70,7 +70,7 @@ export const TicketDetail = () => {
         {comments.map((comment) => (
           <li key={comment.id}>
             <strong>{comment.author_name ?? 'Unknown'}</strong>
-            <div dangerouslySetInnerHTML={{ __html: comment.body }} />
+            <div dangerouslySetInnerHTML={{ __html: comment.body_html }} />
           </li>
         ))}
       </ul>

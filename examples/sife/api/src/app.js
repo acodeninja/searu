@@ -9,12 +9,14 @@ import { config } from './config.js';
 import { apiRouter } from './routes/index.js';
 import { authRouter } from './routes/auth.js';
 import { authenticate } from './middleware/authenticate.js';
+import { permissiveCors } from './middleware/cors.js';
 import { errorHandler } from './middleware/errors.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 export const createApp = () => {
   const app = express();
+  app.use(permissiveCors);
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use(express.text({ type: ['application/xml', 'text/xml'] }));
