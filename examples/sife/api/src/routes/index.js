@@ -9,6 +9,7 @@ import { reportsRouter } from './reports.js';
 import { kbRouter } from './kb.js';
 import { preferencesRouter } from './preferences.js';
 import { redirectRouter } from './redirect.js';
+import { subscribersRouter } from './subscribers.js';
 
 export const apiRouter = Router();
 
@@ -22,6 +23,7 @@ apiRouter.use(reportsRouter);
 apiRouter.use(kbRouter);
 apiRouter.use(preferencesRouter);
 apiRouter.use(redirectRouter);
+apiRouter.use(subscribersRouter);
 
 apiRouter.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'sife-api' });
