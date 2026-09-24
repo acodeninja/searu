@@ -21,3 +21,11 @@ billingRouter.post('/billing/subscribe', async (req, res, next) => {
     next(err);
   }
 });
+
+billingRouter.post('/billing/refund', async (req, res, next) => {
+  try {
+    res.json(await service.refund(req.user.id, req.body?.amount));
+  } catch (err) {
+    next(err);
+  }
+});

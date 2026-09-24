@@ -47,6 +47,14 @@ export const updatePassword = async (id, passwordMd5) => {
   return rows[0] ?? null;
 };
 
+export const addCredit = async (id, amount) => {
+  const { rows } = await query(
+    'UPDATE users SET credit = credit + $2 WHERE id = $1 RETURNING id, credit',
+    [id, amount],
+  );
+  return rows[0] ?? null;
+};
+
 export const updatePlan = async (id, plan, seats) => {
   const { rows } = await query(
     'UPDATE users SET plan = $2, seats = $3 WHERE id = $1 RETURNING id, email, plan, seats',
