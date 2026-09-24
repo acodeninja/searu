@@ -43,9 +43,12 @@ CREATE TABLE IF NOT EXISTS incidents (
 );
 
 ALTER TABLE incidents ADD COLUMN IF NOT EXISTS source_url TEXT;
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS internal_notes TEXT;
 
 UPDATE incidents SET source_url = 'https://status.eu-west.sife.io/incidents/1'
   WHERE id = 1 AND source_url IS NULL;
+UPDATE incidents SET internal_notes = 'Root cause: replica db-eu-2 disk saturation; paging SRE rota, escalation contact +44 7700 900321'
+  WHERE id = 1 AND internal_notes IS NULL;
 
 CREATE TABLE IF NOT EXISTS incident_updates (
   id SERIAL PRIMARY KEY,
