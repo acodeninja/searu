@@ -44,6 +44,9 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-639 | Reaction endpoint leaks private incident titles (IDOR oracle) | `services/incidentService.js` | `GET /api/incidents/{id}/reactions` |
 | CWE-862 | Broken function-level auth: any user lists all incidents incl. private | `routes/incidents.js` `GET /incidents` | Authenticated `GET /api/incidents` |
 | CWE-915 | Mass assignment of `role` on register/profile | `services/authService.js` `register` | `POST /api/users/register` with `"role":"admin"` |
+| CWE-863 / CWE-807 | Authorisation decision trusts a spoofable header | `middleware/authenticate.js` (`x-sife-role`) | `curl -H 'X-Sife-Role: admin' /api/users` |
+| CWE-306 | Missing auth on a critical function (post to public timeline) | `routes/incidents.js` `POST /incidents/:id/updates` | Unauthenticated status-update injection |
+| CWE-345 | Inbound webhook signature never verified | `routes/webhooks.js`, `services/webhookService.js` | `POST /api/webhooks/monitor` unsigned → change component health |
 
 ## Injection
 
@@ -57,6 +60,7 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-1336 / CWE-94 | SSTI (EJS) | `services/reportService.js` | `GET /api/reports/preview?template=<%= 7*7 %>` |
 | CWE-611 | XXE (external entities enabled) | `services/importService.js` | `POST /api/incidents/import` with a `SYSTEM` entity |
 | CWE-502 | Insecure deserialization (RCE) | `services/preferenceService.js` | `sife.prefs` cookie with a `node-serialize` function payload |
+| CWE-95 | Eval injection (RCE) via metric expression | `services/reportService.js` `compute` (`new Function`) | `GET /api/reports/compute?expr=process.env.JWT_SECRET` |
 | CWE-1321 | Prototype pollution via `lodash.merge` | `services/authService.js` `register` | `POST /api/users/register` with `"__proto__"` |
 | CWE-79 | Stored XSS in incident bodies, ticket replies (Markdown), reaction emoji | React `dangerouslySetInnerHTML` in `StatusPage`, `TicketDetail`, `Reactions` | Post markup; renders raw |
 | CWE-79 | Reflected DOM XSS in search term | `web/src/pages/Search.tsx` | `/search?q=<img src=x onerror=…>` |
@@ -76,6 +80,8 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-548 / CWE-732 | Directory listing + world-readable `/uploads`, `/downloads` | `app.js` (`serve-index`) | Browse `/downloads/` |
 | CWE-538 / CWE-540 | Leaked secrets & source: `.env.bak`, DB backup, deploy key, source maps | `/downloads/*`, Vite `sourcemap: true` | Fetch the files / `*.js.map` |
 | CWE-916 / CWE-759 | Weak, unsalted password hashing (MD5) | `auth/hashing.js` | Crack leaked hashes |
+| CWE-312 | Third-party API keys stored & returned in cleartext (and readable by any user) | `services/integrationService.js` | `GET /api/integrations` |
+| CWE-295 | Outbound probe disables TLS certificate validation | `services/monitorService.js` (`rejectUnauthorized: false`) | `POST /api/monitors/probe {"url":"https://expired.badssl.com/"}` |
 
 ## Configuration & transport
 
