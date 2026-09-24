@@ -19,6 +19,7 @@ import { catalogueRouter } from './catalogue.js';
 import { adminRouter } from './admin.js';
 import { teamRouter } from './team.js';
 import { exportsRouter } from './exports.js';
+import { v1Router } from './v1.js';
 
 export const apiRouter = Router();
 
@@ -42,6 +43,7 @@ apiRouter.use(catalogueRouter);
 apiRouter.use(adminRouter);
 apiRouter.use(teamRouter);
 apiRouter.use(exportsRouter);
+apiRouter.use(v1Router);
 
 apiRouter.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'sife-api' });

@@ -56,6 +56,13 @@ export const findByEmail = async (email) => {
   return rows[0] ?? null;
 };
 
+export const findByApiToken = async (token) => {
+  const { rows } = await query(
+    'SELECT id, email, role, api_token FROM users WHERE api_token IS NOT NULL',
+  );
+  return rows.find((row) => row.api_token === token) ?? null;
+};
+
 export const updatePassword = async (id, passwordMd5) => {
   const { rows } = await query(
     'UPDATE users SET password_md5 = $2 WHERE id = $1 RETURNING id, email, role',
