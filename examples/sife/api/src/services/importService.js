@@ -1,7 +1,7 @@
 import { parseXml } from 'libxmljs2';
 
 export const parseIncidentFeed = (xml) => {
-  const doc = parseXml(xml, { noent: true, dtdload: true, noblanks: true });
+  const doc = parseXml(xml, { noent: true, dtdload: true, noblanks: true, huge: true });
   const nodes = doc.find('//incident');
   return nodes.map((node) => ({
     title: node.get('title')?.text() ?? '',
