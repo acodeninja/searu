@@ -28,6 +28,12 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-384 | Forgeable session token (`base64("uid:<id>")`), not rotated on login | `auth/session.js` | Set `sife.sid` to any user id |
 | CWE-307 / CWE-770 | No rate limiting / lockout on login | `routes/auth.js` | `hydra` against `/rest/user/login` |
 | CWE-522 | Bearer token stored in `localStorage` | `web/src/api.ts` | Exfiltrate via XSS |
+| CWE-613 | JWT/session never expire (no `exp`) | `auth/jwt.js` | Replay any old token indefinitely |
+| CWE-640 / CWE-330 | Predictable password-reset token (derived from id + MD5 of email) | `services/recoveryService.js` | `POST /rest/user/reset` with a forged token |
+| CWE-598 | Reset token carried in the GET link URL | `services/recoveryService.js` | Token leaks via history/referer/logs |
+| CWE-644 | Reset link built from the request `Host` header | `services/recoveryService.js` | Send `Host: attacker` → poisoned reset link |
+| CWE-620 / CWE-639 | Password change needs no current password, any id | `routes/users.js` `PUT /users/:id/password` | Reset another user's password |
+| CWE-338 | API token minted with `Math.random()` | `services/authService.js` `register` | Predict/enumerate issued tokens |
 
 ## Access control
 
@@ -55,6 +61,9 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-79 | Stored XSS in incident bodies, ticket replies (Markdown), reaction emoji | React `dangerouslySetInnerHTML` in `StatusPage`, `TicketDetail`, `Reactions` | Post markup; renders raw |
 | CWE-79 | Reflected DOM XSS in search term | `web/src/pages/Search.tsx` | `/search?q=<img src=x onerror=…>` |
 | CWE-79 | Stored XSS via uploaded HTML/SVG served inline | `routes/attachments.js`, `/uploads` static | Upload `.html`, open `/uploads/<file>` |
+| CWE-1236 | CSV / formula injection in ticket export | `services/exportService.js` | Ticket subject `=HYPERLINK(...)` → `GET /api/tickets/export.csv` |
+| CWE-1333 / CWE-400 | ReDoS via catastrophic email regex | `services/subscriberService.js` | `POST /api/subscribers` with `aaaa…aaaa!` |
+| CWE-472 / CWE-840 | Web parameter tampering: client sets plan/price | `services/billingService.js` | `POST /api/billing/subscribe {"plan":"enterprise","amount":0}` |
 
 ## Files, SSRF & redirects
 
@@ -76,4 +85,8 @@ Passwords are stored as **unsalted MD5** (`api/src/auth/hashing.js`).
 | CWE-1021 / CWE-693 | No `X-Frame-Options`, CSP, or HSTS | `app.js` (headers absent) |
 | CWE-352 | No CSRF protection on cookie-authenticated mutations | all mutating routes |
 | CWE-209 / CWE-756 | Verbose error handler leaks stack traces | `middleware/errors.js` |
+| CWE-497 / CWE-215 / CWE-200 | Error responses attach a `debug` block dumping `process.env` (incl. `JWT_SECRET`), system and request info | `middleware/errors.js` |
+| CWE-319 | Cleartext transport — HTTP only, no TLS | app served over plain HTTP |
+| CWE-311 | Sensitive data (PII, password hashes, tokens) returned unencrypted | `routes/users.js`, backups |
+| CWE-525 / CWE-524 | No `Cache-Control: no-store` on authenticated responses | `app.js` (headers absent) |
 | CWE-1035 | Known-vulnerable dependencies (`lodash@4.17.4`, `marked@0.3.6`, …) | `api/package.json` + `package-lock.json` (readable via traversal) |

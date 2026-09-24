@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getStatus, type StatusPage as StatusPageData } from '../api';
 import { Reactions } from '../components/Reactions';
+import { Subscribe } from '../components/Subscribe';
 
 const statusLabel: Record<string, string> = {
   operational: 'All systems operational',
@@ -36,6 +37,8 @@ export const StatusPage = () => {
       <div className={`status-banner ${data.status}`}>
         {statusLabel[data.status] ?? data.status}
       </div>
+
+      <Subscribe />
 
       <section>
         <h2>Components</h2>

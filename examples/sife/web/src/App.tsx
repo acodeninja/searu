@@ -4,6 +4,8 @@ import { Landing } from './pages/Landing';
 import { StatusPage } from './pages/StatusPage';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { Reset } from './pages/Reset';
+import { Billing } from './pages/Billing';
 import { Search } from './pages/Search';
 import { Knowledge } from './pages/Knowledge';
 import { Dashboard } from './pages/Dashboard';
@@ -65,7 +67,9 @@ export const App = () => (
         <Route path="/search" element={<Search />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/reset" element={<Reset />} />
         <Route path="/app" element={<Dashboard />} />
+        <Route path="/billing" element={<Billing />} />
         <Route path="/app/tickets/:id" element={<TicketDetail />} />
       </Routes>
     </main>

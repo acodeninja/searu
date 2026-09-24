@@ -28,12 +28,20 @@ export const Dashboard = () => {
     <div className="dashboard">
       <header className="dashboard-head">
         <h1>Your tickets</h1>
-        {user && (
-          <span className="notice">
-            Signed in as {user.email} ({user.role})
-          </span>
-        )}
+        <div className="dashboard-actions">
+          <a className="btn btn-ghost" href="/api/tickets/export.csv">
+            Export CSV
+          </a>
+          <Link className="btn btn-ghost" to="/billing">
+            Billing
+          </Link>
+        </div>
       </header>
+      {user && (
+        <p className="notice">
+          Signed in as {user.email} ({user.role})
+        </p>
+      )}
       <form
         className="ticket-search"
         onSubmit={(event) => {

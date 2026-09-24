@@ -96,6 +96,25 @@ export const register = async (fields: {
   return body;
 };
 
+export const requestReset = (email: string) =>
+  request('/rest/user/reset-request', { method: 'POST', body: JSON.stringify({ email }) });
+
+export const performReset = (token: string, newPassword: string) =>
+  request('/rest/user/reset', { method: 'POST', body: JSON.stringify({ token, newPassword }) });
+
+export const subscribeStatus = (email: string, components: string[]) =>
+  request('/api/subscribers', { method: 'POST', body: JSON.stringify({ email, components }) });
+
+export type Plan = { plan: string; seats: number };
+
+export const getBilling = (): Promise<Plan> => request('/api/billing');
+
+export const subscribePlan = (plan: string, seats: number, amount: number) =>
+  request('/api/billing/subscribe', {
+    method: 'POST',
+    body: JSON.stringify({ plan, seats, amount }),
+  });
+
 export type Article = {
   slug: string;
   title: string;

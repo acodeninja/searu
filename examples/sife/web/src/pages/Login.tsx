@@ -50,7 +50,8 @@ export const Login = () => {
         </button>
       </form>
       <p className="notice">
-        New to Sife? <Link to="/register">Create an account</Link>.
+        New to Sife? <Link to="/register">Create an account</Link>. Forgotten your password?{' '}
+        <Link to="/reset">Reset it</Link>.
       </p>
     </div>
   );
