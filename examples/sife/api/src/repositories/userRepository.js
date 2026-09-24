@@ -10,7 +10,7 @@ export const findByCredentials = async (email, passwordMd5) => {
 
 export const findById = async (id) => {
   const { rows } = await query(
-    `SELECT id, email, role, full_name, organisation, phone, api_token, created_at
+    `SELECT id, email, role, full_name, organisation, phone, api_token, plan, seats, created_at
        FROM users WHERE id = $1`,
     [id],
   );
