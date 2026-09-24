@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/authenticate.js';
 import * as service from '../services/ticketService.js';
+import { ticketsToCsv } from '../services/exportService.js';
 
 export const ticketsRouter = Router();
 
@@ -9,6 +10,17 @@ ticketsRouter.use('/tickets', requireAuth);
 ticketsRouter.get('/tickets', async (req, res, next) => {
   try {
     res.json(await service.listTickets(req.user, { search: req.query.search, sort: req.query.sort }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+ticketsRouter.get('/tickets/export.csv', async (req, res, next) => {
+  try {
+    const tickets = await service.listTickets(req.user, {});
+    res.type('text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="tickets.csv"');
+    res.send(ticketsToCsv(tickets));
   } catch (err) {
     next(err);
   }
