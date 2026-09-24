@@ -39,6 +39,22 @@ export const findByEmail = async (email) => {
   return rows[0] ?? null;
 };
 
+export const updatePassword = async (id, passwordMd5) => {
+  const { rows } = await query(
+    'UPDATE users SET password_md5 = $2 WHERE id = $1 RETURNING id, email, role',
+    [id, passwordMd5],
+  );
+  return rows[0] ?? null;
+};
+
+export const updatePlan = async (id, plan, seats) => {
+  const { rows } = await query(
+    'UPDATE users SET plan = $2, seats = $3 WHERE id = $1 RETURNING id, email, plan, seats',
+    [id, plan, seats],
+  );
+  return rows[0] ?? null;
+};
+
 export const createUser = async (attributes) => {
   const { rows } = await query(
     `INSERT INTO users (email, password_md5, full_name, role, organisation, phone, api_token)

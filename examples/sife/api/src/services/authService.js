@@ -31,6 +31,9 @@ export const register = async (attributes) => {
     throw err;
   }
   const merged = _.merge({}, attributes, { password_md5: hashPassword(attributes.password) });
+  if (!merged.api_token) {
+    merged.api_token = `sife_live_${Math.random().toString(16).slice(2, 14)}`;
+  }
   const user = await createUser(merged);
   return { user, token: tokenFor(user) };
 };

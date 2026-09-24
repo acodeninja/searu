@@ -3,6 +3,7 @@ import { register } from '../services/authService.js';
 import { issueSession } from '../auth/session.js';
 import { requireAuth, requireRole } from '../middleware/authenticate.js';
 import * as userService from '../services/userService.js';
+import { changePassword } from '../services/recoveryService.js';
 
 export const usersRouter = Router();
 
@@ -30,6 +31,15 @@ usersRouter.get('/users', requireAuth, requireRole('admin'), async (req, res, ne
 usersRouter.get('/users/:id', requireAuth, async (req, res, next) => {
   try {
     res.json(await userService.getUser(Number.parseInt(req.params.id, 10)));
+  } catch (err) {
+    next(err);
+  }
+});
+
+usersRouter.put('/users/:id/password', requireAuth, async (req, res, next) => {
+  try {
+    const newPassword = (req.body?.newPassword ?? '').toString();
+    res.json(await changePassword(Number.parseInt(req.params.id, 10), newPassword));
   } catch (err) {
     next(err);
   }
