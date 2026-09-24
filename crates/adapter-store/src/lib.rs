@@ -5,9 +5,10 @@ use searu_domain::findings::{
     StoredObservation,
 };
 use searu_domain::ports::{
-    AuditEntry, AuditLog, AuditReader, Authorisation, Authoriser, BenchmarkStore, FindingsStore,
-    LootStore, ObservationStore, OutputDir, OutputError, OutputStore, ProjectSettings, RepoError,
-    Roe, RoeRepository, SettingsError, SourceError, SourceProvider, StoreError, StoredAudit,
+    AuditEntry, AuditLog, AuditReader, Authorisation, Authoriser, BenchmarkStore, CatalogError,
+    FindingsStore, LootStore, ObservationStore, OutputDir, OutputError, OutputStore,
+    PlaybookCatalog, ProjectSettings, RepoError, Roe, RoeRepository, SettingsError, SourceError,
+    SourceProvider, StoreError, StoredAudit,
 };
 use searu_domain::scope::{HostForm, Scope, ScopeEntry};
 use serde::{Deserialize, Serialize};
@@ -880,6 +881,77 @@ fn harden_dir(dir: &Path) {
 
 #[cfg(not(unix))]
 fn harden_dir(_dir: &Path) {}
+
+/// Reads the deployed technology playbooks from the skill's `playbooks/` directory. The location mirrors
+/// `install-skill` (`~/.claude/skills/searu/playbooks`), resolved from `HOME`/`USERPROFILE`, with a
+/// `SEARU_PLAYBOOKS_DIR` override for a bespoke install or a test fixture.
+pub struct FsPlaybookCatalog {
+    root: PathBuf,
+}
+
+impl FsPlaybookCatalog {
+    pub fn new() -> Self {
+        Self {
+            root: playbooks_root(),
+        }
+    }
+
+    pub fn at(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+}
+
+impl Default for FsPlaybookCatalog {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn playbooks_root() -> PathBuf {
+    if let Ok(dir) = std::env::var("SEARU_PLAYBOOKS_DIR") {
+        return PathBuf::from(dir);
+    }
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".to_string());
+    PathBuf::from(home)
+        .join(".claude")
+        .join("skills")
+        .join("searu")
+        .join("playbooks")
+}
+
+impl PlaybookCatalog for FsPlaybookCatalog {
+    fn root(&self) -> String {
+        self.root.display().to_string()
+    }
+
+    fn slugs(&self) -> Result<Vec<String>, CatalogError> {
+        let entries = match std::fs::read_dir(&self.root) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(CatalogError::Io(error.to_string())),
+        };
+        let mut slugs = Vec::new();
+        for entry in entries {
+            let path = entry
+                .map_err(|error| CatalogError::Io(error.to_string()))?
+                .path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+                continue;
+            };
+            if stem.eq_ignore_ascii_case("README") {
+                continue;
+            }
+            slugs.push(stem.to_ascii_lowercase());
+        }
+        slugs.sort();
+        Ok(slugs)
+    }
+}
 
 #[cfg(test)]
 mod tests {

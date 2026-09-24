@@ -12,12 +12,13 @@ use searu_domain::findings::{
     Observation, RecordContext, Status, StoredFinding, StoredLoot, StoredObservation,
 };
 use searu_domain::gate::{decide, Decision};
+use searu_domain::playbook::{self, Recognition};
 use searu_domain::ports::{
     AuditEntry, AuditLog, AuditReader, BenchmarkError, BenchmarkStore, FindingsStore, LootStore,
-    Mount, ObservationStore, OutputDir, OutputError, OutputStore, ProjectSettings, RepoError,
-    RoeRepository, RunnerError, ScoreboardProvider, SettingsError, SourceError, SourceProvider,
-    StoreError, StoredAudit, ToolInvocation, ToolOutcome, ToolRunner, WordlistError,
-    WordlistProvider,
+    Mount, ObservationStore, OutputDir, OutputError, OutputStore, PlaybookCatalog, ProjectSettings,
+    RepoError, RoeRepository, RunnerError, ScoreboardProvider, SettingsError, SourceError,
+    SourceProvider, StoreError, StoredAudit, ToolInvocation, ToolOutcome, ToolRunner,
+    WordlistError, WordlistProvider,
 };
 use searu_domain::scope::{
     is_host_in_scope, output_target, source_target, target_host, OUTPUT_MOUNT, SOURCE_MOUNT,
@@ -331,6 +332,42 @@ impl<OS: ObservationStore> QueryObservations<OS> {
             items.retain(|o| o.host.as_deref() == Some(host));
         }
         Ok(items)
+    }
+}
+
+/// Report which technology playbooks apply to the engagement: read the `tech`/`server` observations the
+/// fingerprinting tools recorded, cross them with the playbooks on disk, and hand back the matches,
+/// gaps, and the full catalogue so the operator can read the right playbook (or write a missing one).
+pub struct PlaybookReport {
+    pub root: String,
+    pub available: Vec<String>,
+    pub recognition: Recognition,
+}
+
+pub struct RecognisePlaybooks<OS, PC> {
+    pub observations: OS,
+    pub catalog: PC,
+}
+
+impl<OS: ObservationStore, PC: PlaybookCatalog> RecognisePlaybooks<OS, PC> {
+    pub fn run(&self) -> Result<PlaybookReport, StoreError> {
+        let techs: Vec<String> = self
+            .observations
+            .list()?
+            .into_iter()
+            .filter(|o| matches!(o.observation.kind.as_str(), "tech" | "server"))
+            .map(|o| o.observation.value)
+            .collect();
+        let available = self
+            .catalog
+            .slugs()
+            .map_err(|error| StoreError::Io(error.to_string()))?;
+        let recognition = playbook::recognise(&techs, &available);
+        Ok(PlaybookReport {
+            root: self.catalog.root(),
+            available,
+            recognition,
+        })
     }
 }
 

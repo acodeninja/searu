@@ -267,6 +267,32 @@ pub trait AuditReader {
 }
 
 #[derive(Debug)]
+pub enum CatalogError {
+    Io(String),
+}
+
+impl std::fmt::Display for CatalogError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CatalogError::Io(message) => {
+                write!(f, "could not read the playbook catalogue: {message}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for CatalogError {}
+
+/// The technology playbooks available on disk: the deployed `~/.claude/skills/searu/playbooks`
+/// directory. `slugs` are the playbook filenames without extension; `root` is the directory to build a
+/// readable path from. The catalogue is a living, editable knowledge base, never consulted by the engine
+/// while it attacks — it only tells the operator which playbook to read.
+pub trait PlaybookCatalog {
+    fn root(&self) -> String;
+    fn slugs(&self) -> Result<Vec<String>, CatalogError>;
+}
+
+#[derive(Debug)]
 pub enum BenchmarkError {
     Fetch(String),
     Parse(String),

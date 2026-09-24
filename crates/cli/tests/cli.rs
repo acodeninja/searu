@@ -470,6 +470,39 @@ fn install_skill_preserves_a_users_own_upgrade_command() {
 }
 
 #[test]
+fn playbook_flags_the_matching_technology_and_lists_gaps() {
+    let work = tempfile::tempdir().unwrap();
+    let pentest = work.path().join("pentest");
+    std::fs::create_dir_all(&pentest).unwrap();
+    std::fs::write(
+        pentest.join("observations.jsonl"),
+        "{\"kind\":\"tech\",\"value\":\"Angular\"}\n{\"kind\":\"tech\",\"value\":\"Svelte\"}\n",
+    )
+    .unwrap();
+
+    let playbooks = tempfile::tempdir().unwrap();
+    std::fs::write(playbooks.path().join("angular.md"), "# Angular").unwrap();
+    std::fs::write(playbooks.path().join("php.md"), "# PHP").unwrap();
+    std::fs::write(playbooks.path().join("README.md"), "index").unwrap();
+
+    Command::cargo_bin("searu")
+        .unwrap()
+        .arg("playbook")
+        .current_dir(work.path())
+        .env("SEARU_PLAYBOOKS_DIR", playbooks.path())
+        .assert()
+        .success()
+        .stdout(
+            contains("angular")
+                .and(contains("php"))
+                .and(contains("Angular")),
+        )
+        .stdout(contains("angular.md"))
+        .stdout(contains("svelte"))
+        .stdout(contains("README").not());
+}
+
+#[test]
 fn install_skill_preserves_a_users_own_skill() {
     let home = tempfile::tempdir().unwrap();
     let base = home.path().join(".claude").join("skills").join("searu");

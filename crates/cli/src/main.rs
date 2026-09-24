@@ -129,6 +129,11 @@ fn cli() -> Command {
                 ),
         )
         .subcommand(
+            Command::new("playbook").about(
+                "List the technology playbooks and flag those matching the engagement's tech observations",
+            ),
+        )
+        .subcommand(
             Command::new("benchmark")
                 .about("Score the engagement against a benchmark target's answer key (decoupled)")
                 .subcommand_required(true)
@@ -179,6 +184,7 @@ fn main() {
         Some(("observations", matches)) => std::process::exit(run_observations(matches)),
         Some(("hosts", _)) => std::process::exit(run_hosts()),
         Some(("coverage", matches)) => std::process::exit(run_coverage(matches)),
+        Some(("playbook", _)) => std::process::exit(run_playbook()),
         Some(("benchmark", matches)) => std::process::exit(run_benchmark(matches)),
         Some(("tool", matches)) => std::process::exit(run_tool(matches)),
         Some((name, _)) => {
@@ -614,6 +620,46 @@ fn run_observations(matches: &ArgMatches) -> i32 {
                     }
                     None => println!("{}\t{}", observation.kind, observation.value),
                 }
+            }
+            0
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            1
+        }
+    }
+}
+
+fn run_playbook() -> i32 {
+    use searu_adapter_store::{FsPlaybookCatalog, JsonlObservationStore};
+    use searu_app::RecognisePlaybooks;
+
+    let use_case = RecognisePlaybooks {
+        observations: JsonlObservationStore::new(ENGAGEMENT_DIR),
+        catalog: FsPlaybookCatalog::new(),
+    };
+    match use_case.run() {
+        Ok(report) => {
+            if report.available.is_empty() {
+                println!("no technology playbooks found in {}", report.root);
+            } else {
+                println!("technology playbooks in {}:", report.root);
+                for slug in &report.available {
+                    let matched = report.recognition.matched.iter().find(|m| &m.slug == slug);
+                    match matched {
+                        Some(m) => println!("  * {slug}\t(matches observed '{}')", m.tech),
+                        None => println!("    {slug}"),
+                    }
+                }
+            }
+            for m in &report.recognition.matched {
+                println!("read: {}/{}.md", report.root, m.slug);
+            }
+            for gap in &report.recognition.gaps {
+                println!(
+                    "no playbook for observed technology '{gap}' — write {}/{gap}.md if you learn reusable techniques for it",
+                    report.root
+                );
             }
             0
         }
