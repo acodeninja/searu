@@ -12,6 +12,7 @@ import { redirectRouter } from './redirect.js';
 import { subscribersRouter } from './subscribers.js';
 import { billingRouter } from './billing.js';
 import { integrationsRouter } from './integrations.js';
+import { webhooksRouter } from './webhooks.js';
 
 export const apiRouter = Router();
 
@@ -28,6 +29,7 @@ apiRouter.use(redirectRouter);
 apiRouter.use(subscribersRouter);
 apiRouter.use(billingRouter);
 apiRouter.use(integrationsRouter);
+apiRouter.use(webhooksRouter);
 
 apiRouter.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'sife-api' });

@@ -7,6 +7,14 @@ export const listComponents = async () => {
   return rows;
 };
 
+export const updateComponentStatus = async (name, status) => {
+  const { rows } = await query(
+    'UPDATE components SET status = $2 WHERE name = $1 RETURNING id, name, status',
+    [name, status],
+  );
+  return rows[0] ?? null;
+};
+
 export const listPublicIncidents = async () => {
   const { rows } = await query(
     `SELECT id, title, body, severity, status, component, created_at, updated_at
