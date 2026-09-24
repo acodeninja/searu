@@ -1,6 +1,7 @@
 import { Link, Route, Routes } from 'react-router-dom';
 import { Landing } from './pages/Landing';
 import { StatusPage } from './pages/StatusPage';
+import { Login } from './pages/Login';
 
 const Header = () => (
   <header className="site-header">
@@ -34,6 +35,7 @@ export const App = () => (
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/status" element={<StatusPage />} />
+        <Route path="/login" element={<Login />} />
       </Routes>
     </main>
     <Footer />

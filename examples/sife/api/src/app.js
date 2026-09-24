@@ -5,6 +5,8 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import { config } from './config.js';
 import { apiRouter } from './routes/index.js';
+import { authRouter } from './routes/auth.js';
+import { authenticate } from './middleware/authenticate.js';
 import { errorHandler } from './middleware/errors.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -14,7 +16,9 @@ export const createApp = () => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
+  app.use(authenticate);
 
+  app.use('/rest', authRouter);
   app.use('/api', apiRouter);
 
   const publicDir = resolve(here, '..', config.publicDir);
