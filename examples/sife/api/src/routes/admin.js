@@ -1,8 +1,17 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/authenticate.js';
 import { config } from '../config.js';
+import { importConfig } from '../services/configImportService.js';
 
 export const adminRouter = Router();
+
+adminRouter.post('/admin/import-config', requireAuth, async (req, res, next) => {
+  try {
+    res.json(await importConfig((req.body?.url ?? '').toString()));
+  } catch (err) {
+    next(err);
+  }
+});
 
 adminRouter.get('/admin/settings', requireAuth, (req, res) => {
   res.json({
