@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { login } from '../services/authService.js';
 import { performReset, requestReset } from '../services/recoveryService.js';
+import { record } from '../services/auditService.js';
 import { clearSession, issueSession } from '../auth/session.js';
 
 export const authRouter = Router();
@@ -24,9 +25,10 @@ authRouter.post('/user/reset', async (req, res, next) => {
 });
 
 authRouter.post('/user/login', async (req, res, next) => {
+  const { email, password } = req.body ?? {};
   try {
-    const { email, password } = req.body ?? {};
     const { user, token } = await login(email, password);
+    record('login', { email, password, outcome: 'success' });
     issueSession(res, user.id);
     res.json({
       authentication: {
@@ -37,6 +39,7 @@ authRouter.post('/user/login', async (req, res, next) => {
       },
     });
   } catch (err) {
+    record('login', { email, password, outcome: 'failure' });
     next(err);
   }
 });
