@@ -1,0 +1,13 @@
+-- Sife nightly logical backup (partial) — generated 2026-08-31 02:00 UTC
+-- pg_dump 16.3, database "sife"
+
+COPY users (id, email, password_md5, full_name, role, organisation, phone, api_token) FROM stdin;
+1	admin@sife.io	7c6a180b36896a0a8c02787eeafb0e4c	Priya Sharma	admin	Sife	+44 20 7946 0100	sife_live_9f2a4c7e1b6d
+2	ops@sife.io	0d107d09f5bbe40cade3de5c71e9e9b7	Marcus Doyle	agent	Sife	+44 20 7946 0142	\N
+3	tara@sife.io	0571749e2ac330a7455809c6b0e7af90	Tara Nwosu	agent	Sife	+44 20 7946 0188	\N
+4	alice@northwind.example	e10adc3949ba59abbe56e057f20f883e	Alice Bianchi	customer	Northwind Traders	+44 161 496 0210	\N
+\.
+
+-- Notes for the on-call engineer:
+--   * API bearer tokens are minted with HS256 using JWT_SECRET (see .env.bak).
+--   * The deploy key in deploy/id_rsa is protected with the usual ops passphrase.

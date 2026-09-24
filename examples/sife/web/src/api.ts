@@ -140,3 +140,26 @@ export const getComments = (id: number): Promise<Comment[]> =>
 
 export const postComment = (id: number, body: string): Promise<Comment> =>
   request(`/api/tickets/${id}/comments`, { method: 'POST', body: JSON.stringify({ body }) });
+
+export type Attachment = {
+  id: number;
+  ticket_id: number;
+  filename: string;
+  content_type: string | null;
+  created_at: string;
+};
+
+export const getAttachments = (id: number): Promise<Attachment[]> =>
+  request(`/api/tickets/${id}/attachments`);
+
+export const uploadAttachment = async (id: number, file: File) => {
+  const form = new FormData();
+  form.append('file', file);
+  const response = await fetch(`/api/tickets/${id}/attachments`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { ...authHeaders() },
+    body: form,
+  });
+  return asJson(response);
+};
