@@ -18,6 +18,7 @@ export type Incident = {
   severity: string;
   status: string;
   component: string | null;
+  source_url: string | null;
   created_at: string;
   updated_at: string;
   updates: IncidentUpdate[];

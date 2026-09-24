@@ -74,6 +74,13 @@ export const StatusPage = () => {
                 </li>
               ))}
             </ol>
+            {incident.source_url && (
+              <p className="notice">
+                <a href={incident.source_url} target="_blank">
+                  More information
+                </a>
+              </p>
+            )}
             <Reactions incidentId={incident.id} />
           </article>
         ))}

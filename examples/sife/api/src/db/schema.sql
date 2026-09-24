@@ -42,6 +42,11 @@ CREATE TABLE IF NOT EXISTS incidents (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS source_url TEXT;
+
+UPDATE incidents SET source_url = 'https://status.eu-west.sife.io/incidents/1'
+  WHERE id = 1 AND source_url IS NULL;
+
 CREATE TABLE IF NOT EXISTS incident_updates (
   id SERIAL PRIMARY KEY,
   incident_id INTEGER NOT NULL REFERENCES incidents(id),

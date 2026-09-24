@@ -17,7 +17,7 @@ export const updateComponentStatus = async (name, status) => {
 
 export const listPublicIncidents = async () => {
   const { rows } = await query(
-    `SELECT id, title, body, severity, status, component, created_at, updated_at
+    `SELECT id, title, body, severity, status, component, source_url, created_at, updated_at
        FROM incidents
       WHERE is_public = true
       ORDER BY created_at DESC`,
