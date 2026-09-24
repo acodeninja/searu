@@ -2,8 +2,18 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/authenticate.js';
 import * as service from '../services/ticketService.js';
 import { ticketsToCsv } from '../services/exportService.js';
+import { decodeShareToken, encodeShareToken } from '../services/shareService.js';
 
 export const ticketsRouter = Router();
+
+ticketsRouter.get('/shared/:token', async (req, res, next) => {
+  try {
+    const ticketId = decodeShareToken(req.params.token);
+    res.json(await service.getTicket(ticketId));
+  } catch (err) {
+    next(err);
+  }
+});
 
 ticketsRouter.use('/tickets', requireAuth);
 
@@ -37,6 +47,15 @@ ticketsRouter.post('/tickets', async (req, res, next) => {
 ticketsRouter.get('/tickets/:id', async (req, res, next) => {
   try {
     res.json(await service.getTicket(Number.parseInt(req.params.id, 10)));
+  } catch (err) {
+    next(err);
+  }
+});
+
+ticketsRouter.post('/tickets/:id/share', async (req, res, next) => {
+  try {
+    const token = encodeShareToken(Number.parseInt(req.params.id, 10));
+    res.json({ token, url: `/shared/${token}` });
   } catch (err) {
     next(err);
   }

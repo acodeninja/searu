@@ -8,6 +8,7 @@ export const config = {
   publicDir: process.env.PUBLIC_DIR ?? 'public',
   jwtSecret: process.env.JWT_SECRET ?? 'sife-signing-key',
   sessionSecret: process.env.SESSION_SECRET ?? 'sife-session',
+  shareKey: process.env.SHARE_KEY ?? 'sife-share-key01',
   postgres: {
     host: process.env.PGHOST ?? 'localhost',
     port: int(process.env.PGPORT, 5432),
