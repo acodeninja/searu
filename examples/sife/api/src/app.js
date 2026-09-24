@@ -17,6 +17,7 @@ export const createApp = () => {
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+  app.use(express.text({ type: ['application/xml', 'text/xml'] }));
   app.use(cookieParser());
   app.use(fileUpload());
   app.use(authenticate);

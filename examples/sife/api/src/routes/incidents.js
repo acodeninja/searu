@@ -1,8 +1,18 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../middleware/authenticate.js';
 import * as service from '../services/incidentService.js';
+import { parseIncidentFeed } from '../services/importService.js';
 
 export const incidentsRouter = Router();
+
+incidentsRouter.post('/incidents/import', requireAuth, requireRole('agent'), (req, res, next) => {
+  try {
+    const xml = typeof req.body === 'string' ? req.body : (req.body?.xml ?? '');
+    res.json({ parsed: parseIncidentFeed(xml) });
+  } catch (err) {
+    next(err);
+  }
+});
 
 incidentsRouter.get('/incidents/search', async (req, res, next) => {
   try {
