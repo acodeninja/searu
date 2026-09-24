@@ -1,0 +1,7 @@
+node_modules/
+web/dist/
+api/public/
+api/uploads/*
+!api/uploads/.gitkeep
+*.log
+.env

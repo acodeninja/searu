@@ -1,0 +1,19 @@
+{
+  "name": "@sife/api",
+  "version": "1.4.0",
+  "private": true,
+  "description": "Sife — status pages and support, together. API service.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "mongodb": "^6.12.0",
+    "pg": "^8.13.1"
+  }
+}
