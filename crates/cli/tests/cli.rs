@@ -330,16 +330,73 @@ fn scope_hook_allows_a_file_read_tool() {
         .stdout(contains(r#""permissionDecision":"allow""#));
 }
 
+fn engagement_with_roe(content: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let pentest = dir.path().join("pentest");
+    std::fs::create_dir_all(&pentest).unwrap();
+    std::fs::write(pentest.join("rules-of-engagement.json"), content).unwrap();
+    dir
+}
+
 #[test]
-fn scope_hook_blocks_a_network_tool() {
+fn scope_hook_blocks_webfetch_to_the_in_scope_target() {
+    let dir = engagement_with_roe(LAB_ROE);
     Command::cargo_bin("searu")
         .unwrap()
         .arg("scope-hook")
-        .write_stdin(r#"{"tool_name":"WebFetch","tool_input":{"url":"http://localhost:5000"}}"#)
+        .current_dir(dir.path())
+        .write_stdin(
+            r#"{"tool_name":"WebFetch","tool_input":{"url":"http://localhost:5000/admin"}}"#,
+        )
         .assert()
         .failure()
         .code(2)
-        .stderr(contains("searu"));
+        .stderr(contains("searu run"));
+}
+
+#[test]
+fn scope_hook_allows_webfetch_to_a_research_host() {
+    let dir = engagement_with_roe(LAB_ROE);
+    Command::cargo_bin("searu")
+        .unwrap()
+        .arg("scope-hook")
+        .current_dir(dir.path())
+        .write_stdin(
+            r#"{"tool_name":"WebFetch","tool_input":{"url":"https://nvd.nist.gov/vuln/detail/CVE-2021-1234"}}"#,
+        )
+        .assert()
+        .success()
+        .stdout(contains(r#""permissionDecision":"allow""#));
+}
+
+#[test]
+fn scope_hook_allows_websearch() {
+    let dir = engagement_with_roe(LAB_ROE);
+    Command::cargo_bin("searu")
+        .unwrap()
+        .arg("scope-hook")
+        .current_dir(dir.path())
+        .write_stdin(r#"{"tool_name":"WebSearch","tool_input":{"query":"CVE-2021-1234 express"}}"#)
+        .assert()
+        .success()
+        .stdout(contains(r#""permissionDecision":"allow""#));
+}
+
+#[test]
+fn scope_hook_still_blocks_skill_and_mcp_tools() {
+    for tool in [
+        r#"{"tool_name":"Skill","tool_input":{}}"#,
+        r#"{"tool_name":"mcp__acme__fetch_url","tool_input":{}}"#,
+    ] {
+        Command::cargo_bin("searu")
+            .unwrap()
+            .arg("scope-hook")
+            .write_stdin(tool)
+            .assert()
+            .failure()
+            .code(2)
+            .stderr(contains("searu"));
+    }
 }
 
 #[test]
@@ -356,10 +413,13 @@ fn harden_writes_an_idempotent_egress_deny_list() {
         .success();
 
     let text = std::fs::read_to_string(&settings).unwrap();
-    assert!(text.contains("WebFetch"));
-    assert!(text.contains("WebSearch"));
     assert!(text.contains("mcp__*"));
     assert!(text.contains("Bash(docker:*)"));
+    assert!(
+        !text.contains("WebFetch"),
+        "WebFetch is scope-hook governed, not denied outright"
+    );
+    assert!(!text.contains("WebSearch"));
 
     let document: serde_json::Value = serde_json::from_str(&text).unwrap();
     let hook = &document["hooks"]["PreToolUse"][0];
@@ -378,7 +438,7 @@ fn harden_writes_an_idempotent_egress_deny_list() {
         .success();
 
     let text = std::fs::read_to_string(&settings).unwrap();
-    assert_eq!(text.matches("WebFetch").count(), 1);
+    assert_eq!(text.matches("mcp__*").count(), 1);
     let document: serde_json::Value = serde_json::from_str(&text).unwrap();
     assert_eq!(document["hooks"]["PreToolUse"].as_array().unwrap().len(), 1);
 }

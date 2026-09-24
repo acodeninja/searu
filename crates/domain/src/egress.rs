@@ -4,10 +4,12 @@
 //! skill-frontmatter hook, one that reaches a spawned specialist. Alongside the egress *tools* it
 //! deny-lists the target-reaching Bash *programs* a specialist must never invoke directly (it reaches
 //! a target only through `searu run`), a coarse enforced backstop to the scope-hook allowlist.
+//!
+//! `WebFetch`/`WebSearch` are deliberately *not* denied outright: they are governed by the scope-hook
+//! (`scope_hook::decide_web`), which blocks a fetch of the in-scope target but allows off-target
+//! vulnerability/library research. `mcp__*` stays denied — an MCP tool can reach anywhere.
 
 pub const DENIED_EGRESS: &[&str] = &[
-    "WebFetch",
-    "WebSearch",
     "mcp__*",
     "Bash(docker:*)",
     "Bash(curl:*)",
@@ -40,8 +42,6 @@ mod tests {
         assert_eq!(
             merge_deny(&[]),
             deny(&[
-                "WebFetch",
-                "WebSearch",
                 "mcp__*",
                 "Bash(docker:*)",
                 "Bash(curl:*)",
@@ -51,6 +51,13 @@ mod tests {
                 "Bash(socat:*)",
             ])
         );
+    }
+
+    #[test]
+    fn web_tools_are_not_denied_outright_they_are_scope_hook_governed() {
+        let merged = merge_deny(&[]);
+        assert!(!merged.iter().any(|entry| entry == "WebFetch"));
+        assert!(!merged.iter().any(|entry| entry == "WebSearch"));
     }
 
     #[test]
@@ -68,13 +75,11 @@ mod tests {
 
     #[test]
     fn merging_preserves_existing_entries_and_adds_only_the_missing() {
-        let existing = deny(&["Bash(rm *)", "WebFetch"]);
+        let existing = deny(&["Bash(rm *)", "mcp__*"]);
         assert_eq!(
             merge_deny(&existing),
             deny(&[
                 "Bash(rm *)",
-                "WebFetch",
-                "WebSearch",
                 "mcp__*",
                 "Bash(docker:*)",
                 "Bash(curl:*)",

@@ -1,9 +1,36 @@
-//! The PreToolUse allowlist backstop: force target-facing actions through `searu`. It does not read
-//! the rules of engagement; its only job is to stop an agent bypassing `searu run`.
+//! The PreToolUse allowlist backstop: force target-facing actions through `searu`. For shell and local
+//! tools it is a pure name allowlist that needs no rules of engagement. For a web tool that carries a
+//! target URL (WebFetch) it consults the scope so third-party vulnerability/library research is allowed
+//! while the in-scope target stays reachable only through `searu run`.
+
+use crate::scope::{host_in_target_scope, Scope};
 
 pub enum HookDecision {
     Allow,
     Block(String),
+}
+
+/// Decide a network tool that carries a target URL. `WebSearch` has no host, so it is always allowed
+/// (research). `WebFetch` is allowed against any host that is not an in-scope target — the target itself
+/// is reachable only through `searu run`, so a fetch of an in-scope host is blocked. A missing/blank url
+/// (nothing to check) is allowed; the scope is the only gate.
+pub fn decide_web(tool_name: &str, url: Option<&str>, scope: &Scope) -> HookDecision {
+    match tool_name {
+        "WebSearch" => HookDecision::Allow,
+        "WebFetch" => match url.map(str::trim).filter(|u| !u.is_empty()) {
+            Some(url) if host_in_target_scope(url, scope) => HookDecision::Block(
+                "searu scope-hook: reach the in-scope target through `searu run`, not WebFetch; \
+                 WebFetch is for off-target research only"
+                    .to_string(),
+            ),
+            _ => HookDecision::Allow,
+        },
+        _ => decide(tool_name, None),
+    }
+}
+
+pub fn is_web_tool(tool_name: &str) -> bool {
+    matches!(tool_name, "WebFetch" | "WebSearch")
 }
 
 pub fn decide(tool_name: &str, command: Option<&str>) -> HookDecision {
@@ -223,11 +250,61 @@ mod tests {
     }
 
     #[test]
-    fn network_capable_tools_are_blocked() {
-        assert!(!is_allowed(decide("WebFetch", None)));
-        assert!(!is_allowed(decide("WebSearch", None)));
+    fn skills_and_mcp_tools_are_blocked_outright() {
         assert!(!is_allowed(decide("Skill", None)));
         assert!(!is_allowed(decide("mcp__acme__fetch_url", None)));
+    }
+
+    fn scope() -> Scope {
+        use crate::scope::{HostForm, ScopeEntry};
+        Scope {
+            targets: vec![ScopeEntry::Host {
+                form: HostForm::Domain,
+                value: "localhost".to_string(),
+                port: Some(3000),
+            }],
+            exclusions: vec![],
+        }
+    }
+
+    #[test]
+    fn webfetch_to_the_in_scope_target_is_blocked() {
+        assert!(!is_allowed(decide_web(
+            "WebFetch",
+            Some("http://localhost:3000/rest/products"),
+            &scope()
+        )));
+        assert!(!is_allowed(decide_web(
+            "WebFetch",
+            Some("http://localhost:8080/other-port"),
+            &scope()
+        )));
+    }
+
+    #[test]
+    fn webfetch_to_a_research_host_is_allowed() {
+        assert!(is_allowed(decide_web(
+            "WebFetch",
+            Some("https://nvd.nist.gov/vuln/detail/CVE-2021-1234"),
+            &scope()
+        )));
+        assert!(is_allowed(decide_web(
+            "WebFetch",
+            Some("https://github.com/advisories"),
+            &scope()
+        )));
+    }
+
+    #[test]
+    fn websearch_is_always_allowed() {
+        assert!(is_allowed(decide_web("WebSearch", None, &scope())));
+    }
+
+    #[test]
+    fn a_web_tool_with_no_url_has_nothing_to_gate() {
+        assert!(is_allowed(decide_web("WebFetch", None, &scope())));
+        assert!(is_web_tool("WebFetch"));
+        assert!(!is_web_tool("Bash"));
     }
 
     #[test]

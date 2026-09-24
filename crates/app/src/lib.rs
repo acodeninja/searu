@@ -1629,13 +1629,11 @@ mod tests {
     fn hardening_denies_every_egress_tool_on_an_empty_project() {
         let use_case = harden_project();
         let report = use_case.harden().unwrap();
-        assert_eq!(report.added, 9);
-        assert_eq!(report.total, 9);
+        assert_eq!(report.added, 7);
+        assert_eq!(report.total, 7);
         assert_eq!(
             *use_case.settings.deny.borrow(),
             vec![
-                "WebFetch".to_string(),
-                "WebSearch".to_string(),
                 "mcp__*".to_string(),
                 "Bash(docker:*)".to_string(),
                 "Bash(curl:*)".to_string(),
@@ -1660,9 +1658,8 @@ mod tests {
     #[test]
     fn hardening_preserves_existing_denials_and_is_idempotent() {
         let use_case = harden_project();
-        *use_case.settings.deny.borrow_mut() =
-            vec!["Bash(rm *)".to_string(), "WebFetch".to_string()];
-        assert_eq!(use_case.harden().unwrap().added, 8);
+        *use_case.settings.deny.borrow_mut() = vec!["Bash(rm *)".to_string(), "mcp__*".to_string()];
+        assert_eq!(use_case.harden().unwrap().added, 6);
         assert_eq!(use_case.harden().unwrap().added, 0);
         assert_eq!(
             use_case
@@ -1670,7 +1667,7 @@ mod tests {
                 .deny
                 .borrow()
                 .iter()
-                .filter(|entry| *entry == "WebFetch")
+                .filter(|entry| *entry == "mcp__*")
                 .count(),
             1
         );

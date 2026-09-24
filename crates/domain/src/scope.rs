@@ -89,6 +89,23 @@ pub fn is_host_in_scope(target: &str, scope: &Scope) -> bool {
     true
 }
 
+/// True if the target's host is named by any in-scope target entry, **ignoring port** and treating
+/// loopback aliases as the same host. This is the "is this the target?" test for a network tool that is
+/// not `searu` (WebFetch): the target is reachable only through `searu`, so fetching its host on any port
+/// is blocked, while a third-party research host (not in scope) is left free.
+pub fn host_in_target_scope(target: &str, scope: &Scope) -> bool {
+    let host = target_host(target);
+    scope
+        .targets
+        .iter()
+        .any(|entry| entry_names_host(&host, entry))
+        || (is_loopback(&host)
+            && scope
+                .targets
+                .iter()
+                .any(|entry| entry_host(entry).is_some_and(|h| is_loopback(&h))))
+}
+
 /// When a target is refused as out of scope but its host is already named by an in-scope host entry
 /// (only a pinned port kept it out), or it is a loopback alias of such a host, suggest the `host`
 /// scope entries the operator can add so host-level techniques (e.g. T1046/nmap, which need a bare
@@ -325,6 +342,30 @@ mod tests {
             ],
             exclusions: vec![host(HostForm::Domain, "billing.staging.example.com")],
         }
+    }
+
+    #[test]
+    fn host_in_target_scope_blocks_the_target_host_on_any_port() {
+        let scope = Scope {
+            targets: vec![host_on_port(HostForm::Domain, "localhost", 3000)],
+            exclusions: vec![],
+        };
+        assert!(host_in_target_scope("http://localhost:3000/x", &scope));
+        assert!(host_in_target_scope("http://localhost:8080/y", &scope));
+        assert!(host_in_target_scope("127.0.0.1", &scope));
+        assert!(!host_in_target_scope("https://nvd.nist.gov/vuln", &scope));
+    }
+
+    #[test]
+    fn host_in_target_scope_matches_a_subdomain_but_not_a_research_host() {
+        assert!(host_in_target_scope(
+            "https://api.staging.example.com/",
+            &scope()
+        ));
+        assert!(!host_in_target_scope(
+            "https://github.com/advisories",
+            &scope()
+        ));
     }
 
     #[test]

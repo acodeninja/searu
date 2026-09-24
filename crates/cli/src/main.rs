@@ -449,7 +449,10 @@ fn write_skill_dir(dir: &Dir, dest: &Path, hook: &str) -> std::io::Result<()> {
 }
 
 fn run_scope_hook() -> i32 {
-    use searu_domain::scope_hook::{decide, HookDecision};
+    use searu_adapter_store::JsonRoeRepository;
+    use searu_domain::ports::RoeRepository;
+    use searu_domain::scope::Scope;
+    use searu_domain::scope_hook::{decide, decide_web, is_web_tool, HookDecision};
     use std::io::Read;
 
     let mut input = String::new();
@@ -462,11 +465,23 @@ fn run_scope_hook() -> i32 {
         .get("tool_name")
         .and_then(serde_json::Value::as_str)
         .unwrap_or_default();
-    let command = payload
-        .get("tool_input")
+    let tool_input = payload.get("tool_input");
+    let command = tool_input
         .and_then(|tool_input| tool_input.get("command"))
         .and_then(serde_json::Value::as_str);
-    match decide(tool_name, command) {
+    let decision = if is_web_tool(tool_name) {
+        let url = tool_input
+            .and_then(|tool_input| tool_input.get("url"))
+            .and_then(serde_json::Value::as_str);
+        let scope = JsonRoeRepository::new(DEFAULT_ROE)
+            .load()
+            .map(|roe| roe.scope)
+            .unwrap_or_else(|_| Scope::default());
+        decide_web(tool_name, url, &scope)
+    } else {
+        decide(tool_name, command)
+    };
+    match decision {
         HookDecision::Allow => {
             println!(
                 r#"{{"hookSpecificOutput":{{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"searu: sanctioned local or scoped action"}}}}"#

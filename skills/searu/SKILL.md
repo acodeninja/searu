@@ -4,7 +4,7 @@ description: |
   Authorised pen-testing toolkit (searu). Use for security assessment, penetration testing, MITRE
   ATT&CK technique lookup, scanning, and authorised exploitation of in-scope targets. Triggers:
   "pentest", "security assessment", "exploit", "ATT&CK", "scope check", "assess a target".
-allowed-tools: Bash Read Write Edit Grep Glob Agent Task TodoWrite NotebookEdit
+allowed-tools: Bash Read Write Edit Grep Glob Agent Task TodoWrite NotebookEdit WebFetch WebSearch
 hooks:
   PreToolUse:
     - matcher: "*"
@@ -28,9 +28,13 @@ You decide what to do next; `searu` gates and runs each step and remembers the r
   the Exploitation tier also needs a named authoriser, and destructive techniques need
   `destructive_authorised: true`.
 - **Never reach a target with anything but `searu`.** The PreToolUse hook (`searu scope-hook`) blocks
-  any Bash or PowerShell command that is not a `searu …` call, and blocks every network-capable tool outright —
-  `WebFetch`, `WebSearch`, other skills, MCP tools. Drive tools only through `searu run`. Nothing
-  else — `docker`, `curl`, `wget`, a scanner, a browser skill — may touch a target.
+  any Bash or PowerShell command that is not a `searu …` call, and blocks other skills and MCP tools
+  outright. Drive tools only through `searu run`. Nothing else — `docker`, `curl`, `wget`, a scanner, a
+  browser skill — may touch a target.
+- **`WebFetch`/`WebSearch` are for off-target research only.** They are allowed so you can look up a CVE
+  or a library advisory while you scan, but the hook **blocks a `WebFetch` whose host is an in-scope
+  target** (on any port) — the target is reachable only through `searu run`. `WebSearch` (no host) is
+  always allowed. Never use `WebFetch` to fetch, probe, or exfiltrate to the target.
 
 ## Phases
 
