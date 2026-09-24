@@ -3,5 +3,6 @@ web/dist/
 api/public/
 api/uploads/*
 !api/uploads/.gitkeep
+pentest/
 *.log
 .env

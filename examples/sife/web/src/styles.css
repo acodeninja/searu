@@ -372,3 +372,22 @@ button {
   padding: 0.6rem 0;
   border-bottom: 1px solid var(--line);
 }
+
+.kb-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.kb-tags {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+
+.attachment-list {
+  padding-left: 1.1rem;
+  color: var(--muted);
+}

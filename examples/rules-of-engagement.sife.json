@@ -1,0 +1,26 @@
+{
+  "scope": {
+    "targets": [
+      { "type": "url", "value": "http://localhost:8080", "port": 8080 },
+      { "type": "ip", "value": "127.0.0.1", "port": 8080 }
+    ]
+  },
+  "allowed_techniques": [
+    "T1595",
+    "T1590",
+    "T1593",
+    "T1190",
+    "T1046",
+    "T1110",
+    "T1110.002",
+    "T1059",
+    "T1552",
+    "T1082",
+    "T1083",
+    "T1518",
+    "T1606.001"
+  ],
+  "authorisation": {
+    "exploitation_authorised_by": { "name": "Lawrence", "email": "anthropic@acode.ninja" }
+  }
+}

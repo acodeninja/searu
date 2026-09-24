@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { login } from '../api';
 
 export const Login = () => {
@@ -49,6 +49,9 @@ export const Login = () => {
           Sign in
         </button>
       </form>
+      <p className="notice">
+        New to Sife? <Link to="/register">Create an account</Link>.
+      </p>
     </div>
   );
 };

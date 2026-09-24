@@ -82,6 +82,36 @@ export const logout = async () => {
   clearToken();
 };
 
+export const register = async (fields: {
+  email: string;
+  password: string;
+  full_name: string;
+  organisation?: string;
+}) => {
+  const body = await request('/api/users/register', {
+    method: 'POST',
+    body: JSON.stringify(fields),
+  });
+  setToken(body.authentication.token);
+  return body;
+};
+
+export type Article = {
+  slug: string;
+  title: string;
+  body: string;
+  tags: string[];
+  published: boolean;
+};
+
+export const getArticles = (): Promise<Article[]> => request('/api/kb');
+
+export const searchArticles = (term: string): Promise<Article[]> =>
+  request('/api/kb/search', {
+    method: 'POST',
+    body: JSON.stringify({ title: { $regex: term, $options: 'i' }, published: true }),
+  });
+
 export type Reaction = { emoji: string; count: number };
 export type ReactionSummary = {
   incident: { id: number; title: string } | null;
