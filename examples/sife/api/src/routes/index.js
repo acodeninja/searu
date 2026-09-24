@@ -11,6 +11,7 @@ import { preferencesRouter } from './preferences.js';
 import { redirectRouter } from './redirect.js';
 import { subscribersRouter } from './subscribers.js';
 import { billingRouter } from './billing.js';
+import { integrationsRouter } from './integrations.js';
 
 export const apiRouter = Router();
 
@@ -26,6 +27,7 @@ apiRouter.use(preferencesRouter);
 apiRouter.use(redirectRouter);
 apiRouter.use(subscribersRouter);
 apiRouter.use(billingRouter);
+apiRouter.use(integrationsRouter);
 
 apiRouter.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'sife-api' });

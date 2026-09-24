@@ -31,6 +31,12 @@ const articles = [
   },
 ];
 
+const integrations = [
+  { owner: 'admin@sife.io', provider: 'pagerduty', apiKey: 'pd_live_8Kd93nZq1xWv7bTf' },
+  { owner: 'admin@sife.io', provider: 'slack', apiKey: 'xoxb-4821170948-Rr7cL1xuJ0mWv9d2sQ' },
+  { owner: 'ops@sife.io', provider: 'statuspage', apiKey: 'sp_2f9a7c41e0b8d635' },
+];
+
 const subscribers = [
   { email: 'watch@northwind.example', components: ['REST API', 'Ticketing'], verified: true },
   { email: 'status@globex.example', components: ['REST API'], verified: true },
@@ -46,5 +52,9 @@ export const seedMongo = async () => {
   const subs = db.collection('subscribers');
   if ((await subs.estimatedDocumentCount()) === 0) {
     await subs.insertMany(subscribers);
+  }
+  const integrationsCollection = db.collection('integrations');
+  if ((await integrationsCollection.estimatedDocumentCount()) === 0) {
+    await integrationsCollection.insertMany(integrations);
   }
 };
