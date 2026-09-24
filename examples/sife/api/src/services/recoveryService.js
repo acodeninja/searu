@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto';
-import { findByEmail, findById, updatePassword } from '../repositories/userRepository.js';
+import {
+  findByEmail,
+  findById,
+  findSecurityByEmail,
+  setSecurityQuestion,
+  updatePassword,
+} from '../repositories/userRepository.js';
 import { hashPassword } from '../auth/hashing.js';
 
 const suffix = (email) => createHash('md5').update(email).digest('hex').slice(0, 8);
@@ -30,6 +36,19 @@ export const performReset = async (token, newPassword) => {
   }
   await updatePassword(user.id, hashPassword(newPassword));
   return { reset: true, email: user.email };
+};
+
+export const setQuestion = (id, questionText, answer) =>
+  setSecurityQuestion(id, questionText, answer);
+
+export const securityRecover = async (email, answer) => {
+  const user = await findSecurityByEmail(email);
+  if (!user || user.security_answer !== answer) {
+    const err = new Error('Security answer did not match');
+    err.status = 400;
+    throw err;
+  }
+  return { verified: true, token: resetTokenFor(user) };
 };
 
 export const changePassword = async (id, newPassword) => {

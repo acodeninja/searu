@@ -3,7 +3,7 @@ import { register } from '../services/authService.js';
 import { issueSession } from '../auth/session.js';
 import { requireAuth, requireRole } from '../middleware/authenticate.js';
 import * as userService from '../services/userService.js';
-import { changePassword } from '../services/recoveryService.js';
+import { changePassword, setQuestion } from '../services/recoveryService.js';
 
 export const usersRouter = Router();
 
@@ -40,6 +40,16 @@ usersRouter.put('/users/:id/password', requireAuth, async (req, res, next) => {
   try {
     const newPassword = (req.body?.newPassword ?? '').toString();
     res.json(await changePassword(Number.parseInt(req.params.id, 10), newPassword));
+  } catch (err) {
+    next(err);
+  }
+});
+
+usersRouter.post('/users/:id/security-question', requireAuth, async (req, res, next) => {
+  try {
+    const { question, answer } = req.body ?? {};
+    await setQuestion(Number.parseInt(req.params.id, 10), (question ?? '').toString(), (answer ?? '').toString());
+    res.json({ updated: true });
   } catch (err) {
     next(err);
   }

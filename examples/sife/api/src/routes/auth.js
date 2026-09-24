@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { login } from '../services/authService.js';
-import { performReset, requestReset } from '../services/recoveryService.js';
+import { performReset, requestReset, securityRecover } from '../services/recoveryService.js';
 import { record } from '../services/auditService.js';
 import { clearSession, issueSession } from '../auth/session.js';
 
@@ -19,6 +19,15 @@ authRouter.post('/user/reset', async (req, res, next) => {
   try {
     const { token, newPassword } = req.body ?? {};
     res.json(await performReset((token ?? '').toString(), (newPassword ?? '').toString()));
+  } catch (err) {
+    next(err);
+  }
+});
+
+authRouter.post('/user/security-recover', async (req, res, next) => {
+  try {
+    const { email, answer } = req.body ?? {};
+    res.json(await securityRecover((email ?? '').toString(), (answer ?? '').toString()));
   } catch (err) {
     next(err);
   }

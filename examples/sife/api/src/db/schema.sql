@@ -15,6 +15,13 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS seats INTEGER NOT NULL DEFAULT 3;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS credit NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS security_question TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS security_answer TEXT;
+
+UPDATE users SET security_question = 'Your first pet''s name', security_answer = 'Bella'
+  WHERE id = 4 AND security_answer IS NULL;
+UPDATE users SET security_question = 'Your mother''s maiden name', security_answer = 'Okonkwo'
+  WHERE id = 5 AND security_answer IS NULL;
 
 CREATE TABLE IF NOT EXISTS components (
   id SERIAL PRIMARY KEY,

@@ -19,9 +19,26 @@ export const findById = async (id) => {
 
 export const findProfile = async (id) => {
   const { rows } = await query(
-    `SELECT id, email, password_md5, full_name, role, organisation, phone, api_token, created_at
+    `SELECT id, email, password_md5, full_name, role, organisation, phone, api_token,
+            security_question, security_answer, created_at
        FROM users WHERE id = $1`,
     [id],
+  );
+  return rows[0] ?? null;
+};
+
+export const setSecurityQuestion = async (id, questionText, answer) => {
+  const { rows } = await query(
+    'UPDATE users SET security_question = $2, security_answer = $3 WHERE id = $1 RETURNING id',
+    [id, questionText, answer],
+  );
+  return rows[0] ?? null;
+};
+
+export const findSecurityByEmail = async (email) => {
+  const { rows } = await query(
+    'SELECT id, email, role, security_answer FROM users WHERE email = $1',
+    [email],
   );
   return rows[0] ?? null;
 };
