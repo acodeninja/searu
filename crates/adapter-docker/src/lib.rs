@@ -1,5 +1,6 @@
-//! Runs a tool in a container via the Docker CLI: builds the tool's embedded Dockerfile on first use,
-//! runs it with host networking so it can reach a host-published target, and captures its output.
+//! Runs a tool in a container via the Docker CLI: on first use it pulls the tool's versioned image
+//! from the registry, building the embedded Dockerfile only as a fallback, then runs it with host
+//! networking so it can reach a host-published target, and captures its output.
 
 use searu_domain::ports::{
     Mount, RunnerError, ToolInvocation, ToolOutcome, ToolRunner, WordlistError, WordlistProvider,
@@ -10,21 +11,42 @@ use std::process::{Command, Stdio};
 
 const CURL_IMAGE: &str = "curlimages/curl:8.22.0";
 const SECLISTS_REF: &str = "2026.1";
+const DEFAULT_REGISTRY: &str = "ghcr.io/acodeninja";
 
 pub struct DockerToolRunner {
     pub version: String,
+    pub registry: String,
 }
 
 impl Default for DockerToolRunner {
     fn default() -> Self {
         Self {
-            version: env!("CARGO_PKG_VERSION").to_string(),
+            version: image_version(),
+            registry: image_registry(),
         }
     }
 }
 
+fn image_version() -> String {
+    option_env!("SEARU_IMAGE_VERSION")
+        .filter(|value| !value.is_empty())
+        .unwrap_or(env!("CARGO_PKG_VERSION"))
+        .to_string()
+}
+
+fn image_registry() -> String {
+    option_env!("SEARU_IMAGE_REGISTRY")
+        .filter(|value| !value.is_empty())
+        .unwrap_or(DEFAULT_REGISTRY)
+        .to_string()
+}
+
 pub fn image_tag(tool: &str, version: &str) -> String {
     format!("searu-{tool}:{version}")
+}
+
+pub fn image_ref(registry: &str, tool: &str, version: &str) -> String {
+    format!("{registry}/searu-{tool}:{version}")
 }
 
 /// Rewrite a host-local target so a tool *inside a container* can reach it on the host.
@@ -58,6 +80,10 @@ pub fn docker_run_argv(image: &str, args: &[String], mounts: &[Mount]) -> Vec<St
 impl DockerToolRunner {
     fn ensure_image(&self, image: &str, tool: &str, dockerfile: &str) -> Result<(), RunnerError> {
         if docker_ok(["image", "inspect", image]) {
+            return Ok(());
+        }
+        let remote = image_ref(&self.registry, tool, &self.version);
+        if docker_ok(["pull", remote.as_str()]) && docker_ok(["tag", remote.as_str(), image]) {
             return Ok(());
         }
         let dir = std::env::temp_dir().join(format!("searu-build-{tool}"));
@@ -212,6 +238,14 @@ mod tests {
     #[test]
     fn names_a_local_image_tag() {
         assert_eq!(image_tag("commix", "0.0.1"), "searu-commix:0.0.1");
+    }
+
+    #[test]
+    fn names_a_remote_image_reference() {
+        assert_eq!(
+            image_ref("ghcr.io/acodeninja", "nmap", "0.2.0"),
+            "ghcr.io/acodeninja/searu-nmap:0.2.0"
+        );
     }
 
     #[test]
