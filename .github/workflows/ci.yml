@@ -55,9 +55,59 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+  release-plan:
+    name: release/plan
+    needs: [release-check]
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_CREATED: ${{ needs.release-check.outputs.release_created }}
+      TAG_NAME: ${{ needs.release-check.outputs.tag_name }}
+    outputs:
+      channel: ${{ steps.plan.outputs.channel }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      publish: ${{ steps.plan.outputs.publish }}
+    steps:
+      - name: Resolve the release channel and version
+        id: plan
+        run: |
+          set -eux
+          tags() { gh release list --limit 200 --json tagName --jq '.[].tagName'; }
+          if [ "$RELEASE_CREATED" = "true" ]; then
+            version="${TAG_NAME#v}"
+            {
+              echo "channel=release"
+              echo "version=${version}"
+              echo "tag=${TAG_NAME}"
+              echo "publish=true"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          pr=$(gh pr list --state open --head release-please--branches--main --json title --jq '.[0].title // ""')
+          version=$(printf '%s' "$pr" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)
+          if [ -z "$version" ]; then
+            {
+              echo "channel=none"
+              echo "publish=false"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base="v${version}-rc"
+          last=$(tags | grep -E "^${base}[0-9]+$" | sed -E "s/^${base}//" | sort -n | tail -n1 || true)
+          number=$(( ${last:-0} + 1 ))
+          {
+            echo "channel=rc"
+            echo "version=${version}-rc${number}"
+            echo "tag=${base}${number}"
+            echo "publish=true"
+          } >> "$GITHUB_OUTPUT"
+
   build:
     name: build/${{ matrix.target }}
-    needs: [check-fmt, check-quality, check-test]
+    needs: [check-fmt, check-quality, check-test, release-plan]
     if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     strategy:
@@ -78,6 +128,7 @@ jobs:
           TARGET: ${{ matrix.target }}
           EXT: ${{ matrix.ext }}
           BIN: ${{ matrix.bin }}
+          SEARU_IMAGE_VERSION: ${{ needs.release-plan.outputs.version }}
         run: |
           set -eux
           sudo apt-get update
@@ -99,14 +150,15 @@ jobs:
 
   release:
     name: release
-    needs: [build, release-check]
-    if: ${{ github.event_name == 'push' }}
+    needs: [build, release-plan]
+    if: ${{ github.event_name == 'push' && needs.release-plan.outputs.publish == 'true' }}
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_CREATED: ${{ needs.release-check.outputs.release_created }}
-      TAG_NAME: ${{ needs.release-check.outputs.tag_name }}
+      CHANNEL: ${{ needs.release-plan.outputs.channel }}
+      VERSION: ${{ needs.release-plan.outputs.version }}
+      TAG: ${{ needs.release-plan.outputs.tag }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -118,31 +170,78 @@ jobs:
           cd dist
           assets="searu-x86_64-unknown-linux-musl.tar.gz searu-x86_64-unknown-linux-musl.tar.gz.sha256 searu-x86_64-pc-windows-gnu.zip searu-x86_64-pc-windows-gnu.zip.sha256"
           tags() { gh release list --limit 200 --json tagName --jq '.[].tagName'; }
-          if [ "$RELEASE_CREATED" = "true" ]; then
-            gh release upload "$TAG_NAME" $assets --clobber
-            version="${TAG_NAME#v}"
-            for tag in $(tags | grep -E "^v${version}-rc[0-9]+$" || true); do
+          if [ "$CHANNEL" = "release" ]; then
+            gh release upload "$TAG" $assets --clobber
+            for tag in $(tags | grep -E "^v${VERSION}-rc[0-9]+$" || true); do
               gh release delete "$tag" --cleanup-tag --yes || true
             done
           else
-            pr=$(gh pr list --state open --head release-please--branches--main --json title,body --jq '.[0]')
-            title=$(printf '%s' "$pr" | jq -r '.title // ""')
-            body=$(printf '%s' "$pr" | jq -r '.body // ""')
-            version=$(printf '%s' "$title" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
-            if [ -z "$version" ]; then
-              echo "No pending release PR; nothing to publish."
-              exit 0
-            fi
-            base="v${version}-rc"
-            last=$(tags | grep -E "^${base}[0-9]+$" | sed -E "s/^${base}//" | sort -n | tail -n1 || true)
-            number=$(( ${last:-0} + 1 ))
-            tag="${base}${number}"
+            base="${VERSION%-rc*}"
+            number="${VERSION##*-rc}"
+            body=$(gh pr list --state open --head release-please--branches--main --json body --jq '.[0].body // ""')
             changelog=$(printf '%s\n' "$body" | awk '/^---$/{n++; next} n==1{print}')
             {
-              printf 'Release candidate %s for v%s, built from main.\n' "$number" "$version"
+              printf 'Release candidate %s for v%s, built from main.\n' "$number" "$base"
               if [ -n "$changelog" ]; then printf '\n%s\n' "$changelog"; fi
             } > rc-notes.md
-            gh release create "$tag" --prerelease --target "$GITHUB_SHA" \
-              --title "$tag" --notes-file rc-notes.md \
+            gh release create "$TAG" --prerelease --target "$GITHUB_SHA" \
+              --title "$TAG" --notes-file rc-notes.md \
               $assets
           fi
+
+  images-prep:
+    name: images/prep
+    needs: [build, release-plan]
+    if: ${{ github.event_name == 'push' && needs.release-plan.outputs.publish == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      tools: ${{ steps.list.outputs.tools }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: searu-x86_64-unknown-linux-musl
+          path: bin
+      - name: Export the per-tool build contexts
+        id: list
+        run: |
+          set -eux
+          tar xzf bin/searu-x86_64-unknown-linux-musl.tar.gz -C bin
+          ./bin/searu image export --dir contexts
+          tools=$(ls contexts | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "tools=${tools}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: image-contexts
+          path: contexts
+          if-no-files-found: error
+
+  images-push:
+    name: images/${{ matrix.tool }}
+    needs: [images-prep, release-plan]
+    if: ${{ github.event_name == 'push' && needs.release-plan.outputs.publish == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: ${{ fromJSON(needs.images-prep.outputs.tools) }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: image-contexts
+          path: contexts
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: contexts/${{ matrix.tool }}
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/searu-${{ matrix.tool }}:${{ needs.release-plan.outputs.version }}
+          cache-from: type=gha,scope=searu-${{ matrix.tool }}
+          cache-to: type=gha,mode=max,scope=searu-${{ matrix.tool }}

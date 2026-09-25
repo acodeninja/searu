@@ -164,8 +164,11 @@ design). Everything below is **planned, not built**.
   binary-only `curl … | sh` install.
 - Runtime caches (CWE/EPSS/KEV, M4) are planned to live in `~/.searu/` (`SEARU_HOME`), never in
   `~/.claude`. Engagement data stays per-project in `./pentest/`.
-- Tool images are built on first use from each tool crate's embedded `Dockerfile`; pulling prebuilt
-  `ghcr.io/<ns>/searu-<tool>` with a build fallback is planned.
+- Tool images are pulled on first use from `ghcr.io/acodeninja/searu-<tool>:<version>`, building each
+  tool crate's embedded `Dockerfile` only as a fallback. CI (`images/*` jobs in `ci.yml`) builds and
+  pushes every wrapper image on a release — full releases and release candidates alike — tagged with
+  the release version; the binary bakes that same version (`SEARU_IMAGE_VERSION`) so it pulls the
+  matching images.
 
 ## Toolchain and quality gates
 

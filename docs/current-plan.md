@@ -40,7 +40,7 @@ to pass → refactor → **commit** (one commit per slice) → pause for review.
 - **Architecture** hexagonal / ports-and-adapters (the `../bellman` model): ports in `domain`, use-cases in `app` generic over ports, **one adapter crate per external system**, `cli` as the sole composition root. **No `infra` catch-all crate.** DI via generics; tests via hand-written fakes.
 - **Scope is intrinsic** — a domain rule enforced inside `searu run`; **no `check-scope` command**. The PreToolUse hook is a `searu`-only allowlist, not a scope check.
 - **`searu` delivery** — `install.sh`/`install.ps1` download a prebuilt binary from GitHub Releases per OS/arch with a `cargo install` fallback; `mise run install-local` builds the local checkout for development.
-- **Docker images** — built on first use from each tool crate's embedded `Dockerfile`; pull-through of `ghcr.io/<ns>/searu-<tool>` is planned.
+- **Docker images** — pulled on first use from `ghcr.io/acodeninja/searu-<tool>:<version>`, built from each tool crate's embedded `Dockerfile` only as a fallback; CI builds and pushes every wrapper image on each release/RC (**shipped**).
 - **Hosting** — public GitHub repo (clone-install, Releases, ghcr, Actions).
 - **Design-review decisions recorded** — eleven resolved issues (networked-only scope) in
   `product-plan.md → Resolved design decisions`: hook hardening (default-deny hook + `searu harden`
