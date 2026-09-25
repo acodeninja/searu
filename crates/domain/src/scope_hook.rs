@@ -1,7 +1,9 @@
 //! The PreToolUse allowlist backstop: force target-facing actions through `searu`. For shell and local
 //! tools it is a pure name allowlist that needs no rules of engagement. For a web tool that carries a
 //! target URL (WebFetch) it consults the scope so third-party vulnerability/library research is allowed
-//! while the in-scope target stays reachable only through `searu run`.
+//! while the in-scope target stays reachable only through `searu run`. The `Skill` tool is allowed only
+//! for the searu family (the `searu` skill and its `searu-*`/`searu:*` kin); every other skill and MCP
+//! tool stays blocked outright.
 
 use crate::scope::{host_in_target_scope, Scope};
 
@@ -31,6 +33,24 @@ pub fn decide_web(tool_name: &str, url: Option<&str>, scope: &Scope) -> HookDeci
 
 pub fn is_web_tool(tool_name: &str) -> bool {
     matches!(tool_name, "WebFetch" | "WebSearch")
+}
+
+pub fn is_skill_tool(tool_name: &str) -> bool {
+    tool_name == "Skill"
+}
+
+/// Decide a `Skill` invocation by the skill being invoked. The searu family passes so the operator can
+/// reload its guidance; a missing/blank name fails closed, and any other skill is blocked.
+pub fn decide_skill(skill: Option<&str>) -> HookDecision {
+    match skill.map(str::trim).filter(|name| !name.is_empty()) {
+        Some(name) if is_searu_skill(name) => HookDecision::Allow,
+        Some(name) => HookDecision::Block(format!(
+            "searu scope-hook: only searu skills are available during an engagement; `{name}` is blocked"
+        )),
+        None => HookDecision::Block(
+            "searu scope-hook: only searu skills are available during an engagement".to_string(),
+        ),
+    }
 }
 
 pub fn decide(tool_name: &str, command: Option<&str>) -> HookDecision {
@@ -122,6 +142,14 @@ fn basename(token: &str) -> String {
 
 fn is_searu(program: &str) -> bool {
     program.eq_ignore_ascii_case("searu") || program.eq_ignore_ascii_case("searu.exe")
+}
+
+fn is_searu_skill(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name == "searu"
+        || name.starts_with("searu-")
+        || name.starts_with("searu:")
+        || name.starts_with("searu/")
 }
 
 #[cfg(test)]
@@ -250,9 +278,29 @@ mod tests {
     }
 
     #[test]
-    fn skills_and_mcp_tools_are_blocked_outright() {
-        assert!(!is_allowed(decide("Skill", None)));
+    fn mcp_tools_are_blocked_outright() {
         assert!(!is_allowed(decide("mcp__acme__fetch_url", None)));
+    }
+
+    #[test]
+    fn the_skill_tool_is_recognised() {
+        assert!(is_skill_tool("Skill"));
+        assert!(!is_skill_tool("Bash"));
+    }
+
+    #[test]
+    fn searu_family_skills_pass() {
+        assert!(is_allowed(decide_skill(Some("searu"))));
+        assert!(is_allowed(decide_skill(Some("searu-upgrade"))));
+        assert!(is_allowed(decide_skill(Some("searu:playbook"))));
+        assert!(is_allowed(decide_skill(Some("Searu"))));
+    }
+
+    #[test]
+    fn other_skills_are_blocked() {
+        assert!(!is_allowed(decide_skill(Some("browse"))));
+        assert!(!is_allowed(decide_skill(Some(""))));
+        assert!(!is_allowed(decide_skill(None)));
     }
 
     fn scope() -> Scope {

@@ -452,7 +452,9 @@ fn run_scope_hook() -> i32 {
     use searu_adapter_store::JsonRoeRepository;
     use searu_domain::ports::RoeRepository;
     use searu_domain::scope::Scope;
-    use searu_domain::scope_hook::{decide, decide_web, is_web_tool, HookDecision};
+    use searu_domain::scope_hook::{
+        decide, decide_skill, decide_web, is_skill_tool, is_web_tool, HookDecision,
+    };
     use std::io::Read;
 
     let mut input = String::new();
@@ -478,6 +480,11 @@ fn run_scope_hook() -> i32 {
             .map(|roe| roe.scope)
             .unwrap_or_else(|_| Scope::default());
         decide_web(tool_name, url, &scope)
+    } else if is_skill_tool(tool_name) {
+        let skill = tool_input
+            .and_then(|tool_input| tool_input.get("skill"))
+            .and_then(serde_json::Value::as_str);
+        decide_skill(skill)
     } else {
         decide(tool_name, command)
     };

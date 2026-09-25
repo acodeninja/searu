@@ -383,15 +383,32 @@ fn scope_hook_allows_websearch() {
 }
 
 #[test]
-fn scope_hook_still_blocks_skill_and_mcp_tools() {
-    for tool in [
+fn scope_hook_allows_a_searu_skill() {
+    for payload in [
+        r#"{"tool_name":"Skill","tool_input":{"skill":"searu"}}"#,
+        r#"{"tool_name":"Skill","tool_input":{"skill":"searu-upgrade"}}"#,
+    ] {
+        Command::cargo_bin("searu")
+            .unwrap()
+            .arg("scope-hook")
+            .write_stdin(payload)
+            .assert()
+            .success()
+            .stdout(contains(r#""permissionDecision":"allow""#));
+    }
+}
+
+#[test]
+fn scope_hook_still_blocks_other_skills_and_mcp_tools() {
+    for payload in [
+        r#"{"tool_name":"Skill","tool_input":{"skill":"browse"}}"#,
         r#"{"tool_name":"Skill","tool_input":{}}"#,
         r#"{"tool_name":"mcp__acme__fetch_url","tool_input":{}}"#,
     ] {
         Command::cargo_bin("searu")
             .unwrap()
             .arg("scope-hook")
-            .write_stdin(tool)
+            .write_stdin(payload)
             .assert()
             .failure()
             .code(2)
