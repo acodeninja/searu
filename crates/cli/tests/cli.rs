@@ -592,3 +592,23 @@ fn install_skill_preserves_a_users_own_skill() {
     );
     assert!(base.join("SKILL.md.searu-backup").is_file());
 }
+
+#[test]
+fn image_export_writes_a_dockerfile_per_tool() {
+    let out = tempfile::tempdir().unwrap();
+    Command::cargo_bin("searu")
+        .unwrap()
+        .args(["image", "export", "--dir"])
+        .arg(out.path())
+        .assert()
+        .success()
+        .stdout(contains("nmap"))
+        .stdout(contains("browser"));
+
+    let nmap = std::fs::read_to_string(out.path().join("nmap").join("Dockerfile")).unwrap();
+    assert!(nmap.contains("FROM"));
+
+    let browser = std::fs::read_to_string(out.path().join("browser").join("Dockerfile")).unwrap();
+    assert!(browser.contains("mcr.microsoft.com/playwright"));
+    assert!(browser.contains(r#"ENTRYPOINT ["node", "/app/crawl.js"]"#));
+}

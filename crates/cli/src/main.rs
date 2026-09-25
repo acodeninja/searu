@@ -168,6 +168,23 @@ fn cli() -> Command {
                         .arg(Arg::new("phase").long("phase").value_name("PHASE")),
                 ),
         )
+        .subcommand(
+            Command::new("image")
+                .about("Inspect the tool container images")
+                .subcommand_required(true)
+                .arg_required_else_help(true)
+                .subcommand(
+                    Command::new("export")
+                        .about("Write each tool's Dockerfile to <dir>/<tool>/Dockerfile")
+                        .arg(
+                            Arg::new("dir")
+                                .long("dir")
+                                .required(true)
+                                .value_name("DIR")
+                                .help("Directory to write the per-tool build contexts into"),
+                        ),
+                ),
+        )
 }
 
 fn main() {
@@ -187,6 +204,7 @@ fn main() {
         Some(("playbook", _)) => std::process::exit(run_playbook()),
         Some(("benchmark", matches)) => std::process::exit(run_benchmark(matches)),
         Some(("tool", matches)) => std::process::exit(run_tool(matches)),
+        Some(("image", matches)) => std::process::exit(run_image(matches)),
         Some((name, _)) => {
             eprintln!("searu: '{name}' is not implemented yet");
             std::process::exit(1);
@@ -841,6 +859,33 @@ fn run_coverage(matches: &ArgMatches) -> i32 {
             eprintln!("{error}");
             1
         }
+    }
+}
+
+fn run_image(matches: &ArgMatches) -> i32 {
+    use searu_domain::tools::ToolRegistry;
+    use searu_tool_registry::Registry;
+
+    match matches.subcommand() {
+        Some(("export", args)) => {
+            let dir = args.get_one::<String>("dir").expect("required argument");
+            let root = std::path::Path::new(dir);
+            for tool in Registry.all() {
+                let context = root.join(tool.name());
+                if let Err(error) = std::fs::create_dir_all(&context) {
+                    eprintln!("could not create {}: {error}", context.display());
+                    return 1;
+                }
+                let dockerfile = context.join("Dockerfile");
+                if let Err(error) = std::fs::write(&dockerfile, tool.dockerfile()) {
+                    eprintln!("could not write {}: {error}", dockerfile.display());
+                    return 1;
+                }
+                println!("{}", tool.name());
+            }
+            0
+        }
+        _ => unreachable!("clap requires an image subcommand"),
     }
 }
 
