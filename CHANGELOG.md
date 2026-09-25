@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0](https://github.com/acodeninja/searu/compare/v0.1.0...v0.2.0) (2026-09-25)
+
+
+### Features
+
+* **cli:** add `image export` to emit each tool's Dockerfile ([d72c378](https://github.com/acodeninja/searu/commit/d72c37824d170a790f1bfbed73a8b1fa7e13a4d5))
+* **docker:** pull versioned tool images from GHCR, build as fallback ([2789ad5](https://github.com/acodeninja/searu/commit/2789ad561b02d401fc021ce3e5248681faddbd52))
+
+
+### Bug Fixes
+
+* **scope-hook:** allow searu-family skills through the PreToolUse hook ([879a27a](https://github.com/acodeninja/searu/commit/879a27acc16f2cdb6c25dc232d588f2637906c87))
+
 ## [0.1.0](https://github.com/acodeninja/searu/compare/v0.0.1...v0.1.0) (2026-09-25)
 
 
